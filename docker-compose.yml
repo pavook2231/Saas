@@ -76,12 +76,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command:
-      [
-        "sh",
-        "-lc",
-        "ENGINE_PATH=\"$$(find /app/node_modules -type f -name 'schema-engine*' ! -name '*.sha256' ! -name '*.gz' | head -n 1)\"; if [ -z \"$$ENGINE_PATH\" ]; then echo 'Prisma schema engine not found' >&2; exit 1; fi; export PRISMA_SCHEMA_ENGINE_BINARY=\"$$ENGINE_PATH\"; npx prisma migrate deploy --schema apps/api/prisma/schema.prisma"
-      ]
+    command: ["npx", "prisma", "migrate", "deploy", "--schema", "apps/api/prisma/schema.prisma"]
     networks:
       - internal
 

@@ -15,7 +15,7 @@ docker compose --env-file .env.production up -d --wait postgres redis
 
 "${ROOT_DIR}/deploy/scripts/backup-db.sh"
 
-docker compose --env-file .env.production build --pull backend frontend
+docker compose --env-file .env.production --profile ops build --pull backend frontend migrator
 docker compose --env-file .env.production --profile ops run --rm migrator
 docker compose --env-file .env.production up -d backend frontend nginx --remove-orphans
 

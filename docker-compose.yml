@@ -73,11 +73,15 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
-      PRISMA_SCHEMA_ENGINE_BINARY: /app/node_modules/@prisma/engines/schema-engine-debian-openssl-3.0.x
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["npx", "prisma", "migrate", "deploy", "--schema", "apps/api/prisma/schema.prisma"]
+    command:
+      [
+        "sh",
+        "-lc",
+        "ENGINE_PATH=\"$$(find /app/node_modules -type f -name 'schema-engine*' ! -name '*.sha256' ! -name '*.gz' | head -n 1)\"; if [ -z \"$$ENGINE_PATH\" ]; then echo 'Prisma schema engine not found' >&2; exit 1; fi; export PRISMA_SCHEMA_ENGINE_BINARY=\"$$ENGINE_PATH\"; npx prisma migrate deploy --schema apps/api/prisma/schema.prisma"
+      ]
     networks:
       - internal
 

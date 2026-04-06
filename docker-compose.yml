@@ -63,8 +63,10 @@ services:
       retries: 10
       start_period: 40s
     networks:
-      - internal
-      - edge
+      internal:
+      edge:
+        aliases:
+          - backend
 
   migrator:
     profiles: ["ops"]
@@ -110,7 +112,9 @@ services:
       retries: 10
       start_period: 40s
     networks:
-      - edge
+      edge:
+        aliases:
+          - frontend
 
   nginx:
     image: nginx:1.27-alpine
@@ -131,7 +135,9 @@ services:
       - certbot_www:/var/www/certbot
       - letsencrypt:/etc/letsencrypt
     networks:
-      - edge
+      edge:
+        aliases:
+          - nginx
 
   certbot:
     profiles: ["ops"]

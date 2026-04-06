@@ -15,11 +15,17 @@ COPY packages/utils/package.json packages/utils/package.json
 
 RUN npm ci
 
-FROM deps AS builder
+FROM deps AS source
 
 COPY tsconfig.base.json ./
 COPY apps/api apps/api
 COPY packages packages
+
+FROM source AS migrator
+
+RUN npm run prisma:generate -w @saas/api
+
+FROM source AS builder
 
 RUN npm run prisma:generate -w @saas/api \
   && npm run build -w @saas/api \

@@ -67,12 +67,13 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-      target: builder
+      target: migrator
     env_file:
       - .env.production
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
+      PRISMA_SCHEMA_ENGINE_BINARY: /app/node_modules/@prisma/engines/schema-engine-debian-openssl-3.0.x
     depends_on:
       postgres:
         condition: service_healthy

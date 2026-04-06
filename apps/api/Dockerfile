@@ -1,5 +1,11 @@
-FROM node:22-alpine AS deps
+FROM node:22-bookworm-slim AS base
 WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates openssl wget \
+  && rm -rf /var/lib/apt/lists/*
+
+FROM base AS deps
 
 COPY package*.json ./
 COPY apps/api/package.json apps/api/package.json
@@ -10,7 +16,6 @@ COPY packages/utils/package.json packages/utils/package.json
 RUN npm ci
 
 FROM deps AS builder
-WORKDIR /app
 
 COPY tsconfig.base.json ./
 COPY apps/api apps/api
@@ -21,8 +26,7 @@ RUN npm run prisma:generate -w @saas/api \
   && npm prune --omit=dev \
   && npm cache clean --force
 
-FROM node:22-alpine AS runner
-WORKDIR /app
+FROM base AS runner
 
 ENV NODE_ENV=production
 

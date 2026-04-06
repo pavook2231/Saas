@@ -11,7 +11,7 @@ fi
 
 mkdir -p backups/postgres
 
-docker compose --env-file .env.production up -d postgres redis
+docker compose --env-file .env.production up -d --wait postgres redis
 
 "${ROOT_DIR}/deploy/scripts/backup-db.sh"
 

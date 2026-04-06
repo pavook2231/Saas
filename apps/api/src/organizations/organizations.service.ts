@@ -1,0 +1,1045 @@
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  AuditTargetType,
+  MembershipStatus,
+  OrganizationInviteStatus,
+  OrganizationRole,
+  Prisma,
+} from '@prisma/client';
+import { createHash, randomBytes } from 'crypto';
+
+import { PrismaService } from '../prisma/prisma.service';
+
+import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { InviteMembershipDto } from './dto/invite-membership.dto';
+import { UpdateMembershipDto } from './dto/update-membership.dto';
+import { UpdateOrganizationDto } from './dto/update-organization.dto';
+
+const organizationSelect = {
+  id: true,
+  name: true,
+  slug: true,
+  description: true,
+  timezone: true,
+  settings: true,
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true,
+} satisfies Prisma.OrganizationSelect;
+
+@Injectable()
+export class OrganizationsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async createOrganization(userId: string, dto: CreateOrganizationDto) {
+    const normalizedName = dto.name.trim();
+
+    if (normalizedName.length < 2) {
+      throw new BadRequestException('Organization name must contain at least 2 chars');
+    }
+
+    const slugBase = this.normalizeSlug(dto.slug ?? normalizedName);
+
+    if (!slugBase) {
+      throw new BadRequestException('Organization name/slug cannot produce valid slug');
+    }
+
+    const uniqueSlug = await this.ensureUniqueSlug(slugBase);
+
+    const organization = await this.prisma.$transaction(async (tx) => {
+      const createdOrganization = await tx.organization.create({
+        data: {
+          name: normalizedName,
+          slug: uniqueSlug,
+          description: this.trimOrNull(dto.description),
+          timezone: this.trimOrNull(dto.timezone) ?? 'UTC',
+          settings: this.toAuditPayload({
+            financeEnabled: dto.financeEnabled ?? false,
+          }),
+          createdByUserId: userId,
+        },
+        select: organizationSelect,
+      });
+
+      await tx.membership.create({
+        data: {
+          organizationId: createdOrganization.id,
+          userId,
+          role: OrganizationRole.ADMIN,
+          status: MembershipStatus.ACTIVE,
+          invitedByUserId: userId,
+          acceptedAt: new Date(),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: createdOrganization.id,
+          actorUserId: userId,
+          targetType: AuditTargetType.SETTINGS,
+          targetId: createdOrganization.id,
+          action: 'organization.created',
+          description: 'Organization created',
+          payload: {
+            name: createdOrganization.name,
+            slug: createdOrganization.slug,
+          },
+        },
+      });
+
+      return createdOrganization;
+    });
+
+    return {
+      id: organization.id,
+      name: organization.name,
+      slug: organization.slug,
+      description: organization.description,
+      timezone: organization.timezone,
+      createdAt: organization.createdAt,
+      updatedAt: organization.updatedAt,
+      deletedAt: organization.deletedAt,
+      financeEnabled: this.getFinanceEnabled(organization.settings),
+      role: OrganizationRole.ADMIN,
+      membershipStatus: MembershipStatus.ACTIVE,
+    };
+  }
+
+  async listMyOrganizations(userId: string) {
+    const memberships = await this.prisma.membership.findMany({
+      where: {
+        userId,
+        status: MembershipStatus.ACTIVE,
+        organization: {
+          deletedAt: null,
+        },
+      },
+      select: {
+        role: true,
+        status: true,
+        acceptedAt: true,
+        organization: {
+          select: organizationSelect,
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    return memberships.map((membership) => ({
+      id: membership.organization.id,
+      name: membership.organization.name,
+      slug: membership.organization.slug,
+      description: membership.organization.description,
+      timezone: membership.organization.timezone,
+      createdAt: membership.organization.createdAt,
+      updatedAt: membership.organization.updatedAt,
+      deletedAt: membership.organization.deletedAt,
+      financeEnabled: this.getFinanceEnabled(membership.organization.settings),
+      role: membership.role,
+      membershipStatus: membership.status,
+      acceptedAt: membership.acceptedAt,
+    }));
+  }
+
+  async listMyInvitations(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        email: true,
+        isEmailVerified: true,
+        isActive: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!user || !user.isActive || user.deletedAt !== null || !user.isEmailVerified) {
+      return [];
+    }
+
+    const invites = await this.prisma.organizationInvite.findMany({
+      where: {
+        email: user.email,
+        status: OrganizationInviteStatus.PENDING,
+        revokedAt: null,
+        expiresAt: {
+          gt: new Date(),
+        },
+        organization: {
+          deletedAt: null,
+        },
+      },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        expiresAt: true,
+        createdAt: true,
+        organization: {
+          select: organizationSelect,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return invites.map((invite) => ({
+      membershipId: invite.id,
+      role: invite.role,
+      status: invite.status,
+      invitedAt: invite.createdAt,
+      expiresAt: invite.expiresAt,
+      organization: {
+        id: invite.organization.id,
+        name: invite.organization.name,
+        slug: invite.organization.slug,
+        description: invite.organization.description,
+        timezone: invite.organization.timezone,
+        createdAt: invite.organization.createdAt,
+        updatedAt: invite.organization.updatedAt,
+        deletedAt: invite.organization.deletedAt,
+        financeEnabled: this.getFinanceEnabled(invite.organization.settings),
+      },
+    }));
+  }
+
+  async getOrganization(organizationId: string, userId: string) {
+    const organization = await this.prisma.organization.findFirst({
+      where: {
+        id: organizationId,
+        deletedAt: null,
+        memberships: {
+          some: {
+            userId,
+            status: MembershipStatus.ACTIVE,
+          },
+        },
+      },
+      select: {
+        ...organizationSelect,
+        memberships: {
+          where: {
+            userId,
+            status: MembershipStatus.ACTIVE,
+          },
+          select: {
+            role: true,
+            status: true,
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const membership = organization.memberships[0];
+
+    return {
+      id: organization.id,
+      name: organization.name,
+      slug: organization.slug,
+      description: organization.description,
+      timezone: organization.timezone,
+      createdAt: organization.createdAt,
+      updatedAt: organization.updatedAt,
+      financeEnabled: this.getFinanceEnabled(organization.settings),
+      role: membership?.role ?? OrganizationRole.MEMBER,
+      membershipStatus: membership?.status ?? MembershipStatus.ACTIVE,
+    };
+  }
+
+  async updateOrganization(
+    organizationId: string,
+    userId: string,
+    dto: UpdateOrganizationDto,
+  ) {
+    const organization = await this.findOrganizationOrThrow(organizationId);
+
+    const nextSlug = dto.slug
+      ? await this.ensureUniqueSlug(this.normalizeSlug(dto.slug), organization.id)
+      : undefined;
+
+    const normalizedName =
+      dto.name !== undefined ? this.trimOrNull(dto.name) : undefined;
+    const normalizedTimezone =
+      dto.timezone !== undefined ? this.trimOrNull(dto.timezone) : undefined;
+
+    if (dto.name !== undefined && (!normalizedName || normalizedName.length < 2)) {
+      throw new BadRequestException('Organization name must contain at least 2 chars');
+    }
+
+    if (dto.timezone !== undefined && !normalizedTimezone) {
+      throw new BadRequestException('Timezone cannot be empty');
+    }
+
+    const currentSettings = this.getOrganizationSettingsRecord(organization.settings);
+    const nextSettings =
+      dto.financeEnabled !== undefined
+        ? {
+            ...currentSettings,
+            financeEnabled: dto.financeEnabled,
+          }
+        : undefined;
+
+    const updatedOrganization = await this.prisma.organization.update({
+      where: { id: organization.id },
+      data: {
+        name: normalizedName ?? undefined,
+        slug: nextSlug,
+        description:
+          dto.description !== undefined ? this.trimOrNull(dto.description) : undefined,
+        timezone: normalizedTimezone ?? undefined,
+        settings: nextSettings ? this.toAuditPayload(nextSettings) : undefined,
+      },
+      select: organizationSelect,
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: organization.id,
+        actorUserId: userId,
+        targetType: AuditTargetType.SETTINGS,
+        targetId: organization.id,
+        action: 'organization.updated',
+        description: 'Organization settings updated',
+        payload: this.toAuditPayload(dto),
+      },
+    });
+
+    return {
+      id: updatedOrganization.id,
+      name: updatedOrganization.name,
+      slug: updatedOrganization.slug,
+      description: updatedOrganization.description,
+      timezone: updatedOrganization.timezone,
+      createdAt: updatedOrganization.createdAt,
+      updatedAt: updatedOrganization.updatedAt,
+      deletedAt: updatedOrganization.deletedAt,
+      financeEnabled: this.getFinanceEnabled(updatedOrganization.settings),
+    };
+  }
+
+  async archiveOrganization(organizationId: string, userId: string) {
+    const organization = await this.findOrganizationOrThrow(organizationId);
+
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.organization.update({
+        where: { id: organization.id },
+        data: {
+          deletedAt: now,
+        },
+      });
+
+      await tx.membership.updateMany({
+        where: {
+          organizationId: organization.id,
+          status: {
+            in: [MembershipStatus.ACTIVE, MembershipStatus.INVITED, MembershipStatus.SUSPENDED],
+          },
+        },
+        data: {
+          status: MembershipStatus.LEFT,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: organization.id,
+          actorUserId: userId,
+          targetType: AuditTargetType.SETTINGS,
+          targetId: organization.id,
+          action: 'organization.archived',
+          description: 'Organization archived',
+        },
+      });
+    });
+
+    return {
+      success: true as const,
+      archivedAt: now.toISOString(),
+    };
+  }
+
+  async listMemberships(organizationId: string) {
+    const organization = await this.findOrganizationOrThrow(organizationId);
+
+    const memberships = await this.prisma.membership.findMany({
+      where: {
+        organizationId: organization.id,
+      },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        invitedAt: true,
+        acceptedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return memberships;
+  }
+
+  async inviteMembership(
+    organizationId: string,
+    actorUserId: string,
+    dto: InviteMembershipDto,
+  ) {
+    await this.findOrganizationOrThrow(organizationId);
+    const actorMembership = await this.prisma.membership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: actorUserId,
+        },
+      },
+      select: {
+        role: true,
+        status: true,
+      },
+    });
+
+    const email = dto.email.trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException('Email is required');
+    }
+    if (!actorMembership || actorMembership.status !== MembershipStatus.ACTIVE) {
+      throw new ForbiddenException('Active membership is required');
+    }
+
+    const role = this.resolveInvitedRole(actorMembership.role, dto.role ?? OrganizationRole.MEMBER);
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+      },
+    });
+
+    const existingMembership = existingUser
+      ? await this.prisma.membership.findUnique({
+          where: {
+            organizationId_userId: {
+              organizationId,
+              userId: existingUser.id,
+            },
+          },
+          select: {
+            id: true,
+            status: true,
+          },
+        })
+      : null;
+
+    if (existingMembership && existingMembership.status === MembershipStatus.ACTIVE) {
+      throw new ConflictException('User is already an active member of this organization');
+    }
+
+    const now = new Date();
+    const rawInviteToken = this.generateInviteToken();
+    const tokenHash = this.hashToken(rawInviteToken);
+    const expiresAt = this.buildInviteExpiryDate(now);
+
+    const pendingInvite = await this.prisma.organizationInvite.findFirst({
+      where: {
+        organizationId,
+        email,
+        status: OrganizationInviteStatus.PENDING,
+      },
+      select: {
+        id: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    const invite = pendingInvite
+      ? await this.prisma.organizationInvite.update({
+          where: {
+            id: pendingInvite.id,
+          },
+          data: {
+            role,
+            tokenHash,
+            invitedByUserId: actorUserId,
+            acceptedByUserId: null,
+            expiresAt,
+            acceptedAt: null,
+            revokedAt: null,
+            status: OrganizationInviteStatus.PENDING,
+          },
+          select: {
+            id: true,
+            role: true,
+            status: true,
+            createdAt: true,
+            expiresAt: true,
+          },
+        })
+      : await this.prisma.organizationInvite.create({
+          data: {
+            organizationId,
+            email,
+            role,
+            tokenHash,
+            invitedByUserId: actorUserId,
+            expiresAt,
+            status: OrganizationInviteStatus.PENDING,
+          },
+          select: {
+            id: true,
+            role: true,
+            status: true,
+            createdAt: true,
+            expiresAt: true,
+          },
+        });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId,
+        targetType: AuditTargetType.MEMBERSHIP,
+        targetId: invite.id,
+        action: 'membership.invited',
+        description: 'Organization invitation sent',
+        payload: {
+          invitedEmail: email,
+          role,
+          expiresAt: expiresAt.toISOString(),
+        },
+      },
+    });
+
+    return {
+      invitationId: invite.id,
+      email,
+      role: invite.role,
+      status: invite.status,
+      invitedAt: invite.createdAt,
+      expiresAt: invite.expiresAt,
+      inviteToken: rawInviteToken,
+    };
+  }
+
+  async acceptInvitation(
+    organizationId: string,
+    membershipId: string,
+    userId: string,
+    inviteToken: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        email: true,
+        isEmailVerified: true,
+        isActive: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!user || !user.isActive || user.deletedAt !== null) {
+      throw new ForbiddenException('User account is not available');
+    }
+
+    const invite = await this.prisma.organizationInvite.findFirst({
+      where: {
+        id: membershipId,
+        organizationId,
+        email: user.email,
+        status: OrganizationInviteStatus.PENDING,
+        revokedAt: null,
+        expiresAt: {
+          gt: new Date(),
+        },
+        organization: {
+          deletedAt: null,
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        role: true,
+        email: true,
+        invitedByUserId: true,
+        tokenHash: true,
+      },
+    });
+
+    if (!invite) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (this.hashToken(inviteToken) !== invite.tokenHash) {
+      throw new ForbiddenException('Invitation token is invalid');
+    }
+
+    const now = new Date();
+    const normalizedEmail = user.email.trim().toLowerCase();
+
+    const updatedMembership = await this.prisma.$transaction(async (tx) => {
+      const existingMembership = await tx.membership.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId,
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+
+      const membership = existingMembership
+        ? await tx.membership.update({
+            where: {
+              id: existingMembership.id,
+            },
+            data: {
+              role: invite.role,
+              status: MembershipStatus.ACTIVE,
+              invitedByUserId: invite.invitedByUserId,
+              invitedAt: now,
+              acceptedAt: now,
+            },
+            select: {
+              id: true,
+              role: true,
+              status: true,
+              acceptedAt: true,
+            },
+          })
+        : await tx.membership.create({
+            data: {
+              organizationId,
+              userId,
+              role: invite.role,
+              status: MembershipStatus.ACTIVE,
+              invitedByUserId: invite.invitedByUserId,
+              invitedAt: now,
+              acceptedAt: now,
+            },
+            select: {
+              id: true,
+              role: true,
+              status: true,
+              acceptedAt: true,
+            },
+          });
+
+      await tx.organizationInvite.update({
+        where: {
+          id: invite.id,
+        },
+        data: {
+          status: OrganizationInviteStatus.ACCEPTED,
+          acceptedByUserId: userId,
+          acceptedAt: now,
+        },
+      });
+
+      if (!user.isEmailVerified && normalizedEmail === invite.email) {
+        await tx.user.update({
+          where: {
+            id: userId,
+          },
+          data: {
+            isEmailVerified: true,
+          },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: userId,
+          targetType: AuditTargetType.MEMBERSHIP,
+          targetId: membership.id,
+          action: 'membership.accepted',
+          description: 'Organization invitation accepted',
+        },
+      });
+
+      return membership;
+    });
+
+    return updatedMembership;
+  }
+
+  async updateMembership(
+    organizationId: string,
+    membershipId: string,
+    actorUserId: string,
+    dto: UpdateMembershipDto,
+  ) {
+    if (dto.role === undefined && dto.status === undefined) {
+      throw new BadRequestException('At least one field must be provided');
+    }
+
+    const membership = await this.prisma.membership.findFirst({
+      where: {
+        id: membershipId,
+        organizationId,
+      },
+      select: {
+        id: true,
+        userId: true,
+        role: true,
+        status: true,
+        acceptedAt: true,
+      },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('Membership not found');
+    }
+
+    if (membership.userId === actorUserId && dto.role && dto.role !== membership.role) {
+      throw new ForbiddenException('You cannot change your own role');
+    }
+
+    const targetRole = dto.role ?? membership.role;
+    const targetStatus = dto.status ?? membership.status;
+
+    await this.ensureAdminStillExists(
+      organizationId,
+      membership.id,
+      membership.role,
+      membership.status,
+      targetRole,
+      targetStatus,
+    );
+
+    const updatedMembership = await this.prisma.membership.update({
+      where: { id: membership.id },
+      data: {
+        role: dto.role,
+        status: dto.status,
+        acceptedAt:
+          dto.status === MembershipStatus.ACTIVE &&
+          membership.status !== MembershipStatus.ACTIVE
+            ? new Date()
+            : undefined,
+      },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        invitedAt: true,
+        acceptedAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId,
+        targetType: AuditTargetType.MEMBERSHIP,
+        targetId: membership.id,
+        action: 'membership.updated',
+        description: 'Membership updated',
+        payload: this.toAuditPayload(dto),
+      },
+    });
+
+    return updatedMembership;
+  }
+
+  async removeMembership(
+    organizationId: string,
+    membershipId: string,
+    actorUserId: string,
+  ) {
+    const membership = await this.prisma.membership.findFirst({
+      where: {
+        id: membershipId,
+        organizationId,
+      },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+      },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('Membership not found');
+    }
+
+    if (membership.status === MembershipStatus.LEFT) {
+      return {
+        success: true as const,
+        alreadyRemoved: true as const,
+      };
+    }
+
+    await this.ensureAdminStillExists(
+      organizationId,
+      membership.id,
+      membership.role,
+      membership.status,
+      membership.role,
+      MembershipStatus.LEFT,
+    );
+
+    await this.prisma.membership.update({
+      where: { id: membership.id },
+      data: {
+        status: MembershipStatus.LEFT,
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId,
+        targetType: AuditTargetType.MEMBERSHIP,
+        targetId: membership.id,
+        action: 'membership.removed',
+        description: 'Membership removed from organization',
+      },
+    });
+
+    return {
+      success: true as const,
+    };
+  }
+
+  async leaveOrganization(organizationId: string, userId: string) {
+    const membership = await this.prisma.membership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId,
+        },
+      },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+      },
+    });
+
+    if (!membership || membership.status !== MembershipStatus.ACTIVE) {
+      throw new NotFoundException('Active membership not found');
+    }
+
+    await this.ensureAdminStillExists(
+      organizationId,
+      membership.id,
+      membership.role,
+      membership.status,
+      membership.role,
+      MembershipStatus.LEFT,
+    );
+
+    await this.prisma.membership.update({
+      where: {
+        id: membership.id,
+      },
+      data: {
+        status: MembershipStatus.LEFT,
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: userId,
+        targetType: AuditTargetType.MEMBERSHIP,
+        targetId: membership.id,
+        action: 'membership.left',
+        description: 'User left organization',
+      },
+    });
+
+    return {
+      success: true as const,
+    };
+  }
+
+  private async findOrganizationOrThrow(organizationId: string) {
+    const organization = await this.prisma.organization.findFirst({
+      where: {
+        id: organizationId,
+        deletedAt: null,
+      },
+      select: organizationSelect,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    return organization;
+  }
+
+  private async ensureUniqueSlug(slugBase: string, excludeId?: string): Promise<string> {
+    let slug = slugBase;
+    let sequence = 2;
+
+    while (true) {
+      const existing = await this.prisma.organization.findFirst({
+        where: {
+          slug,
+          ...(excludeId ? { id: { not: excludeId } } : {}),
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!existing) {
+        return slug;
+      }
+
+      slug = `${slugBase}-${sequence}`;
+      sequence += 1;
+    }
+  }
+
+  private normalizeSlug(input: string): string {
+    return input
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-')
+      .slice(0, 80);
+  }
+
+  private trimOrNull(value?: string | null): string | null {
+    if (!value) {
+      return null;
+    }
+
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private getFinanceEnabled(settings: Prisma.JsonValue | null | undefined): boolean {
+    const record = this.getOrganizationSettingsRecord(settings);
+    return record.financeEnabled === true;
+  }
+
+  private getOrganizationSettingsRecord(
+    settings: Prisma.JsonValue | null | undefined,
+  ): Record<string, unknown> {
+    if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
+      return settings as Record<string, unknown>;
+    }
+
+    return {};
+  }
+
+  private toAuditPayload(value: unknown): Prisma.InputJsonValue {
+    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+  }
+
+  private async ensureAdminStillExists(
+    organizationId: string,
+    membershipId: string,
+    currentRole: OrganizationRole,
+    currentStatus: MembershipStatus,
+    targetRole: OrganizationRole,
+    targetStatus: MembershipStatus,
+  ): Promise<void> {
+    const isCurrentlyActiveAdmin =
+      currentRole === OrganizationRole.ADMIN && currentStatus === MembershipStatus.ACTIVE;
+    const staysActiveAdmin =
+      targetRole === OrganizationRole.ADMIN && targetStatus === MembershipStatus.ACTIVE;
+
+    if (!isCurrentlyActiveAdmin || staysActiveAdmin) {
+      return;
+    }
+
+    const otherActiveAdminsCount = await this.prisma.membership.count({
+      where: {
+        organizationId,
+        status: MembershipStatus.ACTIVE,
+        role: OrganizationRole.ADMIN,
+        id: {
+          not: membershipId,
+        },
+      },
+    });
+
+    if (otherActiveAdminsCount === 0) {
+      throw new ConflictException('Organization must have at least one active ADMIN');
+    }
+  }
+
+  private resolveInvitedRole(
+    actorRole: OrganizationRole,
+    targetRole: OrganizationRole,
+  ): OrganizationRole {
+    if (actorRole === OrganizationRole.ADMIN) {
+      return targetRole;
+    }
+
+    if (actorRole === OrganizationRole.DIRECTOR) {
+      if (
+        targetRole === OrganizationRole.ADMIN ||
+        targetRole === OrganizationRole.DIRECTOR
+      ) {
+        throw new ForbiddenException('DIRECTOR cannot invite ADMIN or DIRECTOR');
+      }
+
+      return targetRole;
+    }
+
+    throw new ForbiddenException('You cannot invite members to this organization');
+  }
+
+  private generateInviteToken(): string {
+    return randomBytes(32).toString('base64url');
+  }
+
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private buildInviteExpiryDate(from: Date): Date {
+    return new Date(from.getTime() + 14 * 24 * 60 * 60 * 1000);
+  }
+}

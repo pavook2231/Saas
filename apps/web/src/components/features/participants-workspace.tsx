@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MetricCard } from './metric-card';
 import { PageHeader } from './page-header';
 import { useActiveWorkspace } from './use-active-workspace';
+import { useToastFeedback } from './use-toast-feedback';
 import { WorkspaceOrgEmpty } from './workspace-org-empty';
 
 type ParticipantFormState = {
@@ -26,6 +27,12 @@ type ParticipantFormState = {
   phone: string;
   notes: string;
   sendInvite: boolean;
+};
+
+const invitationLabels: Record<string, string> = {
+  PENDING: 'Ожидает',
+  ACCEPTED: 'Принято',
+  NONE: 'Не отправлялось',
 };
 
 const initialFormState: ParticipantFormState = {
@@ -43,6 +50,7 @@ export function ParticipantsWorkspace() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
@@ -50,6 +58,18 @@ export function ParticipantsWorkspace() {
   const [form, setForm] = useState<ParticipantFormState>(initialFormState);
   const canManageParticipants =
     activeRole === 'ADMIN' || activeRole === 'DIRECTOR' || activeRole === 'ASSISTANT';
+
+  useToastFeedback({
+    noticeText,
+    errorText,
+    noticeTitle: 'Участники',
+    errorTitle: 'Участники',
+  });
+
+  const resetForm = () => {
+    setForm(initialFormState);
+    setShowAdvanced(false);
+  };
 
   const loadParticipants = useCallback(
     async (query: string, signal?: AbortSignal) => {
@@ -113,8 +133,9 @@ export function ParticipantsWorkspace() {
     return participants.map((participant) => ({
       ...participant,
       displayLabel: participantDisplayName(participant),
-      kindLabel: participant.userId ? 'Аккаунт' : 'Participant',
+      kindLabel: participant.userId ? 'Аккаунт' : 'Без аккаунта',
       contact: participant.email || participant.phone || 'Контакт не указан',
+      invitationLabel: invitationLabels[participant.invitationStatus] ?? participant.invitationStatus,
     }));
   }, [participants]);
 
@@ -156,7 +177,7 @@ export function ParticipantsWorkspace() {
           : 'Участник создан.',
       );
       setInviteToken(created.inviteToken ?? null);
-      setForm(initialFormState);
+      resetForm();
       setModalOpen(false);
       await loadParticipants(search);
     } catch (error) {
@@ -170,7 +191,7 @@ export function ParticipantsWorkspace() {
     return (
       <section className="app-page">
         <PageHeader
-          eyebrow="Participants"
+          eyebrow="Участники"
           title="Участники организации"
           description="Экран готов к работе, но сначала нужен активный membership в организации."
         />
@@ -182,9 +203,9 @@ export function ParticipantsWorkspace() {
   return (
     <section className="app-page">
       <PageHeader
-        eyebrow="Participants"
-        title="Участники организации"
-        description="Поиск, статус приглашения и создание участника собраны в одном рабочем экране без лишней сложности."
+        eyebrow="Участники"
+        title="Состав организации"
+        description="Добавление участника сокращено до базовых полей. Контакты и приглашение раскрываются только при необходимости."
         actions={
           <div className="feature-page-header__action-row">
             <Input
@@ -194,8 +215,14 @@ export function ParticipantsWorkspace() {
               onChange={(event) => setSearch(event.target.value)}
             />
             {canManageParticipants ? (
-              <Button type="button" onClick={() => setModalOpen(true)}>
-              Добавить участника
+              <Button
+                type="button"
+                onClick={() => {
+                  resetForm();
+                  setModalOpen(true);
+                }}
+              >
+                Добавить участника
               </Button>
             ) : null}
           </div>
@@ -206,17 +233,17 @@ export function ParticipantsWorkspace() {
         <MetricCard
           label="Всего участников"
           value={String(participants.length)}
-          meta="Полный список активных участников организации"
+          meta="Полный список активных участников"
         />
         <MetricCard
           label="Связаны с аккаунтом"
           value={String(linkedCount)}
-          meta="Участники, у которых уже есть пользовательский профиль"
+          meta="Уже могут входить в систему сами"
         />
         <MetricCard
           label="Приглашения в ожидании"
           value={String(invitedCount)}
-          meta="Участники, которым уже подготовлен invite"
+          meta="Еще не завершили регистрацию"
         />
       </div>
 
@@ -238,7 +265,7 @@ export function ParticipantsWorkspace() {
         <CardHeader>
           <CardTitle>Список участников</CardTitle>
           <CardDescription>
-            Зарегистрированные пользователи и participants без аккаунта отображаются единообразно.
+            В таблице оставили только информацию, которая помогает быстро найти человека и понять его статус.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -261,18 +288,16 @@ export function ParticipantsWorkspace() {
                     <th>Участник</th>
                     <th>Тип</th>
                     <th>Контакт</th>
-                    <th>Статус приглашения</th>
+                    <th>Приглашение</th>
                   </tr>
                 </thead>
                 <tbody>
                   {participantRows.map((participant) => (
                     <tr key={participant.id}>
                       <td>
-                        <div className="table-user-cell">
-                          <div className="table-user-cell__copy">
-                            <strong>{participant.displayLabel}</strong>
-                            <span>{participant.id.slice(0, 8)}...</span>
-                          </div>
+                        <div className="table-user-cell__copy">
+                          <strong>{participant.displayLabel}</strong>
+                          <span>{participant.notes?.trim() || 'Без дополнительной заметки'}</span>
                         </div>
                       </td>
                       <td>
@@ -291,7 +316,7 @@ export function ParticipantsWorkspace() {
                                 : 'neutral'
                           }
                         >
-                          {participant.invitationStatus}
+                          {participant.invitationLabel}
                         </Badge>
                       </td>
                     </tr>
@@ -307,14 +332,14 @@ export function ParticipantsWorkspace() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         title="Новый участник"
-        description="Добавьте человека в организацию. При необходимости сразу подготовим приглашение."
+        description="Сначала только имя и фамилия. Контакты и приглашение можно добавить при необходимости."
         footer={
           <>
             <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>
               Отмена
             </Button>
             <Button type="button" onClick={() => void handleCreateParticipant()} loading={creating}>
-              Создать участника
+              Сохранить участника
             </Button>
           </>
         }
@@ -333,40 +358,52 @@ export function ParticipantsWorkspace() {
             />
           </div>
 
-          <div className="resource-form-grid resource-form-grid--double">
-            <Input
-              label="Email"
-              type="email"
-              value={form.email}
-              onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-            />
-            <Input
-              label="Телефон"
-              value={form.phone}
-              onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
-            />
-          </div>
+          <button
+            type="button"
+            className="form-advanced-toggle"
+            onClick={() => setShowAdvanced((current) => !current)}
+          >
+            {showAdvanced ? 'Скрыть дополнительные поля' : 'Контакты и приглашение'}
+          </button>
 
-          <label className="ui-field-group">
-            <span className="ui-field-group__label">Заметка</span>
-            <textarea
-              className="ui-field"
-              value={form.notes}
-              onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
-              placeholder="Например: основная труппа, приглашенный артист, сценическая команда"
-            />
-          </label>
+          {showAdvanced ? (
+            <div className="resource-form-grid">
+              <div className="resource-form-grid resource-form-grid--double">
+                <Input
+                  label="Email"
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                />
+                <Input
+                  label="Телефон"
+                  value={form.phone}
+                  onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                />
+              </div>
 
-          <label className="checkbox-row">
-            <input
-              checked={form.sendInvite}
-              type="checkbox"
-              onChange={(event) =>
-                setForm((current) => ({ ...current, sendInvite: event.target.checked }))
-              }
-            />
-            <span>Сразу подготовить приглашение по email</span>
-          </label>
+              <label className="ui-field-group">
+                <span className="ui-field-group__label">Заметка</span>
+                <textarea
+                  className="ui-field"
+                  value={form.notes}
+                  onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder="Например: основная труппа, приглашенный артист или техническая команда"
+                />
+              </label>
+
+              <label className="checkbox-row">
+                <input
+                  checked={form.sendInvite}
+                  type="checkbox"
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, sendInvite: event.target.checked }))
+                  }
+                />
+                <span>Сразу подготовить приглашение по email</span>
+              </label>
+            </div>
+          ) : null}
         </div>
       </Modal>
     </section>

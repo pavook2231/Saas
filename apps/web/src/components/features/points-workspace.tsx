@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -7,6 +7,7 @@ import {
   type OrganizationDetails,
 } from '@/app/lib/api/organizations';
 import { PageHeader } from '@/components/features/page-header';
+import { useToastFeedback } from '@/components/features/use-toast-feedback';
 import { MetricCard } from '@/components/features/metric-card';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -19,6 +20,11 @@ export function PointsWorkspace() {
   const [organization, setOrganization] = useState<OrganizationDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
+
+  useToastFeedback({
+    errorText,
+    errorTitle: 'Баллы и финансы',
+  });
 
   const loadOrganization = useCallback(async () => {
     if (!accessToken || !activeOrganizationId) {
@@ -75,6 +81,7 @@ export function PointsWorkspace() {
     ],
     [activeRole, loading, organization],
   );
+
   const canAccessFinance =
     activeRole === 'ADMIN' || activeRole === 'DIRECTOR' || activeRole === 'ASSISTANT';
 
@@ -82,7 +89,7 @@ export function PointsWorkspace() {
     return (
       <section className="app-page">
         <PageHeader
-          eyebrow="Points"
+          eyebrow="Баллы"
           title="Баллы и финансы"
           description="Рабочая страница уже готова, осталось выбрать активную организацию."
         />
@@ -94,7 +101,7 @@ export function PointsWorkspace() {
   return (
     <section className="app-page">
       <PageHeader
-        eyebrow="Points"
+        eyebrow="Баллы"
         title="Баллы, ставка и расчет дохода"
         description="Ставка балла, расчет периода 25–25 и экспорт уже подключены к текущей организации и сессии."
       />
@@ -114,11 +121,9 @@ export function PointsWorkspace() {
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            {organization?.name || 'Финансовый контур организации'}
-          </CardTitle>
+          <CardTitle>{organization?.name || 'Финансовый контур организации'}</CardTitle>
           <CardDescription>
-            Рабочее пространство уже привязано к текущей сессии, поэтому здесь больше не нужно вручную вводить токен и ID организации.
+            Рабочее пространство уже привязано к текущей сессии, поэтому здесь не нужно вручную вводить токен и ID организации.
           </CardDescription>
         </CardHeader>
         <CardContent className="resource-inline-panel__content">
@@ -158,3 +163,4 @@ export function PointsWorkspace() {
     </section>
   );
 }
+

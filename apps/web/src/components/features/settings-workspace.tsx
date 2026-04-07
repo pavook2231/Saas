@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MetricCard } from './metric-card';
 import { PageHeader } from './page-header';
 import { useActiveWorkspace } from './use-active-workspace';
+import { useToastFeedback } from './use-toast-feedback';
 import { WorkspaceOrgEmpty } from './workspace-org-empty';
 
 type OrganizationFormState = {
@@ -49,6 +50,13 @@ export function SettingsWorkspace() {
   const canManageSettings = activeRole === 'ADMIN' || activeRole === 'DIRECTOR';
   const canViewMemberships =
     activeRole === 'ADMIN' || activeRole === 'DIRECTOR' || activeRole === 'ASSISTANT';
+
+  useToastFeedback({
+    noticeText,
+    errorText,
+    noticeTitle: 'Настройки',
+    errorTitle: 'Настройки',
+  });
 
   const loadData = useCallback(async () => {
     if (!accessToken || !activeOrganizationId) {
@@ -107,17 +115,17 @@ export function SettingsWorkspace() {
       {
         label: 'Моя роль',
         value: activeRole ?? '—',
-        meta: 'От роли зависит возможность менять состав, роли и финансовые настройки.',
+        meta: 'От роли зависит, можно ли менять состав, роли и финансовые настройки.',
       },
       {
         label: 'Активные участники команды',
         value: loading ? '—' : String(activeMembers),
-        meta: 'Только участники со статусом ACTIVE участвуют в ежедневной работе.',
+        meta: 'В ежедневной работе участвуют только membership со статусом ACTIVE.',
       },
       {
         label: 'Администраторы',
         value: loading ? '—' : String(admins),
-        meta: 'Организация должна сохранять хотя бы одного активного администратора.',
+        meta: 'У организации должен оставаться хотя бы один активный администратор.',
       },
     ];
   }, [activeRole, loading, memberships]);
@@ -166,9 +174,9 @@ export function SettingsWorkspace() {
     return (
       <section className="app-page">
         <PageHeader
-          eyebrow="Settings"
+          eyebrow="Настройки"
           title="Настройки организации"
-          description="Рабочая страница уже готова, осталось выбрать активную организацию."
+          description="Рабочий экран уже готов, осталось выбрать активную организацию."
         />
         <WorkspaceOrgEmpty />
       </section>
@@ -178,14 +186,16 @@ export function SettingsWorkspace() {
   return (
     <section className="app-page">
       <PageHeader
-        eyebrow="Settings"
+        eyebrow="Настройки"
         title="Настройки организации и доступов"
-        description="Организация, роли, часовой пояс и опциональные модули собраны в один понятный экран без лишнего шума."
-        actions={canManageSettings ? (
-          <Button type="button" onClick={() => void handleSave()} loading={saving}>
-            Сохранить изменения
-          </Button>
-        ) : undefined}
+        description="Организация, роли, часовой пояс и опциональные модули собраны в один понятный экран."
+        actions={
+          canManageSettings ? (
+            <Button type="button" onClick={() => void handleSave()} loading={saving}>
+              Сохранить изменения
+            </Button>
+          ) : undefined
+        }
       />
 
       <div className="page-grid page-grid--three">
@@ -355,3 +365,4 @@ export function SettingsWorkspace() {
     </section>
   );
 }
+

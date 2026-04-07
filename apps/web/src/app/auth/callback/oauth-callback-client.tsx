@@ -15,7 +15,7 @@ export default function OAuthCallbackClient() {
 
   const nextUrl = useMemo(() => {
     const raw = searchParams.get('next');
-    return (raw && raw.startsWith('/') ? raw : '/dashboard') as Route;
+    return (raw && raw.startsWith('/') ? raw : '/calendar') as Route;
   }, [searchParams]);
 
   const csrfToken = searchParams.get('csrfToken') ?? undefined;

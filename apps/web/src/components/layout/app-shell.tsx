@@ -8,6 +8,7 @@ import { cn } from '@/lib/cn';
 import { useActiveWorkspace } from '../features/use-active-workspace';
 import { useAuth } from '../../app/providers/auth-provider';
 import { AppSidebar } from './app-sidebar';
+import { PageTransition } from './page-transition';
 import { AppTopbar } from './app-topbar';
 
 const SIDEBAR_STORAGE_KEY = 'saas.ui.sidebar-collapsed';
@@ -112,7 +113,9 @@ export function AppShell({ children }: PropsWithChildren) {
           activeOrganizationId={activeOrganizationId}
           onOrganizationChange={setActiveOrganizationId}
         />
-        <main className="app-frame__content">{children}</main>
+        <main className="app-frame__content">
+          <PageTransition>{children}</PageTransition>
+        </main>
       </div>
 
       <div className={cn('app-mobile-sidebar', menuOpen && 'is-open')}>

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -48,8 +48,8 @@ type AppSidebarProps = {
 };
 
 const primaryNav: NavItem[] = [
-  { href: '/dashboard', label: 'Дашборд', icon: DashboardIcon },
   { href: '/calendar', label: 'Календарь', icon: CalendarIcon },
+  { href: '/dashboard', label: 'Главное', icon: DashboardIcon },
   { href: '/templates', label: 'Спектакли', icon: TemplateIcon },
   { href: '/events', label: 'События', icon: EventIcon },
   { href: '/participants', label: 'Участники', icon: ParticipantsIcon },
@@ -81,7 +81,7 @@ export function AppSidebar({
           {!collapsed ? (
             <div>
               <p>RPGLife SaaS</p>
-              <strong>Операционный центр</strong>
+              <strong>Быстрые действия</strong>
             </div>
           ) : null}
         </div>

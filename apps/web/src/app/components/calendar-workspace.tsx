@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { type DragEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
@@ -10,12 +11,37 @@ import {
   type EventType,
   type UpdateEventPayload,
 } from '@/app/lib/api/operations';
+import { useToastFeedback } from '@/components/features/use-toast-feedback';
 import { useActiveWorkspace } from '@/components/features/use-active-workspace';
 import { WorkspaceOrgEmpty } from '@/components/features/workspace-org-empty';
 
-import { ChatPanel } from './chat-panel';
-import { PointsIncomePanel } from './points-income-panel';
 import { ru } from '../lib/i18n/ru';
+
+const LazyChatPanel = dynamic(
+  () => import('./chat-panel').then((module) => module.ChatPanel),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="resource-empty-inline">
+        <strong>Загружаем чат</strong>
+        <p>Панель сообщений подключается автоматически.</p>
+      </div>
+    ),
+  },
+);
+
+const LazyPointsIncomePanel = dynamic(
+  () => import('./points-income-panel').then((module) => module.PointsIncomePanel),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="resource-empty-inline">
+        <strong>Загружаем финансы</strong>
+        <p>Панель баллов и дохода готовится для текущей организации.</p>
+      </div>
+    ),
+  },
+);
 
 type ViewMode = 'week' | 'month';
 
@@ -239,6 +265,14 @@ export function CalendarWorkspace() {
   const [draft, setDraft] = useState<EventDraft | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
+  const [activeSidePanel, setActiveSidePanel] = useState<'edit' | 'chat' | 'finance'>('edit');
+
+  useToastFeedback({
+    noticeText,
+    errorText,
+    noticeTitle: 'Календарь',
+    errorTitle: 'Календарь',
+  });
 
   const loadEvents = useCallback(async () => {
     if (!accessToken || !activeOrganizationId) {
@@ -322,6 +356,8 @@ export function CalendarWorkspace() {
     if (!selectedEvent) {
       return;
     }
+
+    setActiveSidePanel('edit');
 
     setDraft({
       id: selectedEvent.id,
@@ -765,6 +801,31 @@ export function CalendarWorkspace() {
       </section>
 
       <aside className="side-stack">
+        <div className="side-tabs">
+          <button
+            type="button"
+            className={activeSidePanel === 'edit' ? 'is-active' : ''}
+            onClick={() => setActiveSidePanel('edit')}
+          >
+            Быстрое редактирование
+          </button>
+          <button
+            type="button"
+            className={activeSidePanel === 'chat' ? 'is-active' : ''}
+            onClick={() => setActiveSidePanel('chat')}
+          >
+            Чат
+          </button>
+          <button
+            type="button"
+            className={activeSidePanel === 'finance' ? 'is-active' : ''}
+            onClick={() => setActiveSidePanel('finance')}
+          >
+            Баллы
+          </button>
+        </div>
+
+        {activeSidePanel === 'edit' ? (
         <section className="quick-panel">
           <h2>{ru.calendar.quickPanel.title}</h2>
           {!selectedEvent || !draft ? (
@@ -923,17 +984,23 @@ export function CalendarWorkspace() {
             </>
           )}
         </section>
+        ) : null}
 
-        <PointsIncomePanel
+        {activeSidePanel === 'finance' ? (
+        <LazyPointsIncomePanel
           organizationId={activeOrganizationId}
           accessToken={accessToken}
           lockWorkspace
         />
-        <ChatPanel
+        ) : null}
+
+        {activeSidePanel === 'chat' ? (
+        <LazyChatPanel
           organizationId={activeOrganizationId}
           accessToken={accessToken}
           lockWorkspace
         />
+        ) : null}
       </aside>
     </main>
   );

@@ -1,8 +1,9 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 
 import { organizationsApi } from '@/app/lib/api/organizations';
+import { useToast } from '@/app/providers/toast-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
@@ -32,9 +33,11 @@ export function CreateOrganizationAction({
   variant = 'primary',
   onCreated,
 }: CreateOrganizationActionProps) {
+  const toast = useToast();
   const { accessToken, refreshOrganizations, setActiveOrganizationId } = useActiveWorkspace();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(initialFormState);
 
@@ -63,12 +66,15 @@ export function CreateOrganizationAction({
       await refreshOrganizations();
       setActiveOrganizationId(created.id);
       setForm(initialFormState);
+      setShowAdvanced(false);
       setOpen(false);
+      toast.success('Организация создана. Можно сразу переходить к расписанию.');
       onCreated?.();
     } catch (error) {
-      setErrorText(
-        error instanceof Error ? error.message : 'Не удалось создать организацию.',
-      );
+      const message =
+        error instanceof Error ? error.message : 'Не удалось создать организацию.';
+      setErrorText(message);
+      toast.error(message, 'Создание организации');
     } finally {
       setSaving(false);
     }
@@ -84,7 +90,7 @@ export function CreateOrganizationAction({
         open={open}
         onClose={() => setOpen(false)}
         title="Новая организация"
-        description="Создайте рабочее пространство для спектаклей, репетиций, участников и расписания."
+        description="Для старта нужен только понятный заголовок. Остальные поля можно раскрыть при необходимости."
         footer={
           <>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
@@ -105,25 +111,37 @@ export function CreateOrganizationAction({
             }
           />
 
-          <label className="ui-field-group">
-            <span className="ui-field-group__label">Описание</span>
-            <textarea
-              className="ui-field"
-              value={form.description}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, description: event.target.value }))
-              }
-              placeholder="Например: театр, студия, команда постановки или репетиционная группа"
-            />
-          </label>
+          <button
+            type="button"
+            className="form-advanced-toggle"
+            onClick={() => setShowAdvanced((current) => !current)}
+          >
+            {showAdvanced ? 'Скрыть дополнительные поля' : 'Описание и часовой пояс'}
+          </button>
 
-          <Input
-            label="Часовой пояс"
-            value={form.timezone}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, timezone: event.target.value }))
-            }
-          />
+          {showAdvanced ? (
+            <div className="resource-form-grid">
+              <label className="ui-field-group">
+                <span className="ui-field-group__label">Описание</span>
+                <textarea
+                  className="ui-field"
+                  value={form.description}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, description: event.target.value }))
+                  }
+                  placeholder="Например: театр, студия, команда постановки или репетиционная группа"
+                />
+              </label>
+
+              <Input
+                label="Часовой пояс"
+                value={form.timezone}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, timezone: event.target.value }))
+                }
+              />
+            </div>
+          ) : null}
 
           {errorText ? <p className="finance-error">{errorText}</p> : null}
         </div>

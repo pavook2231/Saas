@@ -11,7 +11,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      router.replace('/dashboard');
+      router.replace('/calendar');
       return;
     }
 

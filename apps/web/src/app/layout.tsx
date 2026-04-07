@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 import { ru } from './lib/i18n/ru';
 import { AuthProvider } from './providers/auth-provider';
+import { ToastProvider } from './providers/toast-provider';
 import { WorkspaceProvider } from './providers/workspace-provider';
 
 export const metadata: Metadata = {
@@ -18,9 +19,11 @@ export default function RootLayout({ children }: LayoutProps) {
   return (
     <html lang="ru">
       <body>
-        <AuthProvider>
-          <WorkspaceProvider>{children}</WorkspaceProvider>
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <WorkspaceProvider>{children}</WorkspaceProvider>
+          </AuthProvider>
+        </ToastProvider>
       </body>
     </html>
   );

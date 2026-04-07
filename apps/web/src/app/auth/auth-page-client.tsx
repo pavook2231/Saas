@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { useToastFeedback } from '@/components/features/use-toast-feedback';
 
 import { useAuth } from '../providers/auth-provider';
 
@@ -53,9 +54,14 @@ export default function AuthPageClient() {
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
+  useToastFeedback({
+    errorText,
+    errorTitle: mode === 'login' ? 'Не удалось войти' : 'Не удалось создать аккаунт',
+  });
+
   const nextUrl = useMemo(() => {
     const raw = searchParams.get('next');
-    return (raw && raw.startsWith('/') ? raw : '/dashboard') as Route;
+    return (raw && raw.startsWith('/') ? raw : '/calendar') as Route;
   }, [searchParams]);
 
   useEffect(() => {

@@ -1,5 +1,7 @@
-'use client';
+﻿'use client';
 
+import type { Route } from 'next';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
@@ -20,10 +22,12 @@ import { Modal } from '@/components/ui/modal';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 
+import { loadWorkspaceDefaults, pushRecentId, saveWorkspaceDefaults } from './workspace-defaults';
 import { MetricCard } from './metric-card';
 import { PageHeader } from './page-header';
 import { ParticipantPicker } from './participant-picker';
 import { useActiveWorkspace } from './use-active-workspace';
+import { useToastFeedback } from './use-toast-feedback';
 import { WorkspaceOrgEmpty } from './workspace-org-empty';
 
 type EventFormState = {
@@ -45,10 +49,19 @@ const eventTypeLabels: Record<EventType, string> = {
   CUSTOM: 'Свободный формат',
 };
 
+const defaultTitles: Record<EventType, string> = {
+  PERFORMANCE: 'Спектакль',
+  REHEARSAL: 'Репетиция',
+  EVENT: 'Событие',
+  CUSTOM: 'Событие',
+};
+
 const dateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
   dateStyle: 'medium',
   timeStyle: 'short',
 });
+
+const durationPresets = [60, 90, 120, 180];
 
 const todayDateInput = () => {
   const date = new Date();
@@ -65,17 +78,21 @@ const currentTimeInput = () => {
   return `${String(date.getHours()).padStart(2, '0')}:00`;
 };
 
-const initialEventForm = (): EventFormState => ({
-  title: '',
-  type: 'REHEARSAL',
-  description: '',
-  dateInput: todayDateInput(),
-  timeInput: currentTimeInput(),
-  durationMinutes: 120,
-  templateId: '',
-  location: '',
-  participantIds: [],
-});
+const createInitialEventForm = (organizationId: string | null): EventFormState => {
+  const defaults = loadWorkspaceDefaults(organizationId);
+
+  return {
+    title: '',
+    type: defaults.lastEventType ?? 'REHEARSAL',
+    description: '',
+    dateInput: todayDateInput(),
+    timeInput: currentTimeInput(),
+    durationMinutes: defaults.lastEventDurationMinutes ?? 120,
+    templateId: '',
+    location: defaults.lastEventLocation ?? '',
+    participantIds: [],
+  };
+};
 
 const buildDateTime = (dateInput: string, timeInput: string) => {
   const [year, month, day] = dateInput.split('-').map(Number);
@@ -131,23 +148,68 @@ const rangeFromNow = (days: number) => {
   return date.toISOString();
 };
 
+const applyTemplateToForm = (form: EventFormState, template: TemplateRecord): EventFormState => ({
+  ...form,
+  templateId: template.id,
+  title: template.name,
+  type: template.type,
+  durationMinutes: template.durationMinutes,
+  participantIds: Array.from(templateParticipantsMap(template).keys()),
+});
+
 export function EventsWorkspace() {
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
   const [templates, setTemplates] = useState<TemplateRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | EventType>('ALL');
   const [errorText, setErrorText] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictCheckResult | null>(null);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
-  const [form, setForm] = useState<EventFormState>(initialEventForm);
+  const [form, setForm] = useState<EventFormState>(() => createInitialEventForm(null));
+  const [recentParticipantIds, setRecentParticipantIds] = useState<string[]>([]);
+  const [recentTemplateIds, setRecentTemplateIds] = useState<string[]>([]);
+  const [handledQuickKey, setHandledQuickKey] = useState<string | null>(null);
   const canManageEvents =
     activeRole === 'ADMIN' || activeRole === 'DIRECTOR' || activeRole === 'ASSISTANT';
+
+  useToastFeedback({
+    noticeText,
+    errorText,
+    noticeTitle: 'События',
+    errorTitle: 'События',
+  });
+
+  const resetForm = useCallback(
+    (templateId?: string | null) => {
+      const defaults = loadWorkspaceDefaults(activeOrganizationId);
+      setRecentParticipantIds(defaults.recentParticipantIds ?? []);
+      setRecentTemplateIds(defaults.recentTemplateIds ?? []);
+
+      let nextForm = createInitialEventForm(activeOrganizationId);
+      const template = templateId
+        ? templates.find((item) => item.id === templateId) ?? null
+        : null;
+
+      if (template) {
+        nextForm = applyTemplateToForm(nextForm, template);
+      }
+
+      setForm(nextForm);
+      setShowAdvanced(!template);
+      setConflicts(null);
+    },
+    [activeOrganizationId, templates],
+  );
 
   const loadData = useCallback(async () => {
     if (!accessToken || !activeOrganizationId) {
@@ -181,6 +243,9 @@ export function EventsWorkspace() {
         }),
       ]);
 
+      const defaults = loadWorkspaceDefaults(activeOrganizationId);
+      setRecentParticipantIds(defaults.recentParticipantIds ?? []);
+      setRecentTemplateIds(defaults.recentTemplateIds ?? []);
       setEvents(eventsResponse);
       setParticipants(participantsResponse);
       setTemplates(templatesResponse);
@@ -195,6 +260,47 @@ export function EventsWorkspace() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!activeOrganizationId) {
+      return;
+    }
+
+    resetForm();
+  }, [activeOrganizationId, resetForm]);
+
+  useEffect(() => {
+    if (!canManageEvents) {
+      return;
+    }
+
+    const quickRequested = searchParams.get('quick') === '1';
+    const templateId = searchParams.get('templateId');
+    const quickKey = quickRequested ? `${activeOrganizationId ?? 'none'}:${templateId ?? 'blank'}` : null;
+
+    if (!quickRequested) {
+      setHandledQuickKey(null);
+      return;
+    }
+
+    if (templateId && templates.length === 0) {
+      return;
+    }
+
+    if (!quickKey || handledQuickKey === quickKey) {
+      return;
+    }
+
+    resetForm(templateId);
+    setModalOpen(true);
+    setHandledQuickKey(quickKey);
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('quick');
+    params.delete('templateId');
+    const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    router.replace(nextUrl as Route);
+  }, [activeOrganizationId, canManageEvents, handledQuickKey, pathname, resetForm, router, searchParams, templates.length]);
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === form.templateId) ?? null,
@@ -229,6 +335,20 @@ export function EventsWorkspace() {
 
     return { rehearsals, performances, upcoming };
   }, [events]);
+
+  const recentTemplates = useMemo(() => {
+    const byId = new Map(templates.map((template) => [template.id, template]));
+    return recentTemplateIds
+      .map((templateId) => byId.get(templateId) ?? null)
+      .filter((template): template is TemplateRecord => template !== null);
+  }, [recentTemplateIds, templates]);
+
+  const recentParticipants = useMemo(() => {
+    const byId = new Map(participants.map((participant) => [participant.id, participant]));
+    return recentParticipantIds
+      .map((participantId) => byId.get(participantId) ?? null)
+      .filter((participant): participant is ParticipantRecord => participant !== null);
+  }, [participants, recentParticipantIds]);
 
   useEffect(() => {
     if (!modalOpen) {
@@ -299,15 +419,15 @@ export function EventsWorkspace() {
       return;
     }
 
-    const templateParticipantIds = Array.from(templateParticipantsMap(template).keys());
+    setForm((current) => applyTemplateToForm(current, template));
+  };
 
+  const toggleQuickParticipant = (participantId: string) => {
     setForm((current) => ({
       ...current,
-      templateId: template.id,
-      title: template.name,
-      type: template.type,
-      durationMinutes: template.durationMinutes,
-      participantIds: templateParticipantIds,
+      participantIds: current.participantIds.includes(participantId)
+        ? current.participantIds.filter((item) => item !== participantId)
+        : [...current.participantIds, participantId],
     }));
   };
 
@@ -321,21 +441,18 @@ export function EventsWorkspace() {
     setNoticeText(null);
 
     try {
-      if (form.title.trim().length < 2) {
-        throw new Error('Название события должно содержать минимум 2 символа');
-      }
-
       if (form.durationMinutes < 1) {
         throw new Error('Укажите корректную длительность');
       }
 
       const { startsAt, endsAt } = rangeForApi(form);
+      const resolvedTitle = form.title.trim() || selectedTemplate?.name || defaultTitles[form.type];
 
       await operationsApi.createEvent({
         organizationId: activeOrganizationId,
         accessToken,
         payload: {
-          title: form.title.trim(),
+          title: resolvedTitle,
           description: form.description.trim() || undefined,
           type: form.type,
           status: 'PLANNED',
@@ -356,9 +473,21 @@ export function EventsWorkspace() {
         },
       });
 
+      const previousDefaults = loadWorkspaceDefaults(activeOrganizationId);
+      const nextDefaults = saveWorkspaceDefaults(activeOrganizationId, {
+        lastEventType: form.type,
+        lastEventDurationMinutes: form.durationMinutes,
+        lastEventLocation: form.location,
+        recentParticipantIds: form.participantIds,
+        recentTemplateIds: form.templateId
+          ? pushRecentId(previousDefaults.recentTemplateIds, form.templateId)
+          : previousDefaults.recentTemplateIds,
+      });
+
+      setRecentParticipantIds(nextDefaults.recentParticipantIds ?? []);
+      setRecentTemplateIds(nextDefaults.recentTemplateIds ?? []);
       setNoticeText(ignoreConflicts ? 'Событие создано несмотря на конфликты.' : 'Событие создано.');
-      setForm(initialEventForm());
-      setConflicts(null);
+      resetForm();
       setModalOpen(false);
       await loadData();
     } catch (error) {
@@ -376,7 +505,7 @@ export function EventsWorkspace() {
     return (
       <section className="app-page">
         <PageHeader
-          eyebrow="Events"
+          eyebrow="События"
           title="Репетиции и события"
           description="Экран готов к работе, но сначала нужен активный membership в организации."
         />
@@ -388,9 +517,9 @@ export function EventsWorkspace() {
   return (
     <section className="app-page">
       <PageHeader
-        eyebrow="Events"
-        title="Репетиции и события"
-        description="Создавайте репетиции и спектакли из одного экрана. Если выбран шаблон, состав и длительность подставляются автоматически."
+        eyebrow="События"
+        title="Репетиции и показы"
+        description="Основной сценарий теперь короткий: выбрать шаблон или тип, указать время и сохранить. Остальное скрыто до запроса."
         actions={
           <div className="feature-page-header__action-row">
             <Input
@@ -411,8 +540,14 @@ export function EventsWorkspace() {
               <option value="CUSTOM">Свободный формат</option>
             </Select>
             {canManageEvents ? (
-              <Button type="button" onClick={() => setModalOpen(true)}>
-              Создать событие
+              <Button
+                type="button"
+                onClick={() => {
+                  resetForm();
+                  setModalOpen(true);
+                }}
+              >
+                Создать событие
               </Button>
             ) : null}
           </div>
@@ -423,12 +558,12 @@ export function EventsWorkspace() {
         <MetricCard
           label="Ближайшие события"
           value={String(metrics.upcoming)}
-          meta="События в будущем окне планирования"
+          meta="Что находится в ближайшем окне планирования"
         />
         <MetricCard
           label="Репетиции"
           value={String(metrics.rehearsals)}
-          meta="Количество рабочих репетиций в текущей выборке"
+          meta="Рабочие слоты в текущей выборке"
         />
         <MetricCard
           label="Спектакли"
@@ -449,7 +584,7 @@ export function EventsWorkspace() {
         <CardHeader>
           <CardTitle>Лента событий</CardTitle>
           <CardDescription>
-            Выбранный шаблон подставляет состав и длительность, а конфликты видны до сохранения.
+            Шаблон подставляет состав и длительность, а форма оставляет только важные действия на первом шаге.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -462,7 +597,7 @@ export function EventsWorkspace() {
           ) : visibleEvents.length === 0 ? (
             <div className="resource-empty-inline">
               <strong>Событий пока нет</strong>
-              <p>Создайте первое событие, чтобы запустить расписание и проверку занятости.</p>
+              <p>Создайте первое событие и начните управлять расписанием без лишних переходов.</p>
             </div>
           ) : (
             <div className="data-table-wrap">
@@ -471,7 +606,6 @@ export function EventsWorkspace() {
                   <tr>
                     <th>Событие</th>
                     <th>Когда</th>
-                    <th>Тип</th>
                     <th>Шаблон</th>
                     <th>Участники</th>
                   </tr>
@@ -482,15 +616,10 @@ export function EventsWorkspace() {
                       <td>
                         <div className="table-user-cell__copy">
                           <strong>{event.title}</strong>
-                          <span>{event.location || 'Локация не указана'}</span>
+                          <span>{event.location || eventTypeLabels[event.type]}</span>
                         </div>
                       </td>
                       <td>{dateTimeFormat.format(new Date(event.startsAt))}</td>
-                      <td>
-                        <Badge variant={event.type === 'PERFORMANCE' ? 'primary' : 'neutral'}>
-                          {eventTypeLabels[event.type]}
-                        </Badge>
-                      </td>
                       <td>{event.template?.name || 'Без шаблона'}</td>
                       <td>{event.participants.length}</td>
                     </tr>
@@ -506,7 +635,7 @@ export function EventsWorkspace() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         title="Новое событие"
-        description="Выберите шаблон, если хотите сразу подтянуть состав и длительность. Для репетиции можно заполнить форму вручную."
+        description="Сначала только главное: шаблон, время и длительность. Все дополнительные поля раскрываются по кнопке."
         size="lg"
         footer={
           <>
@@ -520,7 +649,7 @@ export function EventsWorkspace() {
                 onClick={() => void createEvent(true)}
                 loading={creating}
               >
-                Создать несмотря на конфликты
+                Сохранить несмотря на конфликты
               </Button>
             ) : null}
             <Button type="button" onClick={() => void createEvent(false)} loading={creating}>
@@ -530,6 +659,24 @@ export function EventsWorkspace() {
         }
       >
         <div className="resource-form-grid">
+          {recentTemplates.length > 0 ? (
+            <div className="modal-form-section">
+              <span className="quick-choice-label">Недавние спектакли</span>
+              <div className="quick-choice-row">
+                {recentTemplates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    className={`quick-choice-chip${form.templateId === template.id ? ' is-active' : ''}`}
+                    onClick={() => applyTemplate(template.id)}
+                  >
+                    {template.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="resource-form-grid resource-form-grid--double">
             <Select
               label="Шаблон спектакля"
@@ -558,13 +705,7 @@ export function EventsWorkspace() {
             </Select>
           </div>
 
-          <Input
-            label="Название"
-            value={form.title}
-            onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-          />
-
-          <div className="resource-form-grid resource-form-grid--triple">
+          <div className="resource-form-grid resource-form-grid--double">
             <Input
               label="Дата"
               type="date"
@@ -581,44 +722,107 @@ export function EventsWorkspace() {
                 setForm((current) => ({ ...current, timeInput: event.target.value }))
               }
             />
-            <Input
-              label="Длительность (мин)"
-              type="number"
-              min={1}
-              step={15}
-              value={String(form.durationMinutes)}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  durationMinutes: Number(event.target.value) || 0,
-                }))
-              }
-            />
           </div>
 
-          <div className="resource-form-grid resource-form-grid--double">
-            <Input
-              label="Локация"
-              value={form.location}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, location: event.target.value }))
-              }
-            />
-            <Input
-              label="Краткое описание"
-              value={form.description}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, description: event.target.value }))
-              }
-            />
+          <div className="modal-form-section">
+            <span className="quick-choice-label">Длительность</span>
+            <div className="quick-choice-row">
+              {durationPresets.map((duration) => (
+                <button
+                  key={duration}
+                  type="button"
+                  className={`quick-choice-chip${form.durationMinutes === duration ? ' is-active' : ''}`}
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      durationMinutes: duration,
+                    }))
+                  }
+                >
+                  {duration} мин
+                </button>
+              ))}
+            </div>
           </div>
 
-          <ParticipantPicker
-            participants={participants}
-            value={form.participantIds}
-            onChange={(participantIds) => setForm((current) => ({ ...current, participantIds }))}
-            label="Участники"
+          <Input
+            label="Длительность (мин)"
+            type="number"
+            min={1}
+            step={15}
+            value={String(form.durationMinutes)}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                durationMinutes: Number(event.target.value) || 0,
+              }))
+            }
           />
+
+          {!selectedTemplate && recentParticipants.length > 0 ? (
+            <div className="modal-form-section">
+              <span className="quick-choice-label">Недавние участники</span>
+              <div className="quick-choice-row">
+                {recentParticipants.map((participant) => {
+                  const active = form.participantIds.includes(participant.id);
+                  return (
+                    <button
+                      key={participant.id}
+                      type="button"
+                      className={`quick-choice-chip${active ? ' is-active' : ''}`}
+                      onClick={() => toggleQuickParticipant(participant.id)}
+                    >
+                      {participantDisplayName(participant)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            className="form-advanced-toggle"
+            onClick={() => setShowAdvanced((current) => !current)}
+          >
+            {showAdvanced ? 'Скрыть дополнительные поля' : 'Дополнительно'}
+          </button>
+
+          {showAdvanced ? (
+            <div className="resource-form-grid">
+              <Input
+                label="Название"
+                placeholder={selectedTemplate?.name || defaultTitles[form.type]}
+                value={form.title}
+                onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+              />
+
+              <div className="resource-form-grid resource-form-grid--double">
+                <Input
+                  label="Локация"
+                  value={form.location}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, location: event.target.value }))
+                  }
+                />
+                <Input
+                  label="Краткое описание"
+                  value={form.description}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, description: event.target.value }))
+                  }
+                />
+              </div>
+
+              <ParticipantPicker
+                participants={participants}
+                recentIds={recentParticipantIds}
+                value={form.participantIds}
+                onChange={(participantIds) => setForm((current) => ({ ...current, participantIds }))}
+                label="Участники"
+              />
+            </div>
+          ) : null}
 
           {checkingConflicts ? (
             <p className="finance-notice">Проверяем конфликты занятости...</p>
@@ -656,10 +860,7 @@ export function EventsWorkspace() {
                   <strong>Подтянуто из шаблона</strong>
                   <span>
                     {selectedTemplate.name} · {selectedTemplate.durationMinutes} мин ·{' '}
-                    {selectedTemplate.roles.length > 0
-                      ? Array.from(selectedTemplateAssignments.keys()).length
-                      : 0}{' '}
-                    участников
+                    {Array.from(selectedTemplateAssignments.keys()).length} участников
                   </span>
                 </div>
               </CardContent>
@@ -670,3 +871,4 @@ export function EventsWorkspace() {
     </section>
   );
 }
+

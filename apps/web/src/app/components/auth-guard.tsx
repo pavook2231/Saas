@@ -14,7 +14,7 @@ export function AuthGuard({ children }: PropsWithChildren) {
   useEffect(() => {
     if (status === 'unauthenticated') {
       const params = new URLSearchParams();
-      params.set('next', pathname || '/dashboard');
+      params.set('next', pathname || '/calendar');
       router.replace(`/auth?${params.toString()}` as Route);
     }
   }, [pathname, router, status]);

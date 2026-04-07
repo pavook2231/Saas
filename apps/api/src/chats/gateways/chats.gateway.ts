@@ -67,7 +67,7 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         typeof payload.sub !== 'string' ||
         payload.sub.trim().length === 0
       ) {
-        throw new Error('Invalid access token payload');
+        throw new Error('Некорректное содержимое access-токена');
       }
 
       const user = await this.prisma.user.findUnique({
@@ -82,7 +82,7 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       if (!user || !user.isActive || user.deletedAt !== null) {
-        throw new Error('User is disabled');
+        throw new Error('Пользователь деактивирован');
       }
 
       client.data.userId = payload.sub;
@@ -180,7 +180,7 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
 
     if (!membership) {
-      throw new WsException('Active membership is required');
+      throw new WsException('Требуется активное членство');
     }
   }
 
@@ -197,7 +197,7 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
 
     if (!event) {
-      throw new WsException('Event not found');
+      throw new WsException('Событие не найдено');
     }
   }
 
@@ -261,7 +261,7 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     if (!allowedOrigins.includes(origin)) {
-      throw new Error('Origin is not allowed');
+      throw new Error('Источник запроса запрещен');
     }
   }
 
@@ -282,7 +282,7 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       (typeof forwardedProto === 'string' && forwardedProto.toLowerCase() === 'https');
 
     if (!isSecure) {
-      throw new Error('Secure WebSocket transport is required');
+      throw new Error('Требуется защищенный WebSocket-транспорт');
     }
   }
 

@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'SaaS Platform',
-  description: 'Organization and scheduling management platform',
+  title: 'Платформа управления организациями',
+  description: 'Платформа для управления организациями, расписанием и участниками',
 };
 
 type LayoutProps = {
@@ -13,7 +13,7 @@ type LayoutProps = {
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
-    <html lang="en">
+    <html lang="ru">
       <body>{children}</body>
     </html>
   );

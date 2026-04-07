@@ -323,7 +323,7 @@ export class ChatsService {
     });
 
     if (!message) {
-      throw new NotFoundException('Chat message not found');
+      throw new NotFoundException('Сообщение чата не найдено');
     }
 
     return message;
@@ -349,7 +349,7 @@ export class ChatsService {
     });
 
     if (!membership || !moderatorRoles.has(membership.role)) {
-      throw new ForbiddenException('You cannot edit/delete this message');
+      throw new ForbiddenException('У вас нет прав редактировать или удалять это сообщение');
     }
   }
 
@@ -365,7 +365,7 @@ export class ChatsService {
     });
 
     if (!organization) {
-      throw new NotFoundException('Organization not found');
+      throw new NotFoundException('Организация не найдена');
     }
   }
 
@@ -382,13 +382,13 @@ export class ChatsService {
     });
 
     if (!event) {
-      throw new NotFoundException('Event not found');
+      throw new NotFoundException('Событие не найдено');
     }
   }
 
   private async ensureMessageCanBeModified(message: ChatMessageRecord) {
     if (message.deletedAt) {
-      throw new BadRequestException('Message is already deleted');
+      throw new BadRequestException('Сообщение уже удалено');
     }
   }
 
@@ -456,7 +456,7 @@ export class ChatsService {
     const parsed = new Date(value);
 
     if (Number.isNaN(parsed.getTime())) {
-      throw new BadRequestException('Invalid before date');
+      throw new BadRequestException('Некорректный параметр before');
     }
 
     return parsed;
@@ -466,11 +466,11 @@ export class ChatsService {
     const normalized = value.trim();
 
     if (normalized.length < 1) {
-      throw new BadRequestException('Message body is required');
+      throw new BadRequestException('Текст сообщения обязателен');
     }
 
     if (normalized.length > 4000) {
-      throw new BadRequestException('Message body is too long');
+      throw new BadRequestException('Текст сообщения слишком длинный');
     }
 
     return normalized;

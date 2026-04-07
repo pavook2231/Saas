@@ -32,7 +32,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       typeof payload.email !== 'string' ||
       payload.email.trim().length === 0
     ) {
-      throw new UnauthorizedException('Invalid access token type');
+      throw new UnauthorizedException('Неверный тип access-токена');
     }
 
     const user = await this.prisma.user.findUnique({
@@ -47,7 +47,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
 
     if (!user || !user.isActive || user.deletedAt !== null) {
-      throw new UnauthorizedException('User is disabled');
+      throw new UnauthorizedException('Пользователь деактивирован');
     }
 
     return payload;

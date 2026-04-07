@@ -55,7 +55,7 @@ export class NotificationsService {
     const tokenHash = this.dataEncryptionService.hashDeterministic(token);
 
     if (token.length < 20) {
-      throw new BadRequestException('Invalid push token');
+      throw new BadRequestException('Некорректный push-токен');
     }
 
     const device = await this.prisma.pushDeviceToken.upsert({
@@ -192,7 +192,7 @@ export class NotificationsService {
     });
 
     if (!recipient) {
-      throw new NotFoundException('Notification recipient not found');
+      throw new NotFoundException('Получатель уведомления не найден');
     }
 
     if (recipient.status === NotificationDeliveryStatus.READ) {
@@ -712,7 +712,7 @@ export class NotificationsService {
     try {
       return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
     } catch {
-      throw new InternalServerErrorException('Failed to serialize notification payload');
+      throw new InternalServerErrorException('Не удалось сериализовать данные уведомления');
     }
   }
 }

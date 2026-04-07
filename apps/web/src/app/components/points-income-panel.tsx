@@ -100,11 +100,11 @@ const getErrorMessage = (error: unknown): string => {
     return error.message;
   }
 
-  return 'Unexpected request error';
+  return 'Непредвиденная ошибка запроса';
 };
 
 const parseErrorMessage = async (response: Response): Promise<string> => {
-  const fallback = `Request failed (${response.status})`;
+  const fallback = `Ошибка запроса (${response.status})`;
 
   try {
     const payload = (await response.json()) as {
@@ -161,7 +161,7 @@ const formatIsoDateTime = (value: string | null): string => {
     return value;
   }
 
-  return parsed.toLocaleString();
+  return parsed.toLocaleString('ru-RU');
 };
 
 const formatAmount = (amount: string | null, currency: CurrencyCode): string => {
@@ -204,7 +204,7 @@ export function PointsIncomePanel() {
 
   const requireOrganization = (): string => {
     if (!pointsBaseUrl) {
-      throw new Error('Organization ID is required');
+      throw new Error('Нужно указать ID организации');
     }
 
     return pointsBaseUrl;
@@ -214,7 +214,7 @@ export function PointsIncomePanel() {
     const value = organizationId.trim();
 
     if (!value) {
-      throw new Error('Organization ID is required');
+      throw new Error('Нужно указать ID организации');
     }
 
     return value;
@@ -224,7 +224,7 @@ export function PointsIncomePanel() {
     const token = accessToken.trim();
 
     if (!token) {
-      throw new Error('Access token is required for this action');
+      throw new Error('Для этого действия нужен access token');
     }
 
     return {
@@ -290,7 +290,7 @@ export function PointsIncomePanel() {
     const enabled = await syncFinanceStatus();
 
     if (!enabled) {
-      throw new Error('Finance is disabled for this organization');
+      throw new Error('Финансовый модуль отключен для этой организации');
     }
   };
 
@@ -304,6 +304,7 @@ export function PointsIncomePanel() {
       const response = await fetch(url, {
         headers: {
           Accept: 'application/json',
+          ...requireAuthHeaders(),
         },
       });
 
@@ -319,7 +320,7 @@ export function PointsIncomePanel() {
         setPointValue(payload.pointValue);
       }
 
-      setNoticeText('Point rate loaded');
+      setNoticeText('Стоимость балла загружена');
     });
   };
 
@@ -359,7 +360,7 @@ export function PointsIncomePanel() {
       setCurrency(payload.currency);
       setPointValue(payload.pointValue);
       setNoticeText(
-        `Point rate saved: ${payload.pointValue} ${payload.currency} from ${payload.effectiveFrom.slice(0, 10)}`,
+        `Стоимость балла сохранена: ${payload.pointValue} ${payload.currency}, действует с ${payload.effectiveFrom.slice(0, 10)}`,
       );
     });
   };
@@ -385,7 +386,7 @@ export function PointsIncomePanel() {
 
       const payload = (await response.json()) as IncomeResponse;
       setIncomeData(payload);
-      setNoticeText('Income report calculated');
+      setNoticeText('Отчет по доходу рассчитан');
     });
   };
 
@@ -423,14 +424,14 @@ export function PointsIncomePanel() {
         downloadBlob(fileName, jsonContent, 'application/json;charset=utf-8');
       }
 
-      setNoticeText(`Export ${format.toUpperCase()} ready`);
+      setNoticeText(`Экспорт ${format.toUpperCase()} готов`);
     });
   };
 
   const refreshFinanceStatus = async () => {
     await withAction('sync-finance', async () => {
       const enabled = await syncFinanceStatus();
-      setNoticeText(enabled ? 'Finance is enabled' : 'Finance is disabled');
+      setNoticeText(enabled ? 'Финансы включены' : 'Финансы отключены');
     });
   };
 
@@ -460,15 +461,15 @@ export function PointsIncomePanel() {
         setRateData(null);
         setIncomeData(null);
       }
-      setNoticeText(next ? 'Finance enabled' : 'Finance disabled');
+      setNoticeText(next ? 'Финансовый модуль включен' : 'Финансовый модуль отключен');
     });
   };
 
   return (
     <section className="finance-panel">
-      <h2>Points & Income</h2>
+      <h2>Баллы и доход</h2>
       <p className="finance-note">
-        Set point value, calculate income for 25-25 period and export report.
+        Настраивайте стоимость балла, считайте доход за период 25-25 и выгружайте отчет.
       </p>
 
       <form
@@ -479,18 +480,18 @@ export function PointsIncomePanel() {
         }}
       >
         <label>
-          Organization ID
+          ID организации
           <input
-            placeholder="UUID organization"
+            placeholder="UUID организации"
             value={organizationId}
             onChange={(event) => setOrganizationId(event.target.value)}
           />
         </label>
 
         <label>
-          Access token
+          Токен доступа
           <input
-            placeholder="JWT access token"
+            placeholder="JWT токен доступа"
             type="password"
             value={accessToken}
             onChange={(event) => setAccessToken(event.target.value)}
@@ -499,7 +500,7 @@ export function PointsIncomePanel() {
 
         <div className="row">
           <label>
-            Reference date
+            Дата расчета
             <input
               type="date"
               value={referenceDate}
@@ -508,9 +509,9 @@ export function PointsIncomePanel() {
           </label>
 
           <label>
-            Participant (optional)
+            Участник (необязательно)
             <input
-              placeholder="Participant UUID"
+              placeholder="UUID участника"
               value={participantId}
               onChange={(event) => setParticipantId(event.target.value)}
             />
@@ -523,17 +524,15 @@ export function PointsIncomePanel() {
             onClick={() => void refreshFinanceStatus()}
             disabled={busyAction !== null}
           >
-            {busyAction === 'sync-finance' ? 'Checking...' : 'Check Finance Flag'}
+            {busyAction === 'sync-finance' ? 'Проверка...' : 'Проверить флаг финансов'}
           </button>
         </div>
       </form>
 
       {financeEnabled === false ? (
         <section className="finance-block">
-          <h3>Finance Disabled</h3>
-          <p className="empty-state">
-            Financial features are off for this organization.
-          </p>
+          <h3>Финансы отключены</h3>
+          <p className="empty-state">Финансовые функции выключены для этой организации.</p>
           <div className="action-row">
             <button
               className="accent-button"
@@ -541,7 +540,7 @@ export function PointsIncomePanel() {
               onClick={() => void updateFinanceEnabled(true)}
               disabled={busyAction !== null}
             >
-              {busyAction === 'toggle-finance' ? 'Updating...' : 'Enable Finance'}
+              {busyAction === 'toggle-finance' ? 'Обновление...' : 'Включить финансы'}
             </button>
           </div>
         </section>
@@ -549,9 +548,9 @@ export function PointsIncomePanel() {
 
       {financeEnabled === null ? (
         <section className="finance-block">
-          <h3>Finance Access</h3>
+          <h3>Доступ к финансам</h3>
           <p className="empty-state">
-            Enter organization and token, then press "Check Finance Flag".
+            Укажите организацию и токен, затем нажмите «Проверить флаг финансов».
           </p>
         </section>
       ) : null}
@@ -559,171 +558,165 @@ export function PointsIncomePanel() {
       {financeEnabled ? (
         <>
           <section className="finance-block">
-        <h3>Point Value</h3>
+            <h3>Стоимость балла</h3>
 
-        <div className="row">
-          <label>
-            Value
-            <input
-              inputMode="decimal"
-              placeholder="3.00"
-              value={pointValue}
-              onChange={(event) => setPointValue(event.target.value)}
-            />
-          </label>
+            <div className="row">
+              <label>
+                Значение
+                <input
+                  inputMode="decimal"
+                  placeholder="3.00"
+                  value={pointValue}
+                  onChange={(event) => setPointValue(event.target.value)}
+                />
+              </label>
 
-          <label>
-            Currency
-            <select
-              value={currency}
-              onChange={(event) => setCurrency(event.target.value as CurrencyCode)}
-            >
-              {currencyOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+              <label>
+                Валюта
+                <select
+                  value={currency}
+                  onChange={(event) => setCurrency(event.target.value as CurrencyCode)}
+                >
+                  {currencyOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
-        <label>
-          Effective from
-          <input
-            type="date"
-            value={effectiveFrom}
-            onChange={(event) => setEffectiveFrom(event.target.value)}
-          />
-        </label>
+            <label>
+              Действует с
+              <input
+                type="date"
+                value={effectiveFrom}
+                onChange={(event) => setEffectiveFrom(event.target.value)}
+              />
+            </label>
 
-        <div className="action-row">
-          <button
-            type="button"
-            onClick={() => void loadRate()}
-            disabled={busyAction !== null}
-          >
-            {busyAction === 'load-rate' ? 'Loading...' : 'Load Rate'}
-          </button>
-          <button
-            className="accent-button"
-            type="button"
-            onClick={() => void saveRate()}
-            disabled={busyAction !== null}
-          >
-            {busyAction === 'save-rate' ? 'Saving...' : 'Save Rate'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void updateFinanceEnabled(false)}
-            disabled={busyAction !== null}
-          >
-            {busyAction === 'toggle-finance' ? 'Updating...' : 'Disable Finance'}
-          </button>
-        </div>
+            <div className="action-row">
+              <button
+                type="button"
+                onClick={() => void loadRate()}
+                disabled={busyAction !== null}
+              >
+                {busyAction === 'load-rate' ? 'Загрузка...' : 'Загрузить ставку'}
+              </button>
+              <button
+                className="accent-button"
+                type="button"
+                onClick={() => void saveRate()}
+                disabled={busyAction !== null}
+              >
+                {busyAction === 'save-rate' ? 'Сохранение...' : 'Сохранить ставку'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void updateFinanceEnabled(false)}
+                disabled={busyAction !== null}
+              >
+                {busyAction === 'toggle-finance' ? 'Обновление...' : 'Отключить финансы'}
+              </button>
+            </div>
 
-        {rateData ? (
-          <p className="finance-meta">
-            Current: {rateData.pointValue ?? '-'} {rateData.currency}
-            {' · '}
-            source {rateData.source}
-            {' · '}
-            effective {formatIsoDateTime(rateData.effectiveFrom)}
-          </p>
-        ) : null}
+            {rateData ? (
+              <p className="finance-meta">
+                Текущая ставка: {rateData.pointValue ?? '-'} {rateData.currency}
+                {' | '}
+                источник {rateData.source}
+                {' | '}
+                действует {formatIsoDateTime(rateData.effectiveFrom)}
+              </p>
+            ) : null}
           </section>
 
           <section className="finance-block">
-        <h3>Income</h3>
+            <h3>Доход</h3>
 
-        <div className="action-row">
-          <button
-            type="button"
-            onClick={() => void loadIncome()}
-            disabled={busyAction !== null}
-          >
-            {busyAction === 'load-income' ? 'Calculating...' : 'Calculate'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void exportReport('csv')}
-            disabled={busyAction !== null}
-          >
-            {busyAction === 'export-csv' ? 'Exporting...' : 'Export CSV'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void exportReport('json')}
-            disabled={busyAction !== null}
-          >
-            {busyAction === 'export-json' ? 'Exporting...' : 'Export JSON'}
-          </button>
-        </div>
-
-        {incomeData ? (
-          <>
-            <div className="income-stats">
-              <article>
-                <span>Total points</span>
-                <strong>{incomeData.totals.totalPoints}</strong>
-              </article>
-              <article>
-                <span>Auto points</span>
-                <strong>{incomeData.totals.autoPoints}</strong>
-              </article>
-              <article>
-                <span>Manual points</span>
-                <strong>{incomeData.totals.manualPoints}</strong>
-              </article>
-              <article>
-                <span>Total income</span>
-                <strong>
-                  {formatAmount(
-                    incomeData.totals.totalAmount,
-                    incomeData.rate.currency,
-                  )}
-                </strong>
-              </article>
+            <div className="action-row">
+              <button
+                type="button"
+                onClick={() => void loadIncome()}
+                disabled={busyAction !== null}
+              >
+                {busyAction === 'load-income' ? 'Расчет...' : 'Рассчитать'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void exportReport('csv')}
+                disabled={busyAction !== null}
+              >
+                {busyAction === 'export-csv' ? 'Экспорт...' : 'Экспорт CSV'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void exportReport('json')}
+                disabled={busyAction !== null}
+              >
+                {busyAction === 'export-json' ? 'Экспорт...' : 'Экспорт JSON'}
+              </button>
             </div>
 
-            <p className="finance-meta">
-              Period: {incomeData.periodStart.slice(0, 10)} to{' '}
-              {incomeData.periodEnd.slice(0, 10)}
-              {' · '}
-              entries {incomeData.entriesCount}
-              {' · '}
-              rate {incomeData.rate.pointValue ?? '-'} {incomeData.rate.currency}
-            </p>
+            {incomeData ? (
+              <>
+                <div className="income-stats">
+                  <article>
+                    <span>Всего баллов</span>
+                    <strong>{incomeData.totals.totalPoints}</strong>
+                  </article>
+                  <article>
+                    <span>Автобаллы</span>
+                    <strong>{incomeData.totals.autoPoints}</strong>
+                  </article>
+                  <article>
+                    <span>Ручные баллы</span>
+                    <strong>{incomeData.totals.manualPoints}</strong>
+                  </article>
+                  <article>
+                    <span>Общий доход</span>
+                    <strong>
+                      {formatAmount(incomeData.totals.totalAmount, incomeData.rate.currency)}
+                    </strong>
+                  </article>
+                </div>
 
-            <div className="income-table-wrap">
-              <table className="income-table">
-                <thead>
-                  <tr>
-                    <th>Participant</th>
-                    <th>Auto</th>
-                    <th>Manual</th>
-                    <th>Total</th>
-                    <th>Income</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {incomeData.participants.map((participant) => (
-                    <tr key={participant.participantId}>
-                      <td>{participant.participantName}</td>
-                      <td>{participant.autoPoints}</td>
-                      <td>{participant.manualPoints}</td>
-                      <td>{participant.totalPoints}</td>
-                      <td>
-                        {formatAmount(participant.amount, incomeData.rate.currency)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        ) : (
-          <p className="empty-state">No income data loaded yet.</p>
-        )}
+                <p className="finance-meta">
+                  Период: {incomeData.periodStart.slice(0, 10)} - {incomeData.periodEnd.slice(0, 10)}
+                  {' | '}
+                  записей {incomeData.entriesCount}
+                  {' | '}
+                  ставка {incomeData.rate.pointValue ?? '-'} {incomeData.rate.currency}
+                </p>
+
+                <div className="income-table-wrap">
+                  <table className="income-table">
+                    <thead>
+                      <tr>
+                        <th>Участник</th>
+                        <th>Авто</th>
+                        <th>Ручные</th>
+                        <th>Итого</th>
+                        <th>Доход</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {incomeData.participants.map((participant) => (
+                        <tr key={participant.participantId}>
+                          <td>{participant.participantName}</td>
+                          <td>{participant.autoPoints}</td>
+                          <td>{participant.manualPoints}</td>
+                          <td>{participant.totalPoints}</td>
+                          <td>{formatAmount(participant.amount, incomeData.rate.currency)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <p className="empty-state">Данные по доходу еще не загружены.</p>
+            )}
           </section>
         </>
       ) : null}

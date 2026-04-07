@@ -368,7 +368,7 @@ export class PointsService {
     const to = query.to ? this.parseReferenceDate(query.to) : null;
 
     if (from && to && from.getTime() > to.getTime()) {
-      throw new BadRequestException('from cannot be later than to');
+      throw new BadRequestException('Параметр from не может быть позже параметра to');
     }
 
     const where: Prisma.PointRateHistoryWhereInput = {
@@ -567,18 +567,18 @@ export class PointsService {
     });
 
     if (!event) {
-      throw new NotFoundException('Event not found');
+      throw new NotFoundException('Событие не найдено');
     }
 
     if (event.status === 'CANCELLED') {
-      throw new ConflictException('Cannot compute points for cancelled event');
+      throw new ConflictException('Нельзя рассчитать баллы для отмененного события');
     }
 
     const period = this.buildPeriodRange(event.startsAt, config.periodStartDay);
     const rule = this.resolveAutoRule(event.type, event.durationMinutes, config);
 
     if (rule.points.lte(0)) {
-      throw new BadRequestException('Auto points rule is not available for this event type');
+      throw new BadRequestException('Для этого типа события правило автобаллов недоступно');
     }
 
     const eligibleParticipants = event.participants.filter(
@@ -814,11 +814,11 @@ export class PointsService {
     const reason = dto.reason.trim();
 
     if (reason.length < 3) {
-      throw new BadRequestException('reason is required');
+      throw new BadRequestException('Поле reason обязательно');
     }
 
     if (points.eq(0)) {
-      throw new BadRequestException('points cannot be 0');
+      throw new BadRequestException('Количество баллов не может быть равно 0');
     }
 
     if (dto.eventId) {
@@ -940,7 +940,7 @@ export class PointsService {
     const reason = dto.reason.trim();
 
     if (reason.length < 3) {
-      throw new BadRequestException('reason is required');
+      throw new BadRequestException('Поле reason обязательно');
     }
 
     const adjustment = await this.prisma.manualPointsAdjustment.findFirst({
@@ -968,11 +968,11 @@ export class PointsService {
     });
 
     if (!adjustment) {
-      throw new NotFoundException('Manual points adjustment not found');
+      throw new NotFoundException('Ручная корректировка баллов не найдена');
     }
 
     if (adjustment.deletedAt || adjustment.ledgerEntry.reversedAt) {
-      throw new ConflictException('Manual points adjustment is already deleted');
+      throw new ConflictException('Ручная корректировка баллов уже удалена');
     }
 
     const nextType = this.resolveManualType(dto.type ?? adjustment.ledgerEntry.type);
@@ -982,7 +982,7 @@ export class PointsService {
         : new Prisma.Decimal(adjustment.ledgerEntry.points);
 
     if (nextPoints.eq(0)) {
-      throw new BadRequestException('points cannot be 0');
+      throw new BadRequestException('Количество баллов не может быть равно 0');
     }
 
     const period = dto.occurredAt
@@ -1098,7 +1098,7 @@ export class PointsService {
     const reason = dto.reason.trim();
 
     if (reason.length < 3) {
-      throw new BadRequestException('reason is required');
+      throw new BadRequestException('Поле reason обязательно');
     }
 
     const adjustment = await this.prisma.manualPointsAdjustment.findFirst({
@@ -1125,7 +1125,7 @@ export class PointsService {
     });
 
     if (!adjustment) {
-      throw new NotFoundException('Manual points adjustment not found');
+      throw new NotFoundException('Ручная корректировка баллов не найдена');
     }
 
     if (adjustment.deletedAt || adjustment.ledgerEntry.reversedAt) {
@@ -1236,7 +1236,7 @@ export class PointsService {
     });
 
     if (!organization) {
-      throw new NotFoundException('Organization not found');
+      throw new NotFoundException('Организация не найдена');
     }
 
     return organization;
@@ -1253,7 +1253,7 @@ export class PointsService {
     const enabled = await this.isFinanceEnabledForOrganization(organizationId);
 
     if (!enabled) {
-      throw new ConflictException('Finance system is disabled for this organization');
+      throw new ConflictException('Финансовый модуль отключен для этой организации');
     }
   }
 
@@ -1284,7 +1284,7 @@ export class PointsService {
     });
 
     if (!participant) {
-      throw new NotFoundException('Participant not found');
+      throw new NotFoundException('Участник не найден');
     }
 
     return participant;
@@ -1303,7 +1303,7 @@ export class PointsService {
     });
 
     if (!event) {
-      throw new NotFoundException('Event not found');
+      throw new NotFoundException('Событие не найдено');
     }
 
     return event;
@@ -1311,7 +1311,7 @@ export class PointsService {
 
   private ensurePointsEnabled(config: { enabled: boolean }) {
     if (!config.enabled) {
-      throw new ConflictException('Points system is disabled for this organization');
+      throw new ConflictException('Система баллов отключена для этой организации');
     }
   }
 
@@ -1357,7 +1357,7 @@ export class PointsService {
     const resolved = type ?? PointsLedgerType.MANUAL_ADJUSTMENT;
 
     if (!manualAllowedTypes.has(resolved)) {
-      throw new BadRequestException('Unsupported manual points type');
+      throw new BadRequestException('Неподдерживаемый тип ручных баллов');
     }
 
     return resolved;
@@ -1381,7 +1381,7 @@ export class PointsService {
     const ref = new Date(referenceDate);
 
     if (Number.isNaN(ref.getTime())) {
-      throw new BadRequestException('Invalid reference date');
+      throw new BadRequestException('Некорректная дата расчета');
     }
 
     const year = ref.getUTCFullYear();
@@ -1410,7 +1410,7 @@ export class PointsService {
     const parsed = new Date(value);
 
     if (Number.isNaN(parsed.getTime())) {
-      throw new BadRequestException('Invalid referenceDate');
+      throw new BadRequestException('Некорректный параметр referenceDate');
     }
 
     return parsed;
@@ -1702,7 +1702,7 @@ export class PointsService {
     const parsed = this.parseDecimal(value, field);
 
     if (parsed.lte(0)) {
-      throw new BadRequestException(`${field} must be greater than 0`);
+      throw new BadRequestException(`${field} должно быть больше 0`);
     }
 
     return parsed;
@@ -1712,7 +1712,7 @@ export class PointsService {
     const parsed = this.parseDecimal(value, field);
 
     if (parsed.lt(0)) {
-      throw new BadRequestException(`${field} cannot be negative`);
+      throw new BadRequestException(`${field} не может быть отрицательным`);
     }
 
     return parsed;
@@ -1722,7 +1722,7 @@ export class PointsService {
     try {
       return new Prisma.Decimal(value);
     } catch {
-      throw new BadRequestException(`${field} must be a valid decimal`);
+      throw new BadRequestException(`${field} должно быть корректным десятичным числом`);
     }
   }
 

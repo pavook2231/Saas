@@ -29,42 +29,42 @@ type EventDraft = {
   participants: number;
 };
 
-const weekDayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+const weekDayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const;
 const weekHours = Array.from({ length: 14 }, (_, index) => index + 8);
 
 const eventTypeLabels: Record<EventType, string> = {
-  PERFORMANCE: 'Performance',
-  REHEARSAL: 'Rehearsal',
-  EVENT: 'Event',
-  CUSTOM: 'Custom',
+  PERFORMANCE: 'Спектакль',
+  REHEARSAL: 'Репетиция',
+  EVENT: 'Событие',
+  CUSTOM: 'Свободный формат',
 };
 
 const statusLabels: Record<EventStatus, string> = {
-  DRAFT: 'Draft',
-  PLANNED: 'Planned',
-  CONFIRMED: 'Confirmed',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
+  DRAFT: 'Черновик',
+  PLANNED: 'Запланировано',
+  CONFIRMED: 'Подтверждено',
+  COMPLETED: 'Завершено',
+  CANCELLED: 'Отменено',
 };
 
-const monthTitleFormat = new Intl.DateTimeFormat('en-US', {
+const monthTitleFormat = new Intl.DateTimeFormat('ru-RU', {
   month: 'long',
   year: 'numeric',
 });
 
-const weekdayLongFormat = new Intl.DateTimeFormat('en-US', {
+const weekdayLongFormat = new Intl.DateTimeFormat('ru-RU', {
   weekday: 'short',
   month: 'short',
   day: 'numeric',
 });
 
-const timeFormat = new Intl.DateTimeFormat('en-US', {
+const timeFormat = new Intl.DateTimeFormat('ru-RU', {
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
 });
 
-const shortDateFormat = new Intl.DateTimeFormat('en-US', {
+const shortDateFormat = new Intl.DateTimeFormat('ru-RU', {
   month: 'short',
   day: 'numeric',
 });
@@ -163,7 +163,7 @@ const createInitialEvents = (): CalendarEvent[] => {
   return [
     {
       id: makeEventId(),
-      title: 'Stage Rehearsal',
+      title: 'Сценическая репетиция',
       type: 'REHEARSAL',
       status: 'CONFIRMED',
       startsAt: new Date(
@@ -178,7 +178,7 @@ const createInitialEvents = (): CalendarEvent[] => {
     },
     {
       id: makeEventId(),
-      title: 'Premiere Run',
+      title: 'Премьерный показ',
       type: 'PERFORMANCE',
       status: 'PLANNED',
       startsAt: new Date(
@@ -193,7 +193,7 @@ const createInitialEvents = (): CalendarEvent[] => {
     },
     {
       id: makeEventId(),
-      title: 'Producer Check-in',
+      title: 'Встреча с продюсером',
       type: 'EVENT',
       status: 'DRAFT',
       startsAt: new Date(
@@ -208,7 +208,7 @@ const createInitialEvents = (): CalendarEvent[] => {
     },
     {
       id: makeEventId(),
-      title: 'Movement Class',
+      title: 'Пластический класс',
       type: 'CUSTOM',
       status: 'CONFIRMED',
       startsAt: new Date(
@@ -319,7 +319,7 @@ export default function HomePage() {
 
     const nextEvent: CalendarEvent = {
       id: makeEventId(),
-      title: 'New Event',
+      title: 'Новое событие',
       type: 'EVENT',
       status: 'PLANNED',
       startsAt: baseDate,
@@ -384,7 +384,7 @@ export default function HomePage() {
         item.id === draft.id
           ? {
               ...item,
-              title: draft.title.trim() || 'Untitled Event',
+              title: draft.title.trim() || 'Событие без названия',
               type: draft.type,
               status: draft.status,
               startsAt,
@@ -432,7 +432,7 @@ export default function HomePage() {
     const clone: CalendarEvent = {
       ...selectedEvent,
       id: makeEventId(),
-      title: `${selectedEvent.title} Copy`,
+      title: `${selectedEvent.title} (копия)`,
       startsAt: new Date(selectedEvent.startsAt.getTime() + 60 * 60_000),
     };
 
@@ -466,7 +466,7 @@ export default function HomePage() {
     >
       <span className="chip-time">{timeFormat.format(event.startsAt)}</span>
       <span className="chip-title">{event.title}</span>
-      <span className="chip-meta">{event.durationMinutes} min</span>
+      <span className="chip-meta">{event.durationMinutes} мин</span>
     </button>
   );
 
@@ -475,8 +475,8 @@ export default function HomePage() {
       <section className="calendar-shell">
         <header className="calendar-header">
           <div>
-            <p className="kicker">Live Scheduling</p>
-            <h1>Production Calendar</h1>
+            <p className="kicker">Живое расписание</p>
+            <h1>Календарь постановок</h1>
             <p className="period-label">{periodLabel}</p>
           </div>
 
@@ -487,31 +487,31 @@ export default function HomePage() {
                 onClick={() => setViewMode('week')}
                 type="button"
               >
-                Week
+                Неделя
               </button>
               <button
                 className={viewMode === 'month' ? 'active' : ''}
                 onClick={() => setViewMode('month')}
                 type="button"
               >
-                Month
+                Месяц
               </button>
             </div>
 
             <div className="nav-controls">
               <button onClick={() => navigate(-1)} type="button">
-                Prev
+                Назад
               </button>
               <button onClick={() => setCursorDate(startOfDay(new Date()))} type="button">
-                Today
+                Сегодня
               </button>
               <button onClick={() => navigate(1)} type="button">
-                Next
+                Вперед
               </button>
             </div>
 
             <button className="accent-button" onClick={createQuickEvent} type="button">
-              + Quick Event
+              + Быстрое событие
             </button>
           </div>
         </header>
@@ -540,12 +540,12 @@ export default function HomePage() {
                   >
                     <div className="month-cell-header">
                       <span>{day.getDate()}</span>
-                      {isToday ? <small>Today</small> : null}
+                      {isToday ? <small>Сегодня</small> : null}
                     </div>
                     <div className="month-events">
                       {items.slice(0, 3).map((item) => renderEventChip(item))}
                       {items.length > 3 ? (
-                        <p className="more-events">+{items.length - 3} more</p>
+                        <p className="more-events">+{items.length - 3} еще</p>
                       ) : null}
                     </div>
                   </article>
@@ -556,7 +556,7 @@ export default function HomePage() {
         ) : (
           <section className="week-view">
             <div className="week-grid-head">
-              <div className="time-col-label">Time</div>
+              <div className="time-col-label">Время</div>
               {weekDays.map((day) => (
                 <div key={toDayKey(day)} className={isSameDay(day, new Date()) ? 'today' : ''}>
                   <strong>{weekdayLongFormat.format(day)}</strong>
@@ -595,14 +595,14 @@ export default function HomePage() {
 
       <aside className="side-stack">
         <section className="quick-panel">
-          <h2>Quick Changes</h2>
+          <h2>Быстрые изменения</h2>
           {!selectedEvent || !draft ? (
-            <p className="empty-state">Select an event to edit details instantly.</p>
+            <p className="empty-state">Выберите событие, чтобы сразу изменить его параметры.</p>
           ) : (
             <>
               <form className="quick-form" onSubmit={saveDraft}>
                 <label>
-                  Title
+                  Название
                   <input
                     value={draft.title}
                     onChange={(event) =>
@@ -614,7 +614,7 @@ export default function HomePage() {
                 </label>
 
                 <label>
-                  Type
+                  Тип
                   <select
                     value={draft.type}
                     onChange={(event) =>
@@ -634,7 +634,7 @@ export default function HomePage() {
                 </label>
 
                 <label>
-                  Status
+                  Статус
                   <select
                     value={draft.status}
                     onChange={(event) =>
@@ -655,7 +655,7 @@ export default function HomePage() {
 
                 <div className="row">
                   <label>
-                    Date
+                    Дата
                     <input
                       type="date"
                       value={draft.dateInput}
@@ -668,7 +668,7 @@ export default function HomePage() {
                   </label>
 
                   <label>
-                    Time
+                    Время
                     <input
                       type="time"
                       value={draft.timeInput}
@@ -683,7 +683,7 @@ export default function HomePage() {
 
                 <div className="row">
                   <label>
-                    Duration (min)
+                    Длительность (мин)
                     <input
                       min={15}
                       step={15}
@@ -703,7 +703,7 @@ export default function HomePage() {
                   </label>
 
                   <label>
-                    Participants
+                    Участники
                     <input
                       min={0}
                       step={1}
@@ -721,28 +721,28 @@ export default function HomePage() {
                 </div>
 
                 <button className="accent-button full-width" type="submit">
-                  Save Changes
+                  Сохранить изменения
                 </button>
               </form>
 
               <div className="quick-actions">
                 <button onClick={() => applyQuickShift(24 * 60)} type="button">
-                  Move +1 Day
+                  Сдвинуть на +1 день
                 </button>
                 <button onClick={() => applyQuickShift(-24 * 60)} type="button">
-                  Move -1 Day
+                  Сдвинуть на -1 день
                 </button>
                 <button onClick={() => applyQuickDuration(15)} type="button">
-                  Duration +15m
+                  Длительность +15 мин
                 </button>
                 <button onClick={() => applyQuickDuration(-15)} type="button">
-                  Duration -15m
+                  Длительность -15 мин
                 </button>
                 <button onClick={duplicateSelected} type="button">
-                  Duplicate
+                  Дублировать
                 </button>
                 <button className="danger" onClick={deleteSelected} type="button">
-                  Delete
+                  Удалить
                 </button>
               </div>
             </>

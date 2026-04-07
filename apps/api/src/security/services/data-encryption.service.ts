@@ -70,7 +70,7 @@ export class DataEncryptionService {
     const parts = value.split(':');
 
     if (parts.length !== ENCRYPTION_PARTS) {
-      throw new InternalServerErrorException('Encrypted payload format is invalid');
+      throw new InternalServerErrorException('Некорректный формат зашифрованных данных');
     }
 
     const iv = Buffer.from(parts[2], 'base64url');
@@ -87,7 +87,7 @@ export class DataEncryptionService {
     try {
       return Buffer.concat([decipher.update(cipherText), decipher.final()]).toString('utf8');
     } catch {
-      throw new InternalServerErrorException('Encrypted payload could not be decrypted');
+      throw new InternalServerErrorException('Не удалось расшифровать зашифрованные данные');
     }
   }
 
@@ -111,7 +111,7 @@ export class DataEncryptionService {
     const source = config.security.dataEncryptionKey.trim();
 
     if (source.length === 0) {
-      throw new InternalServerErrorException('DATA_ENCRYPTION_KEY is required');
+      throw new InternalServerErrorException('Требуется DATA_ENCRYPTION_KEY');
     }
 
     let key: Buffer;
@@ -136,7 +136,7 @@ export class DataEncryptionService {
       source === 'development-only-encryption-key-change-me'
     ) {
       this.logger.error('Refusing to boot with the default data encryption key');
-      throw new InternalServerErrorException('DATA_ENCRYPTION_KEY must be rotated');
+      throw new InternalServerErrorException('Необходимо заменить DATA_ENCRYPTION_KEY');
     }
 
     return key;
@@ -146,7 +146,7 @@ export class DataEncryptionService {
     const config = this.configService.get<AppConfig>('appConfig');
 
     if (!config) {
-      throw new InternalServerErrorException('Application config is missing');
+      throw new InternalServerErrorException('Конфигурация приложения отсутствует');
     }
 
     return config;

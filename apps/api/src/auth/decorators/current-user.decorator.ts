@@ -1,4 +1,4 @@
-﻿import {
+import {
   createParamDecorator,
   ExecutionContext,
   UnauthorizedException,
@@ -15,7 +15,7 @@ export const CurrentUser = createParamDecorator(
     const request = ctx.switchToHttp().getRequest<RequestWithUser>();
 
     if (!request.user) {
-      throw new UnauthorizedException('Authenticated user is missing');
+      throw new UnauthorizedException('Авторизованный пользователь не найден');
     }
 
     return request.user;

@@ -357,7 +357,7 @@ export class AuthController {
     const provider = providerByName[key];
 
     if (!provider) {
-      throw new BadRequestException('Unsupported OAuth provider');
+      throw new BadRequestException('Неподдерживаемый OAuth-провайдер');
     }
 
     return provider;
@@ -386,7 +386,7 @@ export class AuthController {
     payload: T,
   ): T & { csrfToken: string } {
     if (!payload.tokens.refreshToken || !payload.tokens.refreshTokenExpiresAt) {
-      throw new BadRequestException('Refresh token payload is missing');
+      throw new BadRequestException('Отсутствует содержимое refresh-токена');
     }
 
     const csrfToken = this.authCookieService.setAuthCookies(

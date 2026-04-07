@@ -41,13 +41,13 @@ export class OrganizationsService {
     const normalizedName = dto.name.trim();
 
     if (normalizedName.length < 2) {
-      throw new BadRequestException('Organization name must contain at least 2 chars');
+      throw new BadRequestException('Название организации должно содержать минимум 2 символа');
     }
 
     const slugBase = this.normalizeSlug(dto.slug ?? normalizedName);
 
     if (!slugBase) {
-      throw new BadRequestException('Organization name/slug cannot produce valid slug');
+      throw new BadRequestException('Из названия или slug организации не удалось получить корректный slug');
     }
 
     const uniqueSlug = await this.ensureUniqueSlug(slugBase);
@@ -243,7 +243,7 @@ export class OrganizationsService {
     });
 
     if (!organization) {
-      throw new NotFoundException('Organization not found');
+      throw new NotFoundException('Организация не найдена');
     }
 
     const membership = organization.memberships[0];
@@ -279,11 +279,11 @@ export class OrganizationsService {
       dto.timezone !== undefined ? this.trimOrNull(dto.timezone) : undefined;
 
     if (dto.name !== undefined && (!normalizedName || normalizedName.length < 2)) {
-      throw new BadRequestException('Organization name must contain at least 2 chars');
+      throw new BadRequestException('Название организации должно содержать минимум 2 символа');
     }
 
     if (dto.timezone !== undefined && !normalizedTimezone) {
-      throw new BadRequestException('Timezone cannot be empty');
+      throw new BadRequestException('Часовой пояс не может быть пустым');
     }
 
     const currentSettings = this.getOrganizationSettingsRecord(organization.settings);
@@ -428,10 +428,10 @@ export class OrganizationsService {
 
     const email = dto.email.trim().toLowerCase();
     if (!email) {
-      throw new BadRequestException('Email is required');
+      throw new BadRequestException('Email обязателен');
     }
     if (!actorMembership || actorMembership.status !== MembershipStatus.ACTIVE) {
-      throw new ForbiddenException('Active membership is required');
+      throw new ForbiddenException('Требуется активное членство');
     }
 
     const role = this.resolveInvitedRole(actorMembership.role, dto.role ?? OrganizationRole.MEMBER);
@@ -459,7 +459,7 @@ export class OrganizationsService {
       : null;
 
     if (existingMembership && existingMembership.status === MembershipStatus.ACTIVE) {
-      throw new ConflictException('User is already an active member of this organization');
+      throw new ConflictException('Пользователь уже является активным участником этой организации');
     }
 
     const now = new Date();
@@ -570,7 +570,7 @@ export class OrganizationsService {
     });
 
     if (!user || !user.isActive || user.deletedAt !== null) {
-      throw new ForbiddenException('User account is not available');
+      throw new ForbiddenException('Учетная запись пользователя недоступна');
     }
 
     const invite = await this.prisma.organizationInvite.findFirst({
@@ -598,11 +598,11 @@ export class OrganizationsService {
     });
 
     if (!invite) {
-      throw new NotFoundException('Invitation not found');
+      throw new NotFoundException('Приглашение не найдено');
     }
 
     if (this.hashToken(inviteToken) !== invite.tokenHash) {
-      throw new ForbiddenException('Invitation token is invalid');
+      throw new ForbiddenException('Токен приглашения недействителен');
     }
 
     const now = new Date();
@@ -705,7 +705,7 @@ export class OrganizationsService {
     dto: UpdateMembershipDto,
   ) {
     if (dto.role === undefined && dto.status === undefined) {
-      throw new BadRequestException('At least one field must be provided');
+      throw new BadRequestException('Нужно передать хотя бы одно поле');
     }
 
     const membership = await this.prisma.membership.findFirst({
@@ -723,11 +723,11 @@ export class OrganizationsService {
     });
 
     if (!membership) {
-      throw new NotFoundException('Membership not found');
+      throw new NotFoundException('Членство не найдено');
     }
 
     if (membership.userId === actorUserId && dto.role && dto.role !== membership.role) {
-      throw new ForbiddenException('You cannot change your own role');
+      throw new ForbiddenException('Нельзя менять собственную роль');
     }
 
     const targetRole = dto.role ?? membership.role;
@@ -803,7 +803,7 @@ export class OrganizationsService {
     });
 
     if (!membership) {
-      throw new NotFoundException('Membership not found');
+      throw new NotFoundException('Членство не найдено');
     }
 
     if (membership.status === MembershipStatus.LEFT) {
@@ -861,7 +861,7 @@ export class OrganizationsService {
     });
 
     if (!membership || membership.status !== MembershipStatus.ACTIVE) {
-      throw new NotFoundException('Active membership not found');
+      throw new NotFoundException('Активное членство не найдено');
     }
 
     await this.ensureAdminStillExists(
@@ -908,7 +908,7 @@ export class OrganizationsService {
     });
 
     if (!organization) {
-      throw new NotFoundException('Organization not found');
+      throw new NotFoundException('Организация не найдена');
     }
 
     return organization;
@@ -1005,7 +1005,7 @@ export class OrganizationsService {
     });
 
     if (otherActiveAdminsCount === 0) {
-      throw new ConflictException('Organization must have at least one active ADMIN');
+      throw new ConflictException('В организации должен оставаться хотя бы один активный ADMIN');
     }
   }
 
@@ -1022,13 +1022,13 @@ export class OrganizationsService {
         targetRole === OrganizationRole.ADMIN ||
         targetRole === OrganizationRole.DIRECTOR
       ) {
-        throw new ForbiddenException('DIRECTOR cannot invite ADMIN or DIRECTOR');
+        throw new ForbiddenException('DIRECTOR не может приглашать ADMIN или DIRECTOR');
       }
 
       return targetRole;
     }
 
-    throw new ForbiddenException('You cannot invite members to this organization');
+    throw new ForbiddenException('У вас нет прав приглашать участников в эту организацию');
   }
 
   private generateInviteToken(): string {

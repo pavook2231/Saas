@@ -229,7 +229,7 @@ export class EventsService {
     });
 
     if (!participant || participant.deletedAt) {
-      throw new NotFoundException('Participant not found');
+      throw new NotFoundException('Участник не найден');
     }
 
     return participant;
@@ -251,11 +251,11 @@ export class EventsService {
     };
 
     if (dto.sendInvite && dto.userId) {
-      throw new BadRequestException('sendInvite cannot be used when userId is provided');
+      throw new BadRequestException('sendInvite нельзя использовать вместе с userId');
     }
 
     if (dto.sendInvite && !normalized.email) {
-      throw new BadRequestException('email is required to send participant invite');
+      throw new BadRequestException('Для отправки приглашения участнику нужен email');
     }
 
     if (dto.userId) {
@@ -366,11 +366,11 @@ export class EventsService {
     });
 
     if (!existing) {
-      throw new NotFoundException('Participant not found');
+      throw new NotFoundException('Участник не найден');
     }
 
     if (dto.unlinkUser && dto.userId) {
-      throw new BadRequestException('userId and unlinkUser cannot be used together');
+      throw new BadRequestException('Нельзя одновременно использовать userId и unlinkUser');
     }
 
     if (dto.userId) {
@@ -456,7 +456,7 @@ export class EventsService {
     });
 
     if (!participant) {
-      throw new NotFoundException('Participant not found');
+      throw new NotFoundException('Участник не найден');
     }
 
     if (participant.deletedAt) {
@@ -519,7 +519,7 @@ export class EventsService {
     });
 
     if (!template) {
-      throw new NotFoundException('Template not found');
+      throw new NotFoundException('Шаблон не найден');
     }
 
     return template;
@@ -598,7 +598,7 @@ export class EventsService {
     });
 
     if (!existing) {
-      throw new NotFoundException('Template not found');
+      throw new NotFoundException('Шаблон не найден');
     }
 
     const normalizedRoles =
@@ -665,7 +665,7 @@ export class EventsService {
     });
 
     if (!template) {
-      throw new NotFoundException('Template not found');
+      throw new NotFoundException('Шаблон не найден');
     }
 
     if (template.deletedAt) {
@@ -772,7 +772,7 @@ export class EventsService {
     });
 
     if (!event) {
-      throw new NotFoundException('Event not found');
+      throw new NotFoundException('Событие не найдено');
     }
 
     return event;
@@ -804,7 +804,7 @@ export class EventsService {
 
       if (conflicts.hasConflicts && !dto.ignoreConflicts) {
         throw new ConflictException({
-          message: 'Participant conflicts detected',
+          message: 'Обнаружены конфликты участников',
           conflicts,
         });
       }
@@ -912,7 +912,7 @@ export class EventsService {
     });
 
     if (!existing) {
-      throw new NotFoundException('Event not found');
+      throw new NotFoundException('Событие не найдено');
     }
 
     const range = this.parseDateRange(
@@ -951,7 +951,7 @@ export class EventsService {
 
       if (conflicts.hasConflicts && !dto.ignoreConflicts) {
         throw new ConflictException({
-          message: 'Participant conflicts detected',
+          message: 'Обнаружены конфликты участников',
           conflicts,
         });
       }
@@ -1070,7 +1070,7 @@ export class EventsService {
     });
 
     if (!event) {
-      throw new NotFoundException('Event not found');
+      throw new NotFoundException('Событие не найдено');
     }
 
     const participants = await this.normalizeEventParticipants(
@@ -1090,7 +1090,7 @@ export class EventsService {
 
       if (conflicts.hasConflicts && !dto.ignoreConflicts) {
         throw new ConflictException({
-          message: 'Participant conflicts detected',
+          message: 'Обнаружены конфликты участников',
           conflicts,
         });
       }
@@ -1174,7 +1174,7 @@ export class EventsService {
     });
 
     if (!event) {
-      throw new NotFoundException('Event not found');
+      throw new NotFoundException('Событие не найдено');
     }
 
     if (event.deletedAt) {
@@ -1443,7 +1443,7 @@ export class EventsService {
       const key = role.name.toLowerCase();
 
       if (names.has(key)) {
-        throw new BadRequestException(`Template role '${role.name}' is duplicated`);
+        throw new BadRequestException(`Роль шаблона '${role.name}' указана несколько раз`);
       }
 
       names.add(key);
@@ -1453,7 +1453,7 @@ export class EventsService {
 
         if (assignedRole) {
           throw new BadRequestException(
-            `Participant ${participantId} is assigned to multiple template roles`,
+            `Участник ${participantId} назначен на несколько ролей шаблона`,
           );
         }
 
@@ -1575,7 +1575,7 @@ export class EventsService {
     for (const participant of participants) {
       if (seenParticipants.has(participant.participantId)) {
         throw new BadRequestException(
-          `Participant ${participant.participantId} is duplicated in event payload`,
+          `Участник ${participant.participantId} повторяется в данных события`,
         );
       }
 
@@ -1621,7 +1621,7 @@ export class EventsService {
       });
 
       if (roles.length !== templateRoleIds.length) {
-        throw new BadRequestException('Some templateRoleId values are invalid');
+        throw new BadRequestException('Некоторые значения templateRoleId некорректны');
       }
 
       const roleById = new Map(roles.map((role) => [role.id, role.name]));
@@ -1653,7 +1653,7 @@ export class EventsService {
     });
 
     if (!template) {
-      throw new NotFoundException('Template not found');
+      throw new NotFoundException('Шаблон не найден');
     }
 
     return template;
@@ -1672,7 +1672,7 @@ export class EventsService {
     });
 
     if (!user || !user.isActive || user.deletedAt) {
-      throw new BadRequestException('Linked user does not exist');
+      throw new BadRequestException('Связанный пользователь не существует');
     }
   }
 
@@ -1693,7 +1693,7 @@ export class EventsService {
     });
 
     if (existing) {
-      throw new ConflictException('User is already linked to another participant');
+      throw new ConflictException('Пользователь уже связан с другим участником');
     }
   }
 
@@ -1722,7 +1722,7 @@ export class EventsService {
       const missing = uniqueIds.filter((participantId) => !existingIds.has(participantId));
 
       throw new BadRequestException(
-        `Unknown or archived participant(s): ${missing.join(', ')}`,
+        `Неизвестные или архивные участники: ${missing.join(', ')}`,
       );
     }
   }
@@ -1758,11 +1758,11 @@ export class EventsService {
     const endsAt = new Date(endsAtIso);
 
     if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
-      throw new BadRequestException('Invalid date range');
+      throw new BadRequestException('Некорректный диапазон дат');
     }
 
     if (endsAt <= startsAt) {
-      throw new BadRequestException('endsAt must be greater than startsAt');
+      throw new BadRequestException('Время окончания должно быть позже времени начала');
     }
 
     const durationMs = endsAt.getTime() - startsAt.getTime();
@@ -1782,7 +1782,7 @@ export class EventsService {
     const normalized = value.trim();
 
     if (normalized.length < minLength) {
-      throw new BadRequestException(`${field} must contain at least ${minLength} chars`);
+      throw new BadRequestException(`${field} должно содержать минимум ${minLength} символа(ов)`);
     }
 
     return normalized;

@@ -1,4 +1,4 @@
-﻿import { registerAs } from '@nestjs/config';
+import { registerAs } from '@nestjs/config';
 
 export type OAuthProviderRuntimeConfig = {
   clientId: string;
@@ -84,7 +84,7 @@ const requireNonEmpty = (value: string | undefined, envName: string): string => 
   const normalized = value?.trim();
 
   if (!normalized) {
-    throw new Error(`${envName} must be configured`);
+    throw new Error(`${envName} должен быть настроен`);
   }
 
   return normalized;

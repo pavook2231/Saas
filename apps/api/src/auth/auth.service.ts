@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -109,7 +109,7 @@ export class AuthService {
       );
 
       if (!canClaimExistingAccount) {
-        throw new ConflictException('User with this email already exists');
+        throw new ConflictException('Пользователь с таким email уже существует');
       }
     }
 
@@ -150,7 +150,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('User is not available');
+      throw new UnauthorizedException('Учетная запись пользователя недоступна');
     }
 
     if (user.isEmailVerified) {
@@ -176,7 +176,7 @@ export class AuthService {
 
     if (!user || !user.passwordHash) {
       await compare(dto.password, PASSWORD_TIMING_RESISTANCE_HASH);
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Неверные учетные данные');
     }
 
     this.assertUserEnabled(user);
@@ -184,7 +184,7 @@ export class AuthService {
     const isValidPassword = await compare(dto.password, user.passwordHash);
 
     if (!isValidPassword) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Неверные учетные данные');
     }
 
     const updatedUser = await this.prisma.user.update({
@@ -212,7 +212,7 @@ export class AuthService {
     requestMeta: RequestMeta,
   ): Promise<AuthResponse> {
     if (!dto.refreshToken) {
-      throw new BadRequestException('Refresh token is required');
+      throw new BadRequestException('Требуется refresh-токен');
     }
 
     const payload = await this.verifyRefreshToken(dto.refreshToken);
@@ -231,7 +231,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('User is not available');
+      throw new UnauthorizedException('Учетная запись пользователя недоступна');
     }
 
     this.assertUserEnabled(user);
@@ -292,7 +292,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('User is not available');
+      throw new UnauthorizedException('Учетная запись пользователя недоступна');
     }
 
     this.assertUserEnabled(user);
@@ -330,14 +330,14 @@ export class AuthService {
         : '';
 
       throw new UnauthorizedException(
-        `OAuth ${providerNameByEnum[provider]} failed (${query.error})${suffix}`,
+        `OAuth ${providerNameByEnum[provider]} завершился ошибкой (${query.error})${suffix}`,
       );
     }
 
     const normalizedCode = this.trimOrNull(query.code);
 
     if (!normalizedCode) {
-      throw new BadRequestException('OAuth authorization code is required');
+      throw new BadRequestException('Требуется код авторизации OAuth');
     }
 
     const statePayload = await this.verifyOAuthState(provider, query.state);
@@ -375,13 +375,13 @@ export class AuthService {
 
     if (!profile.providerUserId) {
       throw new UnauthorizedException(
-        `OAuth ${providerNameByEnum[provider]} profile is invalid`,
+        `Профиль OAuth ${providerNameByEnum[provider]} некорректен`,
       );
     }
 
     if (statePayload.action === 'link') {
       if (!statePayload.linkUserId) {
-        throw new UnauthorizedException('OAuth link state is invalid');
+        throw new UnauthorizedException('Состояние привязки OAuth недействительно');
       }
 
       const linking = await this.linkOAuthAccountToUser(
@@ -470,7 +470,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('User is not available');
+      throw new UnauthorizedException('Учетная запись пользователя недоступна');
     }
 
     this.assertUserEnabled(user);
@@ -490,7 +490,7 @@ export class AuthService {
 
     if (!oauthAccount || oauthAccount.status !== OAuthAccountStatus.ACTIVE) {
       throw new NotFoundException(
-        `Linked ${providerNameByEnum[provider]} account is not found`,
+        `Связанный аккаунт ${providerNameByEnum[provider]} не найден`,
       );
     }
 
@@ -503,7 +503,7 @@ export class AuthService {
 
     if (!user.passwordHash && activeOAuthCount <= 1) {
       throw new ForbiddenException(
-        'Cannot unlink the last active sign-in method without password',
+        'Нельзя отвязать последний активный способ входа без пароля',
       );
     }
 
@@ -616,7 +616,7 @@ export class AuthService {
     state?: string,
   ): Promise<OAuthStatePayload> {
     if (!state) {
-      throw new BadRequestException('OAuth state is required');
+      throw new BadRequestException('Требуется состояние OAuth');
     }
 
     try {
@@ -631,11 +631,11 @@ export class AuthService {
         payload.provider !== provider ||
         (payload.action !== 'login' && payload.action !== 'link')
       ) {
-        throw new UnauthorizedException('OAuth state is invalid');
+        throw new UnauthorizedException('Состояние OAuth недействительно');
       }
 
       if (payload.action === 'link' && !payload.linkUserId) {
-        throw new UnauthorizedException('OAuth link state is invalid');
+        throw new UnauthorizedException('Состояние привязки OAuth недействительно');
       }
 
       const consumed = await this.prisma.oauthState.updateMany({
@@ -656,7 +656,7 @@ export class AuthService {
       });
 
       if (consumed.count !== 1) {
-        throw new UnauthorizedException('OAuth state is invalid');
+        throw new UnauthorizedException('Состояние OAuth недействительно');
       }
 
       return payload;
@@ -665,7 +665,7 @@ export class AuthService {
         throw error;
       }
 
-      throw new UnauthorizedException('OAuth state is invalid');
+      throw new UnauthorizedException('Состояние OAuth недействительно');
     }
   }
 
@@ -719,7 +719,7 @@ export class AuthService {
 
       if (existingUser) {
         if (!existingUser.isActive || existingUser.deletedAt !== null) {
-          throw new UnauthorizedException('User account is disabled');
+          throw new UnauthorizedException('Учетная запись пользователя отключена');
         }
 
         userId = existingUser.id;
@@ -791,7 +791,7 @@ export class AuthService {
       });
 
       if (!user || !user.isActive || user.deletedAt) {
-        throw new UnauthorizedException('Target user is not available for linking');
+        throw new UnauthorizedException('Целевой пользователь недоступен для привязки');
       }
 
       const identityAccount = await tx.oauthAccount.findUnique({
@@ -826,7 +826,7 @@ export class AuthService {
       if (identityAccount) {
         if (identityAccount.userId !== userId) {
           throw new ConflictException(
-            `This ${providerNameByEnum[provider]} account is already linked to another user`,
+            `Этот аккаунт ${providerNameByEnum[provider]} уже привязан к другому пользователю`,
           );
         }
 
@@ -874,7 +874,7 @@ export class AuthService {
       if (existingProviderAccount) {
         if (existingProviderAccount.providerUserId !== profile.providerUserId) {
           throw new ConflictException(
-            `User already has another ${providerNameByEnum[provider]} account linked`,
+            `У пользователя уже привязан другой аккаунт ${providerNameByEnum[provider]}`,
           );
         }
 
@@ -989,14 +989,14 @@ export class AuthService {
         `OAuth token exchange failed for ${providerNameByEnum[provider]}`,
       );
       throw new UnauthorizedException(
-        `OAuth ${providerNameByEnum[provider]} token exchange failed`,
+        `Не удалось обменять токен OAuth ${providerNameByEnum[provider]}`,
       );
     }
 
     const accessToken = this.pickString(payload, ['access_token']);
 
     if (!accessToken) {
-      throw new UnauthorizedException('OAuth access token is missing');
+      throw new UnauthorizedException('Отсутствует access token OAuth');
     }
 
     const expiresIn = this.pickNumber(payload, ['expires_in']);
@@ -1067,7 +1067,7 @@ export class AuthService {
         `OAuth profile fetch failed for ${providerNameByEnum[provider]}`,
       );
       throw new UnauthorizedException(
-        `OAuth ${providerNameByEnum[provider]} profile request failed`,
+        `Не удалось получить профиль OAuth ${providerNameByEnum[provider]}`,
       );
     }
 
@@ -1085,19 +1085,19 @@ export class AuthService {
     });
 
     if (!tokenRecord) {
-      throw new UnauthorizedException('Refresh session does not exist');
+      throw new UnauthorizedException('Refresh-сессия не существует');
     }
 
     if (tokenRecord.userId !== payload.sub) {
-      throw new UnauthorizedException('Refresh session user mismatch');
+      throw new UnauthorizedException('Пользователь refresh-сессии не совпадает');
     }
 
     if (tokenRecord.revokedAt) {
-      throw new UnauthorizedException('Refresh session is revoked');
+      throw new UnauthorizedException('Refresh-сессия отозвана');
     }
 
     if (tokenRecord.expiresAt <= new Date()) {
-      throw new UnauthorizedException('Refresh session is expired');
+      throw new UnauthorizedException('Срок действия refresh-сессии истек');
     }
 
     const incomingTokenHash = this.hashToken(refreshToken);
@@ -1113,7 +1113,7 @@ export class AuthService {
         },
       });
 
-      throw new UnauthorizedException('Refresh token reuse detected');
+      throw new UnauthorizedException('Обнаружено повторное использование refresh-токена');
     }
 
     return tokenRecord;
@@ -1135,12 +1135,12 @@ export class AuthService {
         typeof payload.sub !== 'string' ||
         typeof payload.sessionId !== 'string'
       ) {
-        throw new UnauthorizedException('Invalid refresh token payload');
+        throw new UnauthorizedException('Некорректное содержимое refresh-токена');
       }
 
       return payload;
     } catch {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('Недействительный refresh-токен');
     }
   }
 
@@ -1248,7 +1248,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('User is not available');
+      throw new UnauthorizedException('Учетная запись пользователя недоступна');
     }
 
     this.assertUserEnabled(user);
@@ -1383,7 +1383,7 @@ export class AuthService {
 
   private assertUserEnabled(user: { isActive: boolean; deletedAt: Date | null }): void {
     if (!user.isActive || user.deletedAt !== null) {
-      throw new UnauthorizedException('User is disabled');
+      throw new UnauthorizedException('Пользователь деактивирован');
     }
   }
 
@@ -1475,7 +1475,7 @@ export class AuthService {
     });
 
     if (!invite) {
-      throw new UnauthorizedException('Organization invite token is invalid');
+      throw new UnauthorizedException('Токен приглашения в организацию недействителен');
     }
 
     const now = new Date();
@@ -1578,11 +1578,11 @@ export class AuthService {
     });
 
     if (!invite) {
-      throw new UnauthorizedException('Participant invite token is invalid');
+      throw new UnauthorizedException('Токен приглашения участника недействителен');
     }
 
     if (invite.participant.userId && invite.participant.userId !== userId) {
-      throw new ConflictException('Participant is already linked to another user');
+      throw new ConflictException('Участник уже связан с другим пользователем');
     }
 
     const now = new Date();
@@ -1625,7 +1625,7 @@ export class AuthService {
 
     if (!/[a-z]/.test(normalized) || !/[A-Z]/.test(normalized) || !/\d/.test(normalized)) {
       throw new BadRequestException(
-        'Password must include uppercase, lowercase, and numeric characters',
+        'Пароль должен содержать заглавные и строчные буквы, а также цифры',
       );
     }
   }
@@ -1787,7 +1787,7 @@ export class AuthService {
     const config = this.configService.get<AppConfig>('appConfig');
 
     if (!config) {
-      throw new InternalServerErrorException('Application config is missing');
+      throw new InternalServerErrorException('Конфигурация приложения отсутствует');
     }
 
     return config;

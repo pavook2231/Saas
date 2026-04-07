@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   CanActivate,
   ExecutionContext,
@@ -36,17 +36,17 @@ export class OrganizationRoleGuard implements CanActivate {
     const user = request.user;
 
     if (!user) {
-      throw new UnauthorizedException('Authentication is required');
+      throw new UnauthorizedException('Требуется авторизация');
     }
 
     const organizationId = this.resolveOrganizationId(request);
 
     if (!organizationId) {
-      throw new BadRequestException('organizationId is required in route params');
+      throw new BadRequestException('В параметрах маршрута нужен organizationId');
     }
 
     if (!this.isUuidV4(organizationId)) {
-      throw new BadRequestException('organizationId must be UUID v4');
+      throw new BadRequestException('organizationId должен быть UUID v4');
     }
 
     const requiredRoles =
@@ -72,11 +72,11 @@ export class OrganizationRoleGuard implements CanActivate {
     });
 
     if (!membership) {
-      throw new ForbiddenException('Active organization membership is required');
+      throw new ForbiddenException('Требуется активное членство в организации');
     }
 
     if (requiredRoles.length > 0 && !requiredRoles.includes(membership.role)) {
-      throw new ForbiddenException('Not enough organization permissions');
+      throw new ForbiddenException('Недостаточно прав в организации');
     }
 
     request.organizationMembership = membership;

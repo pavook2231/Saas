@@ -65,7 +65,7 @@ export class AuthCookieService {
     );
 
     if (!state || !cookieState || cookieState !== state) {
-      throw new UnauthorizedException('OAuth state cookie validation failed');
+      throw new UnauthorizedException('Проверка cookie состояния OAuth не пройдена');
     }
   }
 
@@ -101,7 +101,7 @@ export class AuthCookieService {
       };
     }
 
-    throw new BadRequestException('Refresh token is required');
+    throw new BadRequestException('Требуется refresh-токен');
   }
 
   assertCsrf(request: Request): void {
@@ -115,7 +115,7 @@ export class AuthCookieService {
       : headerCandidate;
 
     if (!cookieToken || typeof headerToken !== 'string' || headerToken !== cookieToken) {
-      throw new UnauthorizedException('CSRF validation failed');
+      throw new UnauthorizedException('Проверка CSRF не пройдена');
     }
 
     const allowedOrigins = this.getConfig().app.corsOrigins;
@@ -126,7 +126,7 @@ export class AuthCookieService {
     const requestOrigin = this.normalizeOrigin(origin) ?? this.normalizeOrigin(referer);
 
     if (!requestOrigin || !allowedOrigins.includes(requestOrigin)) {
-      throw new UnauthorizedException('Request origin is not allowed');
+      throw new UnauthorizedException('Источник запроса не разрешен');
     }
   }
 
@@ -243,7 +243,7 @@ export class AuthCookieService {
     const config = this.configService.get<AppConfig>('appConfig');
 
     if (!config) {
-      throw new UnauthorizedException('Application config is missing');
+      throw new UnauthorizedException('Конфигурация приложения отсутствует');
     }
 
     return {

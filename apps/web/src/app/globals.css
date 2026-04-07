@@ -2124,11 +2124,15 @@ textarea.ui-field:focus {
 .calendar-page {
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 18px;
+  align-items: stretch;
+  min-height: calc(100vh - 180px);
 }
 
 .calendar-shell--premium {
   gap: 18px;
   padding: 18px;
+  min-height: calc(100vh - 180px);
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .calendar-header h1 {
@@ -2160,20 +2164,23 @@ textarea.ui-field:focus {
 .calendar-board {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  align-items: start;
+  gap: 12px;
+  align-items: stretch;
+  min-height: 0;
 }
 
 .calendar-lane {
   display: grid;
-  gap: 14px;
-  padding: 14px;
+  gap: 12px;
+  padding: 12px;
   border: 1px solid rgba(219, 227, 239, 0.82);
   border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.92)),
     radial-gradient(circle at top, rgba(37, 99, 235, 0.05), transparent 42%);
   box-shadow: 0 20px 48px rgba(15, 23, 42, 0.06);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
 }
 
 .calendar-lane__header {
@@ -2253,7 +2260,13 @@ textarea.ui-field:focus {
 .calendar-lane__sections,
 .calendar-lane__cards {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+}
+
+.calendar-lane__sections {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .calendar-lane__section {
@@ -2274,9 +2287,9 @@ textarea.ui-field:focus {
 
 .schedule-card {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid rgba(219, 227, 239, 0.82);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.96);
@@ -2346,20 +2359,32 @@ textarea.ui-field:focus {
 }
 
 .schedule-card__copy strong {
-  font-size: 0.95rem;
-  line-height: 1.35;
+  font-size: 0.9rem;
+  line-height: 1.28;
 }
 
 .schedule-card__copy p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.84rem;
-  line-height: 1.5;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .schedule-card__meta {
   color: var(--text-soft);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
+}
+
+.side-stack {
+  max-height: calc(100vh - 180px);
+  min-height: 0;
+}
+
+.composer-panel,
+.finance-panel,
+.chat-panel {
+  max-height: calc(100vh - 250px);
+  overflow: auto;
 }
 
 .quick-choice-row--wide {

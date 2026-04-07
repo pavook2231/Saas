@@ -1273,8 +1273,41 @@ textarea.ui-field:focus {
   gap: 16px;
 }
 
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.profile-column {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  align-content: start;
+}
+
+.profile-toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-toolbar__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  align-items: end;
+}
+
+.profile-toolbar__meta {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
 .profile-hero-card {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
   padding: 20px;
@@ -1300,12 +1333,16 @@ textarea.ui-field:focus {
 }
 
 .profile-hero-card__meta {
-  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .profile-item-card {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
   padding: 16px;
@@ -2903,8 +2940,17 @@ textarea.ui-field {
   .page-grid--three,
   .page-grid--two,
   .showcase-grid,
-  .settings-layout { grid-template-columns: 1fr; }
-  .profile-hero-card,
+  .settings-layout,
+  .profile-layout { grid-template-columns: 1fr; }
+  .profile-hero-card {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+  .profile-item-card,
+  .profile-toolbar__row,
+  .profile-hero-card__meta {
+    width: 100%;
+  }
   .profile-item-card {
     flex-direction: column;
     align-items: stretch;
@@ -2912,6 +2958,7 @@ textarea.ui-field {
 
   .profile-hero-card__meta {
     margin-left: 0;
+    justify-content: flex-start;
   }
   .auth-hero-grid { grid-template-columns: 1fr; }
   .card-list-grid,
@@ -3007,6 +3054,10 @@ textarea.ui-field {
   .feature-page-header { align-items: flex-start; }
   .feature-page-header__actions,
   .feature-page-header__action-row { width: 100%; }
+
+  .profile-toolbar__row {
+    grid-template-columns: 1fr;
+  }
 
   .auth-form-grid--double,
   .composer-kind-switcher,

@@ -1,26 +1,30 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { notificationsApi, type NotificationItem } from '@/app/lib/api/notifications';
-import { useAuth } from '@/app/providers/auth-provider';
 import {
   organizationsApi,
   type DiscoverOrganizationRecord,
   type OrganizationInvitation,
   type OrganizationJoinRequestRecord,
 } from '@/app/lib/api/organizations';
+import { useAuth } from '@/app/providers/auth-provider';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { MetricCard } from './metric-card';
 import { PageHeader } from './page-header';
 import { useActiveWorkspace } from './use-active-workspace';
 import { useToastFeedback } from './use-toast-feedback';
+
+type JoinRequestFilter = 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+type NotificationFilter = 'ALL' | 'UNREAD' | 'READ';
 
 const joinRequestStatusLabels: Record<string, string> = {
   PENDING: 'Ожидает решения',
@@ -49,6 +53,32 @@ const formatDateTime = (value: string | null | undefined) => {
   }).format(new Date(value));
 };
 
+const normalizeSearch = (value: string) => value.trim().toLowerCase();
+
+const matchText = (search: string, values: Array<string | null | undefined>) => {
+  if (!search) {
+    return true;
+  }
+
+  return values.some((value) => value?.toLowerCase().includes(search));
+};
+
+const getOrganizationSecondaryLine = (organization: {
+  description: string | null;
+  inviteCode?: string;
+  slug: string;
+}) => {
+  if (organization.description?.trim()) {
+    return organization.description.trim();
+  }
+
+  if (organization.inviteCode) {
+    return `Код входа: ${organization.inviteCode}`;
+  }
+
+  return `Slug: ${organization.slug}`;
+};
+
 export function ProfileWorkspace() {
   const { refreshSession } = useAuth();
   const {
@@ -59,6 +89,7 @@ export function ProfileWorkspace() {
     setActiveOrganizationId,
     refreshOrganizations,
   } = useActiveWorkspace();
+
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
@@ -68,6 +99,10 @@ export function ProfileWorkspace() {
   const [discoverSearch, setDiscoverSearch] = useState('');
   const [discovering, setDiscovering] = useState(false);
   const [discoverResults, setDiscoverResults] = useState<DiscoverOrganizationRecord[]>([]);
+  const [joinRequestSearch, setJoinRequestSearch] = useState('');
+  const [joinRequestFilter, setJoinRequestFilter] = useState<JoinRequestFilter>('ALL');
+  const [notificationSearch, setNotificationSearch] = useState('');
+  const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>('ALL');
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -127,7 +162,9 @@ export function ProfileWorkspace() {
       setDiscoverResults(response);
     } catch (error) {
       setErrorText(
-        error instanceof Error ? error.message : 'Не удалось загрузить организации для вступления.',
+        error instanceof Error
+          ? error.message
+          : 'Не удалось загрузить организации для вступления.',
       );
     } finally {
       setDiscovering(false);
@@ -146,8 +183,10 @@ export function ProfileWorkspace() {
     return () => window.clearTimeout(timer);
   }, [loadDiscoverResults]);
 
-  const metrics = useMemo(
-    () => [
+  const metrics = useMemo(() => {
+    const pendingRequests = joinRequests.filter((request) => request.status === 'PENDING').length;
+
+    return [
       {
         label: 'Организации',
         value: String(organizations.length),
@@ -156,21 +195,53 @@ export function ProfileWorkspace() {
       {
         label: 'Приглашения',
         value: String(invitations.length),
-        meta: 'Новые инвайты приходят сюда и принимаются в один клик.',
+        meta: 'Новые инвайты появляются здесь и принимаются в один клик.',
       },
       {
-        label: 'Уведомления',
-        value: String(unreadCount),
-        meta: 'Админские заявки, системные сигналы и рабочие события.',
+        label: 'Заявки',
+        value: String(pendingRequests),
+        meta: 'Текущие запросы на вступление и их статус.',
       },
-    ],
-    [invitations.length, organizations.length, unreadCount],
-  );
+    ];
+  }, [invitations.length, joinRequests, organizations.length]);
 
   const displayName = useMemo(() => {
     const parts = [user?.firstName, user?.lastName].filter(Boolean);
     return parts.join(' ').trim() || user?.email || 'Пользователь';
   }, [user?.email, user?.firstName, user?.lastName]);
+
+  const filteredJoinRequests = useMemo(() => {
+    const search = normalizeSearch(joinRequestSearch);
+
+    return joinRequests.filter((request) => {
+      const matchesStatus = joinRequestFilter === 'ALL' || request.status === joinRequestFilter;
+      const matchesQuery = matchText(search, [
+        request.organization.name,
+        request.organization.slug,
+        request.organization.description,
+        request.message,
+      ]);
+
+      return matchesStatus && matchesQuery;
+    });
+  }, [joinRequestFilter, joinRequestSearch, joinRequests]);
+
+  const filteredNotifications = useMemo(() => {
+    const search = normalizeSearch(notificationSearch);
+
+    return notifications.filter((item) => {
+      const matchesStatus =
+        notificationFilter === 'ALL' ||
+        (notificationFilter === 'READ' ? item.status === 'READ' : item.status !== 'READ');
+      const matchesQuery = matchText(search, [
+        item.notification.title,
+        item.notification.body,
+        notificationTypeLabels[item.notification.type] ?? item.notification.type,
+      ]);
+
+      return matchesStatus && matchesQuery;
+    });
+  }, [notificationFilter, notificationSearch, notifications]);
 
   const handleAcceptInvitation = async (invitation: OrganizationInvitation) => {
     if (!accessToken) {
@@ -189,7 +260,7 @@ export function ProfileWorkspace() {
       await refreshSession();
       await refreshOrganizations();
       setActiveOrganizationId(invitation.organization.id);
-      await loadProfileData();
+      await Promise.all([loadProfileData(), loadDiscoverResults()]);
       setNoticeText(`Вы вступили в организацию «${invitation.organization.name}».`);
     } catch (error) {
       setErrorText(
@@ -221,7 +292,7 @@ export function ProfileWorkspace() {
       });
       await refreshSession();
       await refreshOrganizations();
-      await loadProfileData();
+      await Promise.all([loadProfileData(), loadDiscoverResults()]);
       setNoticeText(`Вы вышли из организации «${organizationName}».`);
     } catch (error) {
       setErrorText(
@@ -258,7 +329,9 @@ export function ProfileWorkspace() {
       setNoticeText(`Запрос в «${organization.name}» отправлен администратору.`);
     } catch (error) {
       setErrorText(
-        error instanceof Error ? error.message : 'Не удалось отправить запрос на вступление.',
+        error instanceof Error
+          ? error.message
+          : 'Не удалось отправить запрос на вступление.',
       );
     } finally {
       setProcessingId(null);
@@ -286,7 +359,9 @@ export function ProfileWorkspace() {
       setUnreadCount((current) => Math.max(0, current - 1));
     } catch (error) {
       setErrorText(
-        error instanceof Error ? error.message : 'Не удалось отметить уведомление как прочитанное.',
+        error instanceof Error
+          ? error.message
+          : 'Не удалось отметить уведомление как прочитанное.',
       );
     }
   };
@@ -295,10 +370,14 @@ export function ProfileWorkspace() {
     <section className="app-page">
       <PageHeader
         eyebrow="Профиль"
-        title="Профиль, приглашения и вход в новые организации"
-        description="В одном месте собраны ваши организации, входящие приглашения, уведомления и поиск новых команд."
+        title="Профиль и доступ в организации"
+        description="Здесь собраны ваши организации, входящие приглашения, заявки на вступление и рабочие уведомления."
         actions={
-          <Button type="button" variant="ghost" onClick={() => void Promise.all([loadProfileData(), loadDiscoverResults()])}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => void Promise.all([loadProfileData(), loadDiscoverResults()])}
+          >
             Обновить
           </Button>
         }
@@ -320,63 +399,23 @@ export function ProfileWorkspace() {
           <Badge variant="neutral">
             {activeOrganizationId ? 'Есть активная организация' : 'Организация не выбрана'}
           </Badge>
+          <Badge variant={unreadCount > 0 ? 'warning' : 'neutral'}>
+            Непрочитанных: {unreadCount}
+          </Badge>
         </div>
       </div>
 
       {noticeText ? <p className="finance-notice">{noticeText}</p> : null}
       {errorText ? <p className="finance-error">{errorText}</p> : null}
 
-      <div className="settings-layout">
-        <div className="settings-layout__aside profile-stack">
-          <Card>
-            <CardHeader>
-              <CardTitle>Приглашения в организации</CardTitle>
-              <CardDescription>Все входящие инвайты приходят сюда и принимаются в один клик.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="resource-skeleton-grid">
-                  {Array.from({ length: 2 }, (_, index) => (
-                    <Skeleton key={index} className="resource-skeleton-card" />
-                  ))}
-                </div>
-              ) : invitations.length === 0 ? (
-                <div className="resource-empty-inline">
-                  <strong>Приглашений пока нет</strong>
-                  <p>Когда вас пригласят в организацию, инвайт сразу появится в этом разделе.</p>
-                </div>
-              ) : (
-                <div className="resource-card__list">
-                  {invitations.map((invitation) => (
-                    <div key={invitation.invitationId} className="profile-item-card">
-                      <div className="resource-inline-info">
-                        <strong>{invitation.organization.name}</strong>
-                        <span>
-                          Роль: {invitation.role} · действует до {formatDateTime(invitation.expiresAt)}
-                        </span>
-                      </div>
-                      <div className="resource-card__actions">
-                        <Badge variant="warning">Ожидает</Badge>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => void handleAcceptInvitation(invitation)}
-                          loading={processingId === invitation.invitationId}
-                        >
-                          Принять
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
+      <div className="profile-layout">
+        <div className="profile-column profile-column--main">
           <Card>
             <CardHeader>
               <CardTitle>Мои организации</CardTitle>
-              <CardDescription>Если нужно, отсюда можно выйти из любой организации.</CardDescription>
+              <CardDescription>
+                Быстрый доступ к активным организациям и выход из любой из них.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {organizations.length === 0 ? (
@@ -390,9 +429,8 @@ export function ProfileWorkspace() {
                     <div key={organization.id} className="profile-item-card">
                       <div className="resource-inline-info">
                         <strong>{organization.name}</strong>
-                        <span>
-                          {organization.role} · {organization.slug}
-                        </span>
+                        <span>{organization.role} · {organization.slug}</span>
+                        <span>{getOrganizationSecondaryLine(organization)}</span>
                       </div>
                       <div className="resource-card__actions">
                         {activeOrganizationId === organization.id ? (
@@ -423,20 +461,148 @@ export function ProfileWorkspace() {
               )}
             </CardContent>
           </Card>
-        </div>
 
-        <div className="profile-stack">
           <Card>
             <CardHeader>
-              <CardTitle>Найти организацию и отправить запрос</CardTitle>
-              <CardDescription>Ищите по названию и отправляйте запрос, админ получит уведомление.</CardDescription>
+              <CardTitle>Приглашения в организации</CardTitle>
+              <CardDescription>
+                Все входящие инвайты появляются здесь и принимаются в один клик.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="resource-skeleton-grid">
+                  {Array.from({ length: 2 }, (_, index) => (
+                    <Skeleton key={index} className="resource-skeleton-card" />
+                  ))}
+                </div>
+              ) : invitations.length === 0 ? (
+                <div className="resource-empty-inline">
+                  <strong>Приглашений пока нет</strong>
+                  <p>Когда вас пригласят в организацию, инвайт сразу появится в этом разделе.</p>
+                </div>
+              ) : (
+                <div className="resource-card__list">
+                  {invitations.map((invitation) => (
+                    <div key={invitation.invitationId} className="profile-item-card">
+                      <div className="resource-inline-info">
+                        <strong>{invitation.organization.name}</strong>
+                        <span>Роль: {invitation.role}</span>
+                        <span>Действует до {formatDateTime(invitation.expiresAt)}</span>
+                      </div>
+                      <div className="resource-card__actions">
+                        <Badge variant="warning">Ожидает</Badge>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void handleAcceptInvitation(invitation)}
+                          loading={processingId === invitation.invitationId}
+                        >
+                          Принять
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Мои заявки</CardTitle>
+              <CardDescription>
+                Поиск и фильтр по всем вашим запросам на вступление в организации.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="profile-stack">
+              <div className="profile-toolbar">
+                <div className="profile-toolbar__row">
+                  <Input
+                    label="Поиск по заявкам"
+                    value={joinRequestSearch}
+                    onChange={(event) => setJoinRequestSearch(event.target.value)}
+                    placeholder="Название организации или комментарий"
+                  />
+                  <Select
+                    label="Статус"
+                    value={joinRequestFilter}
+                    onChange={(event) => setJoinRequestFilter(event.target.value as JoinRequestFilter)}
+                  >
+                    <option value="ALL">Все</option>
+                    <option value="PENDING">Ожидает решения</option>
+                    <option value="APPROVED">Одобрено</option>
+                    <option value="REJECTED">Отклонено</option>
+                    <option value="CANCELLED">Отменено</option>
+                  </Select>
+                </div>
+                <p className="profile-toolbar__meta">
+                  Найдено заявок: {filteredJoinRequests.length}
+                </p>
+              </div>
+
+              {loading ? (
+                <div className="resource-skeleton-grid">
+                  {Array.from({ length: 2 }, (_, index) => (
+                    <Skeleton key={index} className="resource-skeleton-card" />
+                  ))}
+                </div>
+              ) : joinRequests.length === 0 ? (
+                <div className="resource-empty-inline">
+                  <strong>Заявок пока нет</strong>
+                  <p>Когда вы отправите запрос на вступление, он появится здесь.</p>
+                </div>
+              ) : filteredJoinRequests.length === 0 ? (
+                <div className="resource-empty-inline">
+                  <strong>Ничего не найдено</strong>
+                  <p>Попробуйте изменить фильтр или текст поиска.</p>
+                </div>
+              ) : (
+                <div className="resource-card__list">
+                  {filteredJoinRequests.map((request) => (
+                    <div key={request.requestId} className="profile-item-card">
+                      <div className="resource-inline-info">
+                        <strong>{request.organization.name}</strong>
+                        <span>{getOrganizationSecondaryLine(request.organization)}</span>
+                        <span>
+                          {joinRequestStatusLabels[request.status] ?? request.status} · {formatDateTime(request.createdAt)}
+                        </span>
+                      </div>
+                      <div className="resource-card__actions">
+                        <Badge
+                          variant={
+                            request.status === 'APPROVED'
+                              ? 'success'
+                              : request.status === 'REJECTED'
+                                ? 'error'
+                                : 'warning'
+                          }
+                        >
+                          {joinRequestStatusLabels[request.status] ?? request.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="profile-column profile-column--side">
+          <Card>
+            <CardHeader>
+              <CardTitle>Найти организацию</CardTitle>
+              <CardDescription>
+                Ищите по названию и отправляйте запрос. Админ увидит его в настройках организации.
+              </CardDescription>
             </CardHeader>
             <CardContent className="profile-stack">
               <Input
                 label="Поиск организации"
                 value={discoverSearch}
                 onChange={(event) => setDiscoverSearch(event.target.value)}
-                placeholder="Начните вводить название организации"
+                placeholder="Начните вводить название"
               />
 
               {discovering ? (
@@ -456,7 +622,7 @@ export function ProfileWorkspace() {
                     <div key={organization.id} className="profile-item-card">
                       <div className="resource-inline-info">
                         <strong>{organization.name}</strong>
-                        <span>{organization.description || organization.slug}</span>
+                        <span>{getOrganizationSecondaryLine(organization)}</span>
                       </div>
                       <div className="resource-card__actions">
                         {organization.joinRequestStatus ? (
@@ -483,55 +649,35 @@ export function ProfileWorkspace() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Мои заявки</CardTitle>
-              <CardDescription>Тут видно, в какие организации вы уже отправили запрос.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="resource-skeleton-grid">
-                  {Array.from({ length: 2 }, (_, index) => (
-                    <Skeleton key={index} className="resource-skeleton-card" />
-                  ))}
-                </div>
-              ) : joinRequests.length === 0 ? (
-                <div className="resource-empty-inline">
-                  <strong>Заявок пока нет</strong>
-                  <p>Когда вы отправите запрос на вступление, он появится здесь.</p>
-                </div>
-              ) : (
-                <div className="resource-card__list">
-                  {joinRequests.map((request) => (
-                    <div key={request.requestId} className="profile-item-card">
-                      <div className="resource-inline-info">
-                        <strong>{request.organization.name}</strong>
-                        <span>
-                          {joinRequestStatusLabels[request.status] ?? request.status} · {formatDateTime(request.createdAt)}
-                        </span>
-                      </div>
-                      <Badge
-                        variant={
-                          request.status === 'APPROVED'
-                            ? 'success'
-                            : request.status === 'REJECTED'
-                              ? 'error'
-                              : 'warning'
-                        }
-                      >
-                        {joinRequestStatusLabels[request.status] ?? request.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
               <CardTitle>Уведомления</CardTitle>
-              <CardDescription>Здесь будут инвайты, системные сигналы и заявки в ваши организации.</CardDescription>
+              <CardDescription>
+                Здесь собраны приглашения, системные сигналы и ответы по вашим заявкам.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="profile-stack">
+              <div className="profile-toolbar">
+                <div className="profile-toolbar__row">
+                  <Input
+                    label="Поиск по уведомлениям"
+                    value={notificationSearch}
+                    onChange={(event) => setNotificationSearch(event.target.value)}
+                    placeholder="Тема или текст уведомления"
+                  />
+                  <Select
+                    label="Показать"
+                    value={notificationFilter}
+                    onChange={(event) => setNotificationFilter(event.target.value as NotificationFilter)}
+                  >
+                    <option value="ALL">Все</option>
+                    <option value="UNREAD">Только непрочитанные</option>
+                    <option value="READ">Только прочитанные</option>
+                  </Select>
+                </div>
+                <p className="profile-toolbar__meta">
+                  Показано уведомлений: {filteredNotifications.length}
+                </p>
+              </div>
+
               {loading ? (
                 <div className="resource-skeleton-grid">
                   {Array.from({ length: 3 }, (_, index) => (
@@ -543,9 +689,14 @@ export function ProfileWorkspace() {
                   <strong>Уведомлений пока нет</strong>
                   <p>Когда появятся системные события или заявки, они будут видны тут.</p>
                 </div>
+              ) : filteredNotifications.length === 0 ? (
+                <div className="resource-empty-inline">
+                  <strong>Ничего не найдено</strong>
+                  <p>Попробуйте изменить фильтр или текст поиска.</p>
+                </div>
               ) : (
                 <div className="resource-card__list">
-                  {notifications.map((item) => (
+                  {filteredNotifications.map((item) => (
                     <div key={item.recipientId} className="profile-item-card">
                       <div className="resource-inline-info">
                         <strong>{item.notification.title}</strong>

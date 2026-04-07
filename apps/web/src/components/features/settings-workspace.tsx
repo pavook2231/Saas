@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { MetricCard } from './metric-card';
@@ -54,11 +55,15 @@ const joinRequestStatusLabel: Record<string, string> = {
   CANCELLED: 'Отменено',
 };
 
+const normalizeSearch = (value: string) => value.trim().toLowerCase();
+
 export function SettingsWorkspace() {
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const [organization, setOrganization] = useState<OrganizationDetails | null>(null);
   const [memberships, setMemberships] = useState<OrganizationMember[]>([]);
   const [joinRequests, setJoinRequests] = useState<OrganizationJoinRequestAdminRecord[]>([]);
+  const [joinRequestSearch, setJoinRequestSearch] = useState('');
+  const [joinRequestFilter, setJoinRequestFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'>('ALL');
   const [form, setForm] = useState<OrganizationFormState>(initialFormState);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -157,6 +162,27 @@ export function SettingsWorkspace() {
       },
     ];
   }, [activeRole, joinRequests, loading, memberships]);
+
+  const filteredJoinRequests = useMemo(() => {
+    const search = normalizeSearch(joinRequestSearch);
+
+    return joinRequests.filter((request) => {
+      const matchesStatus =
+        joinRequestFilter === 'ALL' || request.status === joinRequestFilter;
+      const matchesSearch =
+        search.length === 0 ||
+        [
+          request.requester.email,
+          request.requester.firstName,
+          request.requester.lastName,
+          request.message,
+        ]
+          .filter(Boolean)
+          .some((value) => value?.toLowerCase().includes(search));
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [joinRequestFilter, joinRequestSearch, joinRequests]);
 
   const handleSave = async () => {
     if (!accessToken || !activeOrganizationId || !canManageSettings) {
@@ -399,59 +425,102 @@ export function SettingsWorkspace() {
                   <p>Когда кто-то отправит запрос на вступление, он появится здесь.</p>
                 </div>
               ) : (
-                <div className="resource-card__list">
-                  {joinRequests.map((request) => (
-                    <div key={request.requestId} className="profile-item-card">
-                      <div className="resource-inline-info">
-                        <strong>{displayRequesterName(request)}</strong>
-                        <span>{request.requester.email}</span>
-                        <span>
-                          {joinRequestStatusLabel[request.status] ?? request.status} ·{' '}
-                          {new Intl.DateTimeFormat('ru-RU', {
-                            day: '2-digit',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          }).format(new Date(request.createdAt))}
-                        </span>
-                        {request.message ? <span>{request.message}</span> : null}
-                      </div>
-                      <div className="resource-card__actions">
-                        <Badge
-                          variant={
-                            request.status === 'APPROVED'
-                              ? 'success'
-                              : request.status === 'REJECTED'
-                                ? 'error'
-                                : 'warning'
-                          }
-                        >
-                          {joinRequestStatusLabel[request.status] ?? request.status}
-                        </Badge>
-                        {request.status === 'PENDING' ? (
-                          <>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => void handleReviewJoinRequest(request, 'APPROVED')}
-                              loading={reviewingRequestId === request.requestId}
-                            >
-                              Одобрить
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => void handleReviewJoinRequest(request, 'REJECTED')}
-                              loading={reviewingRequestId === request.requestId}
-                            >
-                              Отклонить
-                            </Button>
-                          </>
-                        ) : null}
-                      </div>
+                <div className="profile-stack">
+                  <div className="profile-toolbar">
+                    <div className="profile-toolbar__row">
+                      <Input
+                        label="Поиск по заявкам"
+                        value={joinRequestSearch}
+                        onChange={(event) => setJoinRequestSearch(event.target.value)}
+                        placeholder="Имя, email или комментарий"
+                      />
+                      <Select
+                        label="Статус"
+                        value={joinRequestFilter}
+                        onChange={(event) =>
+                          setJoinRequestFilter(
+                            event.target.value as
+                              | 'ALL'
+                              | 'PENDING'
+                              | 'APPROVED'
+                              | 'REJECTED'
+                              | 'CANCELLED',
+                          )
+                        }
+                      >
+                        <option value="ALL">Все</option>
+                        <option value="PENDING">Ожидает решения</option>
+                        <option value="APPROVED">Одобрено</option>
+                        <option value="REJECTED">Отклонено</option>
+                        <option value="CANCELLED">Отменено</option>
+                      </Select>
                     </div>
-                  ))}
+                    <p className="profile-toolbar__meta">
+                      Найдено заявок: {filteredJoinRequests.length}
+                    </p>
+                  </div>
+
+                  {filteredJoinRequests.length === 0 ? (
+                    <div className="resource-empty-inline">
+                      <strong>Ничего не найдено</strong>
+                      <p>Попробуйте изменить фильтр или текст поиска.</p>
+                    </div>
+                  ) : (
+                    <div className="resource-card__list">
+                      {filteredJoinRequests.map((request) => (
+                        <div key={request.requestId} className="profile-item-card">
+                          <div className="resource-inline-info">
+                            <strong>{displayRequesterName(request)}</strong>
+                            <span>{request.requester.email}</span>
+                            <span>
+                              {joinRequestStatusLabel[request.status] ?? request.status} ·{' '}
+                              {new Intl.DateTimeFormat('ru-RU', {
+                                day: '2-digit',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }).format(new Date(request.createdAt))}
+                            </span>
+                            {request.message ? <span>{request.message}</span> : null}
+                          </div>
+                          <div className="resource-card__actions">
+                            <Badge
+                              variant={
+                                request.status === 'APPROVED'
+                                  ? 'success'
+                                  : request.status === 'REJECTED'
+                                    ? 'error'
+                                    : 'warning'
+                              }
+                            >
+                              {joinRequestStatusLabel[request.status] ?? request.status}
+                            </Badge>
+                            {request.status === 'PENDING' ? (
+                              <>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => void handleReviewJoinRequest(request, 'APPROVED')}
+                                  loading={reviewingRequestId === request.requestId}
+                                >
+                                  Одобрить
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => void handleReviewJoinRequest(request, 'REJECTED')}
+                                  loading={reviewingRequestId === request.requestId}
+                                >
+                                  Отклонить
+                                </Button>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

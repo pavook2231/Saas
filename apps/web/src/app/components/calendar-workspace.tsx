@@ -761,7 +761,11 @@ export function CalendarWorkspace() {
     >
       <span className="chip-time">{timeFormat.format(event.startsAt)}</span>
       <span className="chip-title">{event.title}</span>
-      <span className="chip-meta">{eventTypeLabels[event.type]} · {event.durationMinutes} {ru.calendar.minuteShort}</span>
+      <span className="chip-meta">
+        {event.type === 'PERFORMANCE'
+          ? eventTypeLabels[event.type]
+          : `${eventTypeLabels[event.type]} · ${event.durationMinutes} ${ru.calendar.minuteShort}`}
+      </span>
     </button>
   );
 
@@ -952,7 +956,7 @@ export function CalendarWorkspace() {
                 <option value="">Выберите спектакль</option>
                 {templates.map((template) => (
                   <option key={template.id} value={template.id}>
-                    {template.name} · {template.durationMinutes} мин
+                    {template.name}
                   </option>
                 ))}
               </Select>
@@ -968,7 +972,7 @@ export function CalendarWorkspace() {
             {composer.kind === 'PERFORMANCE' && selectedTemplate ? (
               <div className="composer-template-preview">
                 <strong>{selectedTemplate.name}</strong>
-                <span>{selectedTemplate.durationMinutes} мин · {templateParticipantIds(selectedTemplate).length} участников</span>
+                <span>{templateParticipantIds(selectedTemplate).length} участников</span>
               </div>
             ) : null}
 
@@ -994,35 +998,39 @@ export function CalendarWorkspace() {
               />
             </div>
 
-            <div className="modal-form-section">
-              <span className="quick-choice-label">{ru.calendar.composer.defaults.duration}</span>
-              <div className="quick-choice-row quick-choice-row--wide">
-                {durationPresets.map((duration) => (
-                  <button
-                    key={duration}
-                    type="button"
-                    className={`quick-choice-chip${composer.durationMinutes === duration ? ' is-active' : ''}`}
-                    onClick={() => setComposer((current) => ({ ...current, durationMinutes: duration }))}
-                  >
-                    {duration} мин
-                  </button>
-                ))}
-              </div>
-            </div>
+            {composer.kind !== 'PERFORMANCE' ? (
+              <>
+                <div className="modal-form-section">
+                  <span className="quick-choice-label">{ru.calendar.composer.defaults.duration}</span>
+                  <div className="quick-choice-row quick-choice-row--wide">
+                    {durationPresets.map((duration) => (
+                      <button
+                        key={duration}
+                        type="button"
+                        className={`quick-choice-chip${composer.durationMinutes === duration ? ' is-active' : ''}`}
+                        onClick={() => setComposer((current) => ({ ...current, durationMinutes: duration }))}
+                      >
+                        {duration} мин
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <Input
-              label={ru.calendar.composer.fields.duration}
-              min={15}
-              step={15}
-              type="number"
-              value={String(composer.durationMinutes)}
-              onChange={(event) =>
-                setComposer((current) => ({
-                  ...current,
-                  durationMinutes: Math.max(15, Number(event.target.value) || 15),
-                }))
-              }
-            />
+                <Input
+                  label={ru.calendar.composer.fields.duration}
+                  min={15}
+                  step={15}
+                  type="number"
+                  value={String(composer.durationMinutes)}
+                  onChange={(event) =>
+                    setComposer((current) => ({
+                      ...current,
+                      durationMinutes: Math.max(15, Number(event.target.value) || 15),
+                    }))
+                  }
+                />
+              </>
+            ) : null}
 
             {recentTemplateCards.length > 0 && composer.kind === 'PERFORMANCE' ? (
               <div className="composer-chip-group">

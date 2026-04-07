@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { ru } from '../lib/i18n/ru';
 
@@ -108,13 +108,27 @@ const upsertMessage = (messages: ChatMessage[], incoming: ChatMessage): ChatMess
   return next;
 };
 
-export function ChatPanel() {
+type ChatPanelProps = {
+  organizationId?: string | null;
+  accessToken?: string | null;
+  defaultScope?: ChatScope;
+  defaultEventId?: string | null;
+  lockWorkspace?: boolean;
+};
+
+export function ChatPanel({
+  organizationId: organizationIdProp,
+  accessToken: accessTokenProp,
+  defaultScope = 'ORGANIZATION',
+  defaultEventId,
+  lockWorkspace = false,
+}: ChatPanelProps = {}) {
   const socketRef = useRef<Socket | null>(null);
 
   const [organizationId, setOrganizationId] = useState('');
   const [accessToken, setAccessToken] = useState('');
-  const [scope, setScope] = useState<ChatScope>('ORGANIZATION');
-  const [eventId, setEventId] = useState('');
+  const [scope, setScope] = useState<ChatScope>(defaultScope);
+  const [eventId, setEventId] = useState(defaultEventId ?? '');
   const [messageText, setMessageText] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -123,16 +137,17 @@ export function ChatPanel() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
+  const resolvedOrganizationId = organizationIdProp?.trim() || organizationId.trim();
+  const resolvedAccessToken = accessTokenProp?.trim() || accessToken.trim();
+  const resolvedEventId = (defaultEventId ?? eventId).trim();
 
   const apiBase = useMemo(() => {
-    const trimmedOrganizationId = organizationId.trim();
-
-    if (!trimmedOrganizationId) {
+    if (!resolvedOrganizationId) {
       return null;
     }
 
-    return `${defaultApiBaseUrl}/organizations/${trimmedOrganizationId}/chats`;
-  }, [organizationId]);
+    return `${defaultApiBaseUrl}/organizations/${resolvedOrganizationId}/chats`;
+  }, [resolvedOrganizationId]);
 
   const currentScopeTitle =
     scope === 'ORGANIZATION'
@@ -148,23 +163,19 @@ export function ChatPanel() {
   };
 
   const requireToken = (): string => {
-    const token = accessToken.trim();
-
-    if (!token) {
+    if (!resolvedAccessToken) {
       throw new Error(ru.common.accessTokenRequired);
     }
 
-    return token;
+    return resolvedAccessToken;
   };
 
   const requireEventId = (): string => {
-    const value = eventId.trim();
-
-    if (!value) {
+    if (!resolvedEventId) {
       throw new Error(ru.chat.errors.eventIdRequired);
     }
 
-    return value;
+    return resolvedEventId;
   };
 
   const resolveMessagesPath = (): string => {
@@ -176,7 +187,7 @@ export function ChatPanel() {
   };
 
   const isMessageForCurrentRoom = (message: ChatMessage): boolean => {
-    if (message.organizationId !== organizationId.trim()) {
+    if (message.organizationId !== resolvedOrganizationId) {
       return false;
     }
 
@@ -184,7 +195,7 @@ export function ChatPanel() {
       return message.scope === 'ORGANIZATION';
     }
 
-    return message.scope === 'EVENT' && message.eventId === eventId.trim();
+    return message.scope === 'EVENT' && message.eventId === resolvedEventId;
   };
 
   const loadMessages = async () => {
@@ -270,8 +281,8 @@ export function ChatPanel() {
 
     try {
       const token = requireToken();
-      const currentOrganizationId = organizationId.trim();
-      const currentEventId = eventId.trim();
+      const currentOrganizationId = resolvedOrganizationId;
+      const currentEventId = resolvedEventId;
 
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -338,30 +349,52 @@ export function ChatPanel() {
     }
   };
 
+  useEffect(() => {
+    setScope(defaultScope);
+  }, [defaultScope]);
+
+  useEffect(() => {
+    if (defaultEventId !== undefined) {
+      setEventId(defaultEventId ?? '');
+    }
+  }, [defaultEventId]);
+
+  useEffect(() => {
+    return () => {
+      disconnectSocket();
+    };
+  }, []);
+
   return (
     <section className="chat-panel">
       <h2>{ru.chat.title}</h2>
       <p className="chat-note">{ru.chat.note}</p>
 
       <div className="chat-form">
-        <label>
-          {ru.chat.fields.organizationId}
-          <input
-            placeholder={ru.chat.fields.organizationPlaceholder}
-            value={organizationId}
-            onChange={(event) => setOrganizationId(event.target.value)}
-          />
-        </label>
+        {!lockWorkspace ? (
+          <>
+            <label>
+              {ru.chat.fields.organizationId}
+              <input
+                placeholder={ru.chat.fields.organizationPlaceholder}
+                value={organizationIdProp ?? organizationId}
+                onChange={(event) => setOrganizationId(event.target.value)}
+                disabled={Boolean(organizationIdProp)}
+              />
+            </label>
 
-        <label>
-          {ru.chat.fields.accessToken}
-          <input
-            placeholder={ru.chat.fields.accessTokenPlaceholder}
-            type="password"
-            value={accessToken}
-            onChange={(event) => setAccessToken(event.target.value)}
-          />
-        </label>
+            <label>
+              {ru.chat.fields.accessToken}
+              <input
+                placeholder={ru.chat.fields.accessTokenPlaceholder}
+                type="password"
+                value={accessTokenProp ?? accessToken}
+                onChange={(event) => setAccessToken(event.target.value)}
+                disabled={Boolean(accessTokenProp)}
+              />
+            </label>
+          </>
+        ) : null}
 
         <div className="segmented chat-segmented">
           <button
@@ -385,8 +418,9 @@ export function ChatPanel() {
             {ru.chat.fields.eventId}
             <input
               placeholder={ru.chat.fields.eventPlaceholder}
-              value={eventId}
+              value={defaultEventId ?? eventId}
               onChange={(event) => setEventId(event.target.value)}
+              disabled={Boolean(defaultEventId)}
             />
           </label>
         ) : null}

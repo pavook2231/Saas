@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ru } from '../lib/i18n/ru';
 
 type CurrencyCode = 'RUB' | 'USD' | 'EUR' | 'KZT' | 'BYN' | 'UZS';
@@ -178,7 +178,17 @@ const formatAmount = (amount: string | null, currency: CurrencyCode): string => 
   return `${numeric.toFixed(2)} ${currency}`;
 };
 
-export function PointsIncomePanel() {
+type PointsIncomePanelProps = {
+  organizationId?: string | null;
+  accessToken?: string | null;
+  lockWorkspace?: boolean;
+};
+
+export function PointsIncomePanel({
+  organizationId: organizationIdProp,
+  accessToken: accessTokenProp,
+  lockWorkspace = false,
+}: PointsIncomePanelProps = {}) {
   const [organizationId, setOrganizationId] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [referenceDate, setReferenceDate] = useState(todayInput);
@@ -192,16 +202,16 @@ export function PointsIncomePanel() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [financeEnabled, setFinanceEnabled] = useState<boolean | null>(null);
+  const resolvedOrganizationId = organizationIdProp?.trim() || organizationId.trim();
+  const resolvedAccessToken = accessTokenProp?.trim() || accessToken.trim();
 
   const pointsBaseUrl = useMemo(() => {
-    const trimmedOrgId = organizationId.trim();
-
-    if (!trimmedOrgId) {
+    if (!resolvedOrganizationId) {
       return null;
     }
 
-    return `${defaultApiBaseUrl}/organizations/${trimmedOrgId}/points`;
-  }, [organizationId]);
+    return `${defaultApiBaseUrl}/organizations/${resolvedOrganizationId}/points`;
+  }, [resolvedOrganizationId]);
 
   const requireOrganization = (): string => {
     if (!pointsBaseUrl) {
@@ -212,24 +222,20 @@ export function PointsIncomePanel() {
   };
 
   const requireOrganizationId = (): string => {
-    const value = organizationId.trim();
-
-    if (!value) {
+    if (!resolvedOrganizationId) {
       throw new Error(ru.common.organizationIdRequired);
     }
 
-    return value;
+    return resolvedOrganizationId;
   };
 
   const requireAuthHeaders = (): HeadersInit => {
-    const token = accessToken.trim();
-
-    if (!token) {
+    if (!resolvedAccessToken) {
       throw new Error(ru.common.actionAccessTokenRequired);
     }
 
     return {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${resolvedAccessToken}`,
     };
   };
 
@@ -474,6 +480,48 @@ export function PointsIncomePanel() {
     });
   };
 
+  useEffect(() => {
+    if (!resolvedOrganizationId || !resolvedAccessToken) {
+      setFinanceEnabled(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const sync = async () => {
+      try {
+        const response = await fetch(`${defaultApiBaseUrl}/organizations/${resolvedOrganizationId}`, {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${resolvedAccessToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(await parseErrorMessage(response));
+        }
+
+        const payload = (await response.json()) as OrganizationResponse;
+
+        if (!cancelled) {
+          const enabled = payload.financeEnabled === true;
+          setFinanceEnabled(enabled);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setFinanceEnabled(null);
+          setErrorText(getErrorMessage(error));
+        }
+      }
+    };
+
+    void sync();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedAccessToken, resolvedOrganizationId]);
+
   return (
     <section className="finance-panel">
       <h2>{ru.finance.title}</h2>
@@ -486,24 +534,30 @@ export function PointsIncomePanel() {
           void loadIncome();
         }}
       >
-        <label>
-          {ru.finance.fields.organizationId}
-          <input
-            placeholder={ru.finance.fields.organizationPlaceholder}
-            value={organizationId}
-            onChange={(event) => setOrganizationId(event.target.value)}
-          />
-        </label>
+        {!lockWorkspace ? (
+          <>
+            <label>
+              {ru.finance.fields.organizationId}
+              <input
+                placeholder={ru.finance.fields.organizationPlaceholder}
+                value={organizationIdProp ?? organizationId}
+                onChange={(event) => setOrganizationId(event.target.value)}
+                disabled={Boolean(organizationIdProp)}
+              />
+            </label>
 
-        <label>
-          {ru.finance.fields.accessToken}
-          <input
-            placeholder={ru.finance.fields.accessTokenPlaceholder}
-            type="password"
-            value={accessToken}
-            onChange={(event) => setAccessToken(event.target.value)}
-          />
-        </label>
+            <label>
+              {ru.finance.fields.accessToken}
+              <input
+                placeholder={ru.finance.fields.accessTokenPlaceholder}
+                type="password"
+                value={accessTokenProp ?? accessToken}
+                onChange={(event) => setAccessToken(event.target.value)}
+                disabled={Boolean(accessTokenProp)}
+              />
+            </label>
+          </>
+        ) : null}
 
         <div className="row">
           <label>
@@ -529,7 +583,7 @@ export function PointsIncomePanel() {
           <button
             type="button"
             onClick={() => void refreshFinanceStatus()}
-            disabled={busyAction !== null}
+            disabled={busyAction !== null || !resolvedOrganizationId || !resolvedAccessToken}
           >
             {busyAction === 'sync-finance'
               ? ru.finance.progress.checking

@@ -12,6 +12,7 @@ export type OrganizationSummary = {
   id: string;
   name: string;
   slug: string;
+  inviteCode?: string;
   description: string | null;
   timezone: string | null;
   createdAt: string;
@@ -27,6 +28,7 @@ export type OrganizationDetails = {
   id: string;
   name: string;
   slug: string;
+  inviteCode?: string;
   description: string | null;
   timezone: string | null;
   createdAt: string;
@@ -53,6 +55,37 @@ export type OrganizationMember = {
   };
 };
 
+export type OrganizationInvitation = {
+  invitationId: string;
+  membershipId: string;
+  role: OrganizationRole;
+  status: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
+  invitedAt: string;
+  expiresAt: string;
+  organization: OrganizationSummary;
+};
+
+export type OrganizationJoinRequestStatus =
+  | 'PENDING'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'CANCELLED';
+
+export type OrganizationJoinRequestRecord = {
+  requestId: string;
+  status: OrganizationJoinRequestStatus;
+  message: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  organization: OrganizationSummary;
+};
+
+export type DiscoverOrganizationRecord = OrganizationSummary & {
+  joinLink?: string;
+  joinRequestStatus: OrganizationJoinRequestStatus | null;
+};
+
 export type UpdateOrganizationPayload = {
   name?: string;
   description?: string;
@@ -65,6 +98,10 @@ export type CreateOrganizationPayload = {
   description?: string;
   timezone?: string;
   financeEnabled?: boolean;
+};
+
+export type CreateJoinRequestPayload = {
+  message?: string;
 };
 
 type AuthenticatedRequest = {
@@ -89,6 +126,62 @@ export const organizationsApi = {
     return apiRequest<OrganizationSummary[]>({
       accessToken: params.accessToken,
       path: '/organizations',
+    });
+  },
+
+  listMyInvitations(params: AuthenticatedRequest) {
+    return apiRequest<OrganizationInvitation[]>({
+      accessToken: params.accessToken,
+      path: '/organizations/invitations/me',
+    });
+  },
+
+  acceptInvitation(
+    params: AuthenticatedRequest & {
+      invitationId: string;
+    },
+  ) {
+    return apiRequest<{ id: string; role: OrganizationRole; status: MembershipStatus }>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: `/organizations/invitations/${params.invitationId}/accept`,
+    });
+  },
+
+  listMyJoinRequests(params: AuthenticatedRequest) {
+    return apiRequest<OrganizationJoinRequestRecord[]>({
+      accessToken: params.accessToken,
+      path: '/organizations/join-requests/me',
+    });
+  },
+
+  discoverOrganizations(
+    params: AuthenticatedRequest & {
+      search?: string;
+      limit?: number;
+    },
+  ) {
+    return apiRequest<DiscoverOrganizationRecord[]>({
+      accessToken: params.accessToken,
+      path: '/organizations/discover',
+      searchParams: {
+        search: params.search,
+        limit: params.limit,
+      },
+    });
+  },
+
+  createJoinRequest(
+    params: AuthenticatedRequest & {
+      organizationId: string;
+      payload?: CreateJoinRequestPayload;
+    },
+  ) {
+    return apiRequest<OrganizationJoinRequestRecord>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: `/organizations/${params.organizationId}/join-requests`,
+      body: params.payload ?? {},
     });
   },
 
@@ -125,6 +218,18 @@ export const organizationsApi = {
     return apiRequest<OrganizationMember[]>({
       accessToken: params.accessToken,
       path: `/organizations/${params.organizationId}/memberships`,
+    });
+  },
+
+  leaveOrganization(
+    params: AuthenticatedRequest & {
+      organizationId: string;
+    },
+  ) {
+    return apiRequest<{ success: true }>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: `/organizations/${params.organizationId}/memberships/leave`,
     });
   },
 };

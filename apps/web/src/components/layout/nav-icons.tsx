@@ -56,6 +56,13 @@ export const SettingsIcon = (props: IconProps) => (
   </IconBase>
 );
 
+export const ProfileIcon = (props: IconProps) => (
+  <IconBase {...props}>
+    <path d="M20 21a8 8 0 0 0-16 0" />
+    <circle cx="12" cy="8" r="4" />
+  </IconBase>
+);
+
 export const ChevronLeftIcon = (props: IconProps) => (
   <IconBase {...props}>
     <path d="m15 18-6-6 6-6" />

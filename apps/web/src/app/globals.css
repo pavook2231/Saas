@@ -1268,6 +1268,52 @@ textarea.ui-field:focus {
   align-items: start;
 }
 
+.profile-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.profile-hero-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid rgba(219, 227, 239, 0.9);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-sm);
+}
+
+.profile-hero-card__copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profile-hero-card__copy strong {
+  font-size: 1rem;
+}
+
+.profile-hero-card__copy span {
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.profile-hero-card__meta {
+  margin-left: auto;
+}
+
+.profile-item-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(219, 227, 239, 0.88);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
 .settings-layout__aside,
 .settings-card__content,
 .member-list,
@@ -2858,6 +2904,15 @@ textarea.ui-field {
   .page-grid--two,
   .showcase-grid,
   .settings-layout { grid-template-columns: 1fr; }
+  .profile-hero-card,
+  .profile-item-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .profile-hero-card__meta {
+    margin-left: 0;
+  }
   .auth-hero-grid { grid-template-columns: 1fr; }
   .card-list-grid,
   .resource-skeleton-grid { grid-template-columns: 1fr; }

@@ -1,4 +1,6 @@
-﻿import { Avatar } from '@/components/ui/avatar';
+﻿import Link from 'next/link';
+
+import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
@@ -78,15 +80,14 @@ export function AppTopbar({
 
       <div className="app-topbar__right">
         {activeRole ? <Badge variant="neutral">{activeRole}</Badge> : null}
-        <div className="app-topbar__profile">
+        <Link href="/profile" className="app-topbar__profile">
           <Avatar name={userName} src={userAvatar} size="sm" />
           <div>
             <strong>{userName}</strong>
             <p>{userEmail}</p>
           </div>
-        </div>
+        </Link>
       </div>
     </header>
   );
 }
-

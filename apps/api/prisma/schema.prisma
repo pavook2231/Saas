@@ -29,6 +29,13 @@ enum OrganizationInviteStatus {
   EXPIRED
 }
 
+enum OrganizationJoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 enum OAuthProvider {
   GOOGLE
   VK
@@ -206,6 +213,8 @@ model User {
   membershipsInvited          Membership[]             @relation("MembershipInviter")
   organizationInvitesSent     OrganizationInvite[]     @relation("OrganizationInviteSender")
   organizationInvitesAccepted OrganizationInvite[]     @relation("OrganizationInviteAcceptor")
+  organizationJoinRequests    OrganizationJoinRequest[] @relation("OrganizationJoinRequester")
+  organizationJoinReviews     OrganizationJoinRequest[] @relation("OrganizationJoinReviewer")
   participants                Participant[]            @relation("ParticipantUser")
   participantsCreated         Participant[]            @relation("ParticipantCreator")
   participantInvitesSent      ParticipantInvite[]      @relation("ParticipantInviteSender")
@@ -309,6 +318,7 @@ model Organization {
   createdBy               User?                    @relation("OrganizationCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   memberships             Membership[]
   invites                 OrganizationInvite[]
+  joinRequests            OrganizationJoinRequest[]
   participants            Participant[]
   participantInvites      ParticipantInvite[]
   templates               Template[]
@@ -375,6 +385,26 @@ model OrganizationInvite {
 
   @@index([organizationId, status, expiresAt])
   @@index([organizationId, email])
+}
+
+model OrganizationJoinRequest {
+  id               String                        @id @default(uuid()) @db.Uuid
+  organizationId   String                        @db.Uuid
+  userId           String                        @db.Uuid
+  status           OrganizationJoinRequestStatus @default(PENDING)
+  message          String?
+  reviewedByUserId String?                       @db.Uuid
+  reviewedAt       DateTime?
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation("OrganizationJoinRequester", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy   User?        @relation("OrganizationJoinReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, status, createdAt])
+  @@index([userId, status, createdAt])
 }
 
 model Participant {

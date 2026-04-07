@@ -3,7 +3,7 @@ require('reflect-metadata');
 const { randomUUID } = require('node:crypto');
 const { ConflictException, ForbiddenException, UnauthorizedException } = require('@nestjs/common');
 const { JwtService } = require('@nestjs/jwt');
-const { CurrencyCode, EventAttendanceStatus, EventStatus, EventType, MembershipStatus, NotificationChannel, NotificationDeliveryStatus, NotificationType, OrganizationRole, ParticipantInviteStatus, PointsLedgerType, Prisma } = require('@prisma/client');
+const { CurrencyCode, EventAttendanceStatus, EventStatus, EventType, MembershipStatus, NotificationChannel, NotificationDeliveryStatus, NotificationType, OrganizationJoinRequestStatus, OrganizationRole, ParticipantInviteStatus, PointsLedgerType, Prisma } = require('@prisma/client');
 const { AuthService } = require('../dist/auth/auth.service');
 const { JwtStrategy } = require('../dist/auth/strategies/jwt.strategy');
 const { EventsService } = require('../dist/events/events.service');
@@ -70,11 +70,12 @@ class FakeFirebasePushService {
 
 class InMemoryPrisma {
   constructor() {
-    this.state = { users: [], refreshTokens: [], organizations: [], organizationInvites: [], memberships: [], participants: [], participantInvites: [], events: [], eventParticipants: [], participantAvailabilities: [], pointsConfigs: [], pointRateHistories: [], autoPointsComputations: [], pointsLedgerEntries: [], manualPointsAdjustments: [], manualPointsAudits: [], auditLogs: [], notifications: [], notificationRecipients: [], pushDeviceTokens: [] };
+    this.state = { users: [], refreshTokens: [], organizations: [], organizationInvites: [], organizationJoinRequests: [], memberships: [], participants: [], participantInvites: [], events: [], eventParticipants: [], participantAvailabilities: [], pointsConfigs: [], pointRateHistories: [], autoPointsComputations: [], pointsLedgerEntries: [], manualPointsAdjustments: [], manualPointsAudits: [], auditLogs: [], notifications: [], notificationRecipients: [], pushDeviceTokens: [] };
     this.user = this.model('user');
     this.refreshToken = this.model('refreshToken');
     this.organization = this.model('organization');
     this.organizationInvite = this.model('organizationInvite');
+    this.organizationJoinRequest = this.model('organizationJoinRequest');
     this.membership = this.model('membership');
     this.participant = this.model('participant');
     this.participantInvite = this.model('participantInvite');
@@ -99,7 +100,7 @@ class InMemoryPrisma {
   async $transaction(input) { return typeof input === 'function' ? input(this) : Promise.all(input); }
 
   table(name) {
-    const map = { user: 'users', refreshToken: 'refreshTokens', organization: 'organizations', organizationInvite: 'organizationInvites', membership: 'memberships', participant: 'participants', participantInvite: 'participantInvites', event: 'events', eventParticipant: 'eventParticipants', participantAvailability: 'participantAvailabilities', pointsConfig: 'pointsConfigs', pointRateHistory: 'pointRateHistories', pointsLedgerEntry: 'pointsLedgerEntries', autoPointsComputation: 'autoPointsComputations', manualPointsAdjustment: 'manualPointsAdjustments', manualPointsAudit: 'manualPointsAudits', auditLog: 'auditLogs', notification: 'notifications', notificationRecipient: 'notificationRecipients', pushDeviceToken: 'pushDeviceTokens', eventReminderDispatch: 'eventReminderDispatches' };
+    const map = { user: 'users', refreshToken: 'refreshTokens', organization: 'organizations', organizationInvite: 'organizationInvites', organizationJoinRequest: 'organizationJoinRequests', membership: 'memberships', participant: 'participants', participantInvite: 'participantInvites', event: 'events', eventParticipant: 'eventParticipants', participantAvailability: 'participantAvailabilities', pointsConfig: 'pointsConfigs', pointRateHistory: 'pointRateHistories', pointsLedgerEntry: 'pointsLedgerEntries', autoPointsComputation: 'autoPointsComputations', manualPointsAdjustment: 'manualPointsAdjustments', manualPointsAudit: 'manualPointsAudits', auditLog: 'auditLogs', notification: 'notifications', notificationRecipient: 'notificationRecipients', pushDeviceToken: 'pushDeviceTokens', eventReminderDispatch: 'eventReminderDispatches' };
     const key = map[name];
     if (!key) throw new Error(`Unsupported model ${name}`);
     return this.state[key];
@@ -129,6 +130,7 @@ class InMemoryPrisma {
       refreshToken: { ...base, userId: null, tokenHash: null, sessionId: null, userAgent: null, ipAddress: null, expiresAt: now, revokedAt: null, createdAt: now, updatedAt: now },
       organization: { ...base, name: '', slug: '', inviteCode: `join${String(base.id).replace(/-/g, '').slice(0, 8)}`, description: null, timezone: 'UTC', settings: null, createdByUserId: null, createdAt: now, updatedAt: now, deletedAt: null },
       organizationInvite: { ...base, organizationId: null, email: null, role: OrganizationRole.MEMBER, status: 'PENDING', tokenHash: randomUUID(), invitedByUserId: null, acceptedByUserId: null, expiresAt: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000), acceptedAt: null, revokedAt: null, createdAt: now, updatedAt: now },
+      organizationJoinRequest: { ...base, organizationId: null, userId: null, status: OrganizationJoinRequestStatus.PENDING, message: null, reviewedByUserId: null, reviewedAt: null, createdAt: now, updatedAt: now },
       membership: { ...base, organizationId: null, userId: null, role: OrganizationRole.MEMBER, status: MembershipStatus.INVITED, invitedByUserId: null, invitedAt: now, acceptedAt: null, leftAt: null, suspendedAt: null, createdAt: now, updatedAt: now },
       participant: { ...base, organizationId: null, userId: null, firstName: '', lastName: '', middleName: null, displayName: null, email: null, phone: null, notes: null, invitationStatus: ParticipantInviteStatus.NOT_SENT, invitedAt: null, linkedAt: null, createdByUserId: null, createdAt: now, updatedAt: now, deletedAt: null },
       participantInvite: { ...base, organizationId: null, participantId: null, invitedByUserId: null, email: null, phone: null, status: ParticipantInviteStatus.PENDING, tokenHash: randomUUID(), expiresAt: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000), acceptedAt: null, revokedAt: null, createdAt: now, updatedAt: now },
@@ -168,6 +170,7 @@ class InMemoryPrisma {
     if (name === 'user' && where.email) return item.email === where.email;
     if (name === 'refreshToken' && where.sessionId) return item.sessionId === where.sessionId;
     if (name === 'organizationInvite' && where.tokenHash) return item.tokenHash === where.tokenHash;
+    if (name === 'organizationJoinRequest' && where.organizationId_userId) return item.organizationId === where.organizationId_userId.organizationId && item.userId === where.organizationId_userId.userId;
     if (name === 'pushDeviceToken' && where.tokenHash) return item.tokenHash === where.tokenHash;
     if (name === 'membership' && where.organizationId_userId) return item.organizationId === where.organizationId_userId.organizationId && item.userId === where.organizationId_userId.userId;
     if (name === 'pointsConfig' && where.organizationId) return item.organizationId === where.organizationId;
@@ -184,6 +187,9 @@ class InMemoryPrisma {
       if (key === 'AND' || key === 'OR') continue;
       if (key === 'memberships' && name === 'organization') { const memberships = this.state.memberships.filter((m) => m.organizationId === item.id); if (cond.some && !memberships.some((m) => this.matches('membership', m, cond.some))) return false; continue; }
       if (key === 'organization' && (name === 'membership' || name === 'participant' || name === 'eventParticipant' || name === 'organizationInvite' || name === 'participantInvite')) { const organizationId = name === 'eventParticipant' ? (this.state.events.find((e) => e.id === item.eventId) || {}).organizationId : item.organizationId; const organization = this.state.organizations.find((o) => o.id === organizationId); if (!organization || !this.matches('organization', organization, cond)) return false; continue; }
+      if (key === 'user' && name === 'membership') { const user = this.state.users.find((u) => u.id === item.userId); if (!user || !this.matches('user', user, cond)) return false; continue; }
+      if (key === 'organization' && name === 'organizationJoinRequest') { const organization = this.state.organizations.find((o) => o.id === item.organizationId); if (!organization || !this.matches('organization', organization, cond)) return false; continue; }
+      if (key === 'user' && name === 'organizationJoinRequest') { const user = this.state.users.find((u) => u.id === item.userId); if (!user || !this.matches('user', user, cond)) return false; continue; }
       if (key === 'participant' && name === 'participantInvite') { const participant = this.state.participants.find((p) => p.id === item.participantId); if (!participant || !this.matches('participant', participant, cond)) return false; continue; }
       if (key === 'participant' && name === 'eventParticipant') { const participant = this.state.participants.find((p) => p.id === item.participantId); if (!participant || !this.matches('participant', participant, cond)) return false; continue; }
       if (key === 'event' && name === 'eventParticipant') { const event = this.state.events.find((e) => e.id === item.eventId); if (!event || !this.matches('event', event, cond)) return false; continue; }
@@ -213,6 +219,7 @@ class InMemoryPrisma {
     if (!item) return null;
     if (name === 'membership') return { ...item, organization: this.state.organizations.find((o) => o.id === item.organizationId) || null, user: this.state.users.find((u) => u.id === item.userId) || null };
     if (name === 'organizationInvite') return { ...item, organization: this.state.organizations.find((o) => o.id === item.organizationId) || null };
+    if (name === 'organizationJoinRequest') return { ...item, organization: this.state.organizations.find((o) => o.id === item.organizationId) || null, user: this.state.users.find((u) => u.id === item.userId) || null };
     if (name === 'participant') return { ...item, organization: this.state.organizations.find((o) => o.id === item.organizationId) || null };
     if (name === 'participantInvite') return { ...item, organization: this.state.organizations.find((o) => o.id === item.organizationId) || null, participant: this.materialize('participant', this.state.participants.find((p) => p.id === item.participantId) || null) };
     if (name === 'eventParticipant') return { ...item, event: this.state.events.find((e) => e.id === item.eventId) || null, participant: this.materialize('participant', this.state.participants.find((p) => p.id === item.participantId) || null), templateRole: null };
@@ -238,7 +245,7 @@ class InMemoryPrisma {
     dataEncryptionService,
   );
   const authService = new AuthService(prisma, jwtService, configService);
-  const organizationsService = new OrganizationsService(prisma, configService);
+  const organizationsService = new OrganizationsService(prisma, configService, notificationsService);
   const eventsService = new EventsService(prisma, notificationsService);
   const pointsService = new PointsService(prisma);
   const jwtStrategy = new JwtStrategy(configService, prisma);
@@ -291,11 +298,32 @@ class InMemoryPrisma {
   assert.equal(acceptedMembership.status, MembershipStatus.ACTIVE);
   results.push('3. existing user accepts organization invite by raw token');
 
+  const profileInvite = await organizationsService.inviteMembership(organization.id, adminAuth.user.id, { email: 'profile@example.com', role: OrganizationRole.MEMBER });
+  const profileAuth = await authService.register({ email: 'profile@example.com', password: 'StrongPass123', firstName: 'Profile', lastName: 'User' }, requestMeta);
+  const myInvitations = await organizationsService.listMyInvitations(profileAuth.user.id);
+  assert.equal(myInvitations.length, 1);
+  const acceptedFromProfile = await organizationsService.acceptMyInvitation(myInvitations[0].invitationId, profileAuth.user.id);
+  assert.equal(acceptedFromProfile.status, MembershipStatus.ACTIVE);
+  results.push('4. invitation can be accepted from profile by invitation id');
+
   const joinPreview = await organizationsService.getJoinByInviteCode(organization.inviteCode);
   assert.equal(joinPreview.organization.id, organization.id);
   const joinAuth = await authService.register({ email: 'joiner@example.com', password: 'StrongPass123', firstName: 'Join', lastName: 'Code', organizationJoinCode: organization.inviteCode }, requestMeta);
   assert.equal(prisma.state.memberships.some((m) => m.organizationId === organization.id && m.userId === joinAuth.user.id && m.status === MembershipStatus.ACTIVE), true);
-  results.push('4. join code preview works and registration auto-joins organization');
+  results.push('5. join code preview works and registration auto-joins organization');
+
+  const requesterAuth = await authService.register({ email: 'requester@example.com', password: 'StrongPass123', firstName: 'Join', lastName: 'Requester' }, requestMeta);
+  const joinRequest = await organizationsService.createJoinRequest(organization.id, requesterAuth.user.id, { message: 'Хочу участвовать в проектах' });
+  assert.equal(joinRequest.status, OrganizationJoinRequestStatus.PENDING);
+  assert.equal(prisma.state.notifications.some((notification) => notification.type === NotificationType.SYSTEM && notification.organizationId === organization.id), true);
+  const discovered = await organizationsService.discoverOrganizations(requesterAuth.user.id, { search: 'QA' });
+  assert.equal(discovered[0].joinRequestStatus, OrganizationJoinRequestStatus.PENDING);
+  results.push('6. discover organizations and notify admins about join request');
+
+  const leaveResult = await organizationsService.leaveOrganization(organization.id, assistantAuth.user.id);
+  assert.equal(leaveResult.success, true);
+  assert.equal(prisma.state.memberships.find((m) => m.organizationId === organization.id && m.userId === assistantAuth.user.id).status, MembershipStatus.LEFT);
+  results.push('7. user can leave organization');
 
   const previousPeriodEvent = await eventsService.createEvent(organization.id, adminAuth.user.id, { title: 'April 24 Performance', type: EventType.PERFORMANCE, startsAt: '2026-04-24T10:00:00.000Z', endsAt: '2026-04-24T11:00:00.000Z', participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }] });
   const mainEvent = await eventsService.createEvent(organization.id, adminAuth.user.id, { title: 'April 26 Performance', type: EventType.PERFORMANCE, startsAt: '2026-04-26T18:00:00.000Z', endsAt: '2026-04-26T19:30:00.000Z', participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }] });
@@ -304,10 +332,10 @@ class InMemoryPrisma {
   assert.equal(updatedEvent.title, 'April 26 Performance Updated');
   assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.EVENT_UPDATED && n.eventId === mainEvent.id).length, 1);
   assert.equal(notificationsGateway.emissions.some((item) => item.event === 'notifications:new'), true);
-  results.push('5. create/update event -> notifications');
+  results.push('8. create/update event -> notifications');
 
   await assert.rejects(() => eventsService.createEvent(organization.id, adminAuth.user.id, { title: 'Conflict Event', type: EventType.REHEARSAL, startsAt: '2026-04-26T18:30:00.000Z', endsAt: '2026-04-26T20:00:00.000Z', participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }] }), (error) => error instanceof ConflictException);
-  results.push('6. overlapping event conflict is detected');
+  results.push('9. overlapping event conflict is detected');
 
   const pointsConfig = await pointsService.updatePointsConfig(organization.id, adminAuth.user.id, { enabled: true, periodStartDay: 25, pointValue: '100.00', currency: CurrencyCode.RUB });
   assert.equal(pointsConfig.enabled, true);
@@ -322,7 +350,7 @@ class InMemoryPrisma {
   const manualPoints = await pointsService.createManualPoints(organization.id, adminAuth.user.id, { participantId: invitedParticipant.id, points: '1.50', type: PointsLedgerType.BONUS, reason: 'Manual correction', occurredAt: '2026-04-26T12:00:00.000Z' });
   assert.equal(manualPoints.points, '1.50');
   assert.equal(prisma.state.manualPointsAudits.length, 1);
-  results.push('5. auto + manual points with audit');
+  results.push('10. auto + manual points with audit');
 
   const currentPeriodSummary = await pointsService.getPeriodSummary(organization.id, { referenceDate: '2026-04-26T12:00:00.000Z', participantId: invitedParticipant.id });
   assert.equal(currentPeriodSummary.periodStart, '2026-04-25T00:00:00.000Z');
@@ -335,7 +363,7 @@ class InMemoryPrisma {
   assert.equal(previousPeriodSummary.periodStart, '2026-03-25T00:00:00.000Z');
   assert.equal(previousPeriodSummary.periodEnd, '2026-04-25T00:00:00.000Z');
   assert.equal(previousPeriodSummary.totals.totalPoints, '3.00');
-  results.push('6. payroll period 25-25');
+  results.push('11. payroll period 25-25');
 
   console.log('Scenario smoke passed:');
   results.forEach((item) => console.log(`- ${item}`));

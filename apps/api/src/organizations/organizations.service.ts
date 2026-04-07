@@ -10,16 +10,21 @@ import { ConfigService } from '@nestjs/config';
 import {
   AuditTargetType,
   MembershipStatus,
+  NotificationType,
   OrganizationInviteStatus,
+  OrganizationJoinRequestStatus,
   OrganizationRole,
   Prisma,
 } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 
 import { AppConfig } from '../config/app.config';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { CreateJoinRequestDto } from './dto/create-join-request.dto';
+import { DiscoverOrganizationsQueryDto } from './dto/discover-organizations-query.dto';
 import { InviteMembershipDto } from './dto/invite-membership.dto';
 import { UpdateMembershipDto } from './dto/update-membership.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
@@ -43,6 +48,7 @@ export class OrganizationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService<{ appConfig: AppConfig }>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async createOrganization(userId: string, dto: CreateOrganizationDto) {
@@ -169,13 +175,12 @@ export class OrganizationsService {
       select: {
         id: true,
         email: true,
-        isEmailVerified: true,
         isActive: true,
         deletedAt: true,
       },
     });
 
-    if (!user || !user.isActive || user.deletedAt !== null || !user.isEmailVerified) {
+    if (!user || !user.isActive || user.deletedAt !== null) {
       return [];
     }
 
@@ -207,6 +212,7 @@ export class OrganizationsService {
     });
 
     return invites.map((invite) => ({
+      invitationId: invite.id,
       membershipId: invite.id,
       role: invite.role,
       status: invite.status,
@@ -225,6 +231,268 @@ export class OrganizationsService {
         financeEnabled: this.getFinanceEnabled(invite.organization.settings),
       },
     }));
+  }
+
+  async acceptMyInvitation(invitationId: string, userId: string) {
+    const invite = await this.findInvitationByIdForUserOrThrow(invitationId, userId);
+    return this.acceptResolvedInvitation(invite, userId);
+  }
+
+  async listMyJoinRequests(userId: string) {
+    const requests = await this.prisma.organizationJoinRequest.findMany({
+      where: {
+        userId,
+        organization: {
+          deletedAt: null,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        message: true,
+        reviewedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        organization: {
+          select: organizationSelect,
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    return requests.map((request) => ({
+      requestId: request.id,
+      status: request.status,
+      message: request.message,
+      reviewedAt: request.reviewedAt,
+      createdAt: request.createdAt,
+      updatedAt: request.updatedAt,
+      organization: this.toOrganizationPreview(request.organization),
+    }));
+  }
+
+  async discoverOrganizations(userId: string, query: DiscoverOrganizationsQueryDto) {
+    const limit = query.limit ?? 24;
+    const search = this.trimOrNull(query.search)?.toLowerCase();
+
+    const memberships = await this.prisma.membership.findMany({
+      where: {
+        userId,
+        status: {
+          in: [MembershipStatus.ACTIVE, MembershipStatus.INVITED, MembershipStatus.SUSPENDED],
+        },
+      },
+      select: {
+        organizationId: true,
+      },
+    });
+
+    const excludedOrganizationIds = memberships.map((membership) => membership.organizationId);
+    const requests = await this.prisma.organizationJoinRequest.findMany({
+      where: {
+        userId,
+      },
+      select: {
+        organizationId: true,
+        status: true,
+      },
+    });
+
+    const requestByOrganizationId = new Map(
+      requests.map((request) => [request.organizationId, request.status]),
+    );
+
+    const organizations = await this.prisma.organization.findMany({
+      where: {
+        deletedAt: null,
+        ...(excludedOrganizationIds.length > 0
+          ? {
+              id: {
+                notIn: excludedOrganizationIds,
+              },
+            }
+          : {}),
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: 'insensitive' } },
+                { slug: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      select: organizationSelect,
+      orderBy: [{ createdAt: 'desc' }],
+      take: limit,
+    });
+
+    return organizations.map((organization) => ({
+      ...this.toOrganizationPreview(organization),
+      joinRequestStatus: requestByOrganizationId.get(organization.id) ?? null,
+    }));
+  }
+
+  async createJoinRequest(
+    organizationId: string,
+    userId: string,
+    dto: CreateJoinRequestDto,
+  ) {
+    const user = await this.findActiveUserOrThrow(userId);
+    const organization = await this.findOrganizationOrThrow(organizationId);
+    const message = this.trimOrNull(dto.message);
+
+    const existingMembership = await this.prisma.membership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    const blockedMembershipStatuses: MembershipStatus[] = [
+      MembershipStatus.ACTIVE,
+      MembershipStatus.INVITED,
+      MembershipStatus.SUSPENDED,
+    ];
+
+    if (
+      existingMembership &&
+      blockedMembershipStatuses.includes(existingMembership.status)
+    ) {
+      throw new ConflictException('Вы уже состоите в этой организации или уже приглашены.');
+    }
+
+    const pendingInvite = await this.prisma.organizationInvite.findFirst({
+      where: {
+        organizationId,
+        email: user.email,
+        status: OrganizationInviteStatus.PENDING,
+        revokedAt: null,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (pendingInvite) {
+      throw new ConflictException('Для вас уже есть активное приглашение в эту организацию.');
+    }
+
+    const now = new Date();
+    const existingRequest = await this.prisma.organizationJoinRequest.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    const joinRequest = existingRequest
+      ? await this.prisma.organizationJoinRequest.update({
+          where: {
+            organizationId_userId: {
+              organizationId,
+              userId,
+            },
+          },
+          data: {
+            status: OrganizationJoinRequestStatus.PENDING,
+            message,
+            reviewedAt: null,
+            reviewedByUserId: null,
+          },
+          select: {
+            id: true,
+            status: true,
+            message: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        })
+      : await this.prisma.organizationJoinRequest.create({
+          data: {
+            organizationId,
+            userId,
+            status: OrganizationJoinRequestStatus.PENDING,
+            message,
+          },
+          select: {
+            id: true,
+            status: true,
+            message: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: userId,
+        targetType: AuditTargetType.MEMBERSHIP,
+        targetId: joinRequest.id,
+        action: 'membership.join_requested',
+        description: 'Organization join request created',
+        payload: this.toAuditPayload({
+          message,
+          requestId: joinRequest.id,
+        }),
+      },
+    });
+
+    const adminMemberships = await this.prisma.membership.findMany({
+      where: {
+        organizationId,
+        status: MembershipStatus.ACTIVE,
+        role: OrganizationRole.ADMIN,
+        user: {
+          isActive: true,
+          deletedAt: null,
+        },
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    await this.notificationsService.notifyUsers({
+      organizationId,
+      actorUserId: userId,
+      type: NotificationType.SYSTEM,
+      title: `Новая заявка в ${organization.name}`,
+      body: `${user.email} хочет вступить в организацию.`,
+      payload: {
+        kind: 'organization.join_request',
+        requestId: joinRequest.id,
+        organizationId,
+        requesterUserId: userId,
+        requesterEmail: user.email,
+        message,
+      },
+      userIds: adminMemberships.map((membership) => membership.userId),
+    });
+
+    return {
+      requestId: joinRequest.id,
+      status: joinRequest.status,
+      message: joinRequest.message,
+      createdAt: joinRequest.createdAt,
+      updatedAt: joinRequest.updatedAt,
+      organization: this.toOrganizationPreview(organization),
+    };
   }
 
   async getOrganization(organizationId: string, userId: string) {
@@ -1170,6 +1438,56 @@ export class OrganizationsService {
     const invite = await this.prisma.organizationInvite.findFirst({
       where: {
         tokenHash: this.hashToken(normalizedToken),
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        email: true,
+        role: true,
+        status: true,
+        invitedByUserId: true,
+        expiresAt: true,
+        revokedAt: true,
+        organization: {
+          select: organizationSelect,
+        },
+      },
+    });
+
+    if (!invite || !invite.organization || invite.organization.deletedAt !== null) {
+      throw new NotFoundException('Приглашение не найдено');
+    }
+
+    if (invite.revokedAt !== null || invite.status === OrganizationInviteStatus.REVOKED) {
+      throw new GoneException('Приглашение было отозвано');
+    }
+
+    if (invite.status === OrganizationInviteStatus.ACCEPTED) {
+      throw new ConflictException('Приглашение уже принято');
+    }
+
+    if (invite.expiresAt <= new Date() || invite.status === OrganizationInviteStatus.EXPIRED) {
+      if (invite.status === OrganizationInviteStatus.PENDING) {
+        await this.prisma.organizationInvite.update({
+          where: { id: invite.id },
+          data: {
+            status: OrganizationInviteStatus.EXPIRED,
+          },
+        });
+      }
+
+      throw new GoneException('Срок действия приглашения истек');
+    }
+
+    return invite;
+  }
+
+  private async findInvitationByIdForUserOrThrow(invitationId: string, userId: string) {
+    const user = await this.findActiveUserOrThrow(userId);
+    const invite = await this.prisma.organizationInvite.findFirst({
+      where: {
+        id: invitationId,
+        email: user.email,
       },
       select: {
         id: true,

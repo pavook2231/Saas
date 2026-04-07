@@ -18,6 +18,7 @@ import {
   DashboardIcon,
   ParticipantsIcon,
   PointsIcon,
+  ProfileIcon,
   SettingsIcon,
   TemplateIcon,
 } from './nav-icons';
@@ -52,6 +53,7 @@ const primaryNav: NavItem[] = [
   { href: '/templates', label: 'Спектакли', icon: TemplateIcon },
   { href: '/participants', label: 'Участники', icon: ParticipantsIcon },
   { href: '/points', label: 'Баллы', icon: PointsIcon },
+  { href: '/profile', label: 'Профиль', icon: ProfileIcon },
   { href: '/settings', label: 'Настройки', icon: SettingsIcon },
 ];
 

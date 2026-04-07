@@ -28,7 +28,6 @@ import {
 } from '@/components/features/workspace-defaults';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 
 import { ru } from '../lib/i18n/ru';
 
@@ -310,6 +309,9 @@ export function CalendarWorkspace() {
   const [handledComposeKey, setHandledComposeKey] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictCheckResult | null>(null);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
+  const [participantFilter, setParticipantFilter] = useState('');
+  const [templateFilter, setTemplateFilter] = useState('');
+  const [templateSearch, setTemplateSearch] = useState('');
 
   useToastFeedback({ noticeText, errorText, noticeTitle: 'Календарь', errorTitle: 'Календарь' });
 
@@ -349,6 +351,9 @@ export function CalendarWorkspace() {
 
   useEffect(() => {
     setComposer(createInitialComposer(activeOrganizationId));
+    setParticipantFilter('');
+    setTemplateFilter('');
+    setTemplateSearch('');
   }, [activeOrganizationId]);
 
   useEffect(() => {
@@ -367,12 +372,45 @@ export function CalendarWorkspace() {
   );
 
   const templatesById = useMemo(() => new Map(templates.map((template) => [template.id, template])), [templates]);
+  const participantsById = useMemo(
+    () => new Map(participants.map((participant) => [participant.id, participant])),
+    [participants],
+  );
   const selectedTemplate = composer.templateId ? templatesById.get(composer.templateId) ?? null : null;
 
   const sortedEvents = useMemo(
     () => [...events].sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime()),
     [events],
   );
+
+  const filteredEvents = useMemo(() => {
+    const participantQuery = participantFilter.trim().toLocaleLowerCase('ru-RU');
+    const templateQuery = templateFilter.trim().toLocaleLowerCase('ru-RU');
+
+    if (!participantQuery && !templateQuery) {
+      return sortedEvents;
+    }
+
+    return sortedEvents.filter((event) => {
+      const matchesTemplate =
+        !templateQuery ||
+        event.title.toLocaleLowerCase('ru-RU').includes(templateQuery) ||
+        (event.templateId
+          ? (templatesById.get(event.templateId)?.name ?? '').toLocaleLowerCase('ru-RU').includes(templateQuery)
+          : false);
+
+      const matchesParticipant =
+        !participantQuery ||
+        event.participants.some((item) => {
+          const participant = participantsById.get(item.participantId);
+          return participant
+            ? participantDisplayName(participant).toLocaleLowerCase('ru-RU').includes(participantQuery)
+            : false;
+        });
+
+      return matchesTemplate && matchesParticipant;
+    });
+  }, [participantFilter, participantsById, sortedEvents, templateFilter, templatesById]);
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(cursorDate);
@@ -387,7 +425,7 @@ export function CalendarWorkspace() {
   const monthEventMap = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
 
-    for (const event of sortedEvents) {
+    for (const event of filteredEvents) {
       const key = toDayKey(event.startsAt);
       const list = map.get(key) ?? [];
       list.push(event);
@@ -395,7 +433,7 @@ export function CalendarWorkspace() {
     }
 
     return map;
-  }, [sortedEvents]);
+  }, [filteredEvents]);
 
   const periodLabel = useMemo(() => {
     if (viewMode === 'month') {
@@ -417,12 +455,31 @@ export function CalendarWorkspace() {
     [recentDefaults.recentTemplateIds, templatesById],
   );
 
+  const searchableTemplates = useMemo(() => {
+    const recentIds = new Set(recentDefaults.recentTemplateIds ?? []);
+    const ordered = [
+      ...recentTemplateCards,
+      ...templates.filter((template) => !recentIds.has(template.id)),
+    ];
+    const query = templateSearch.trim().toLocaleLowerCase('ru-RU');
+
+    if (!query) {
+      return ordered.slice(0, 8);
+    }
+
+    return ordered
+      .filter((template) => template.name.toLocaleLowerCase('ru-RU').includes(query))
+      .slice(0, 8);
+  }, [recentDefaults.recentTemplateIds, recentTemplateCards, templateSearch, templates]);
+
   const recentParticipants = useMemo(() => {
     const byId = new Map(participants.map((participant) => [participant.id, participant]));
     return (recentDefaults.recentParticipantIds ?? [])
       .map((participantId) => byId.get(participantId) ?? null)
       .filter((participant): participant is ParticipantRecord => participant !== null);
   }, [participants, recentDefaults.recentParticipantIds]);
+
+  const hasActiveCalendarFilters = participantFilter.trim().length > 0 || templateFilter.trim().length > 0;
 
   const hydrateComposerFromTemplate = useCallback(
     (templateId: string, baseState?: ComposerState): ComposerState => {
@@ -657,6 +714,8 @@ export function CalendarWorkspace() {
   };
 
   const handleTemplateChange = (templateId: string) => {
+    const template = templatesById.get(templateId) ?? null;
+    setTemplateSearch(template?.name ?? '');
     setComposer((current) => hydrateComposerFromTemplate(templateId, current));
   };
 
@@ -817,6 +876,39 @@ export function CalendarWorkspace() {
           </div>
         </header>
 
+        <div className="calendar-search-strip">
+          <div className="calendar-search-grid">
+            <Input
+              label="Найти спектакль"
+              value={templateFilter}
+              onChange={(event) => setTemplateFilter(event.target.value)}
+              placeholder="Начните вводить название спектакля"
+            />
+            <Input
+              label="Найти участника"
+              value={participantFilter}
+              onChange={(event) => setParticipantFilter(event.target.value)}
+              placeholder="Начните вводить имя участника"
+            />
+          </div>
+          {hasActiveCalendarFilters ? (
+            <div className="toolbar">
+              <p className="calendar-search-note">Показываю только совпадения по спектаклю и участнику.</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setTemplateFilter('');
+                  setParticipantFilter('');
+                }}
+              >
+                Сбросить поиск
+              </Button>
+            </div>
+          ) : null}
+        </div>
+
         {noticeText ? <p className="finance-notice">{noticeText}</p> : null}
         {errorText ? <p className="finance-error">{errorText}</p> : null}
         {loading ? <p className="empty-state">Загружаем расписание организации...</p> : null}
@@ -874,7 +966,7 @@ export function CalendarWorkspace() {
                   <div className="hour-label">{String(hour).padStart(2, '0')}:00</div>
 
                   {weekDays.map((day) => {
-                    const slotEvents = sortedEvents.filter(
+                    const slotEvents = filteredEvents.filter(
                       (item) => isSameDay(item.startsAt, day) && item.startsAt.getHours() === hour,
                     );
 
@@ -947,19 +1039,31 @@ export function CalendarWorkspace() {
             ) : null}
 
             {composer.kind === 'PERFORMANCE' ? (
-              <Select
-                label={ru.calendar.composer.fields.template}
-                value={composer.templateId}
-                onChange={(event) => handleTemplateChange(event.target.value)}
-                hint={ru.calendar.composer.helpers.performance}
-              >
-                <option value="">Выберите спектакль</option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </Select>
+              <div className="modal-form-section">
+                <Input
+                  label={ru.calendar.composer.fields.template}
+                  value={templateSearch}
+                  onChange={(event) => setTemplateSearch(event.target.value)}
+                  placeholder="Найдите спектакль по названию"
+                  hint={ru.calendar.composer.helpers.performance}
+                />
+                <div className="template-search-results" role="listbox" aria-label="Спектакли организации">
+                  {searchableTemplates.map((template) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      className={`template-search-result${composer.templateId === template.id ? ' is-active' : ''}`}
+                      onClick={() => handleTemplateChange(template.id)}
+                    >
+                      <strong>{template.name}</strong>
+                      <span>{template.roles.length} ролей · {templateParticipantIds(template).length} участников</span>
+                    </button>
+                  ))}
+                  {searchableTemplates.length === 0 ? (
+                    <p className="template-search-empty empty-state">По этому запросу спектаклей пока нет.</p>
+                  ) : null}
+                </div>
+              </div>
             ) : (
               <Input
                 label={ru.calendar.composer.fields.title}
@@ -1081,6 +1185,7 @@ export function CalendarWorkspace() {
             <ParticipantPicker
               participants={participants}
               recentIds={recentDefaults.recentParticipantIds ?? []}
+              searchPlaceholder="Найти участника по имени"
               value={composer.participantIds}
               onChange={(value) => setComposer((current) => ({ ...current, participantIds: value }))}
             />
@@ -1123,5 +1228,3 @@ export function CalendarWorkspace() {
     </main>
   );
 }
-
-

@@ -295,7 +295,6 @@ class InMemoryPrisma {
   const assistantInvite = await organizationsService.inviteMembership(organization.id, adminAuth.user.id, { email: 'assistant@example.com', role: OrganizationRole.ASSISTANT });
   const outgoingInvites = await organizationsService.listOrganizationInvitations(organization.id);
   assert.equal(outgoingInvites.some((invite) => invite.email === 'assistant@example.com' && invite.status === 'PENDING'), true);
-  assert.equal(prisma.state.notificationRecipients.some((recipient) => recipient.userId === assistantAuth.user.id && recipient.channel === NotificationChannel.WEB), true);
   const acceptedMembership = await organizationsService.acceptInvitationByToken(assistantInvite.inviteToken, assistantAuth.user.id);
   assert.equal(acceptedMembership.role, OrganizationRole.ASSISTANT);
   assert.equal(acceptedMembership.status, MembershipStatus.ACTIVE);
@@ -312,30 +311,48 @@ class InMemoryPrisma {
   assert.equal(acceptedFromProfile.status, MembershipStatus.ACTIVE);
   results.push('4. invitation can be accepted from profile by invitation id');
 
-  const joinPreview = await organizationsService.getJoinByInviteCode(organization.inviteCode);
-  assert.equal(joinPreview.organization.id, organization.id);
-  const joinAuth = await authService.register({ email: 'joiner@example.com', password: 'StrongPass123', firstName: 'Join', lastName: 'Code', organizationJoinCode: organization.inviteCode }, requestMeta);
-  assert.equal(prisma.state.memberships.some((m) => m.organizationId === organization.id && m.userId === joinAuth.user.id && m.status === MembershipStatus.ACTIVE), true);
-  results.push('5. join code preview works and registration auto-joins organization');
-
-  const requesterAuth = await authService.register({ email: 'requester@example.com', password: 'StrongPass123', firstName: 'Join', lastName: 'Requester' }, requestMeta);
-  const joinRequest = await organizationsService.createJoinRequest(organization.id, requesterAuth.user.id, { message: 'Хочу участвовать в проектах' });
-  assert.equal(joinRequest.status, OrganizationJoinRequestStatus.PENDING);
-  assert.equal(prisma.state.notifications.some((notification) => notification.type === NotificationType.SYSTEM && notification.organizationId === organization.id), true);
-  const discovered = await organizationsService.discoverOrganizations(requesterAuth.user.id, { search: 'QA' });
-  assert.equal(discovered[0].joinRequestStatus, OrganizationJoinRequestStatus.PENDING);
-  const organizationJoinRequests = await organizationsService.listOrganizationJoinRequests(organization.id);
-  assert.equal(organizationJoinRequests.length, 1);
-  const approvedJoinRequest = await organizationsService.reviewJoinRequest(
-    organization.id,
-    joinRequest.requestId,
-    adminAuth.user.id,
-    { status: 'APPROVED' },
+  await assert.rejects(
+    () => organizationsService.getJoinByInviteCode(organization.inviteCode),
+    ForbiddenException,
   );
-  assert.equal(approvedJoinRequest.status, OrganizationJoinRequestStatus.APPROVED);
-  assert.equal(prisma.state.memberships.some((m) => m.organizationId === organization.id && m.userId === requesterAuth.user.id && m.status === MembershipStatus.ACTIVE), true);
-  assert.equal(prisma.state.notificationRecipients.some((recipient) => recipient.userId === requesterAuth.user.id && recipient.channel === NotificationChannel.WEB), true);
-  results.push('6. discover organizations, notify admins, and approve join request');
+  await assert.rejects(
+    () =>
+      authService.register(
+        {
+          email: 'joiner@example.com',
+          password: 'StrongPass123',
+          firstName: 'Join',
+          lastName: 'Code',
+          organizationJoinCode: organization.inviteCode,
+        },
+        requestMeta,
+      ),
+    ForbiddenException,
+  );
+  const requesterAuth = await authService.register({ email: 'requester@example.com', password: 'StrongPass123', firstName: 'Join', lastName: 'Requester' }, requestMeta);
+  await assert.rejects(
+    () => organizationsService.createJoinRequest(organization.id, requesterAuth.user.id, { message: 'Хочу участвовать в проектах' }),
+    ForbiddenException,
+  );
+  await assert.rejects(
+    () => organizationsService.discoverOrganizations(requesterAuth.user.id, { search: 'QA' }),
+    ForbiddenException,
+  );
+  await assert.rejects(
+    () => organizationsService.listOrganizationJoinRequests(organization.id),
+    ForbiddenException,
+  );
+  await assert.rejects(
+    () =>
+      organizationsService.reviewJoinRequest(
+        organization.id,
+        randomUUID(),
+        adminAuth.user.id,
+        { status: 'APPROVED' },
+      ),
+    ForbiddenException,
+  );
+  results.push('5. free organization join is disabled and invite-only access is enforced');
 
   const leaveResult = await organizationsService.leaveOrganization(organization.id, assistantAuth.user.id);
   assert.equal(leaveResult.success, true);

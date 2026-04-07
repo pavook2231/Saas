@@ -142,8 +142,8 @@ export class AuthService {
     this.assertUserEnabled(initialUser);
     await this.claimInviteTokensForUser(initialUser.id, email, dto);
     if (dto.organizationJoinCode?.trim()) {
-      throw new UnauthorizedException(
-        'РЎРІРѕР±РѕРґРЅС‹Р№ РІС…РѕРґ РІ РѕСЂРіР°РЅРёР·Р°С†РёСЋ РѕС‚РєР»СЋС‡РµРЅ. РСЃРїРѕР»СЊР·СѓР№С‚Рµ РїСЂРёРіР»Р°С€РµРЅРёРµ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°.',
+      throw new ForbiddenException(
+        'Свободный вход в организацию отключен. Используйте приглашение администратора.',
       );
     }
 

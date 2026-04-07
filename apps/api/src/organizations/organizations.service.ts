@@ -26,6 +26,7 @@ import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { CreateJoinRequestDto } from './dto/create-join-request.dto';
 import { DiscoverOrganizationsQueryDto } from './dto/discover-organizations-query.dto';
 import { InviteMembershipDto } from './dto/invite-membership.dto';
+import { ReviewJoinRequestDto } from './dto/review-join-request.dto';
 import { UpdateMembershipDto } from './dto/update-membership.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 
@@ -271,6 +272,56 @@ export class OrganizationsService {
     }));
   }
 
+  async listOrganizationJoinRequests(organizationId: string) {
+    await this.findOrganizationOrThrow(organizationId);
+
+    const requests = await this.prisma.organizationJoinRequest.findMany({
+      where: {
+        organizationId,
+      },
+      select: {
+        id: true,
+        status: true,
+        message: true,
+        reviewedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        organization: {
+          select: organizationSelect,
+        },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        reviewedBy: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    return requests.map((request) => ({
+      requestId: request.id,
+      status: request.status,
+      message: request.message,
+      reviewedAt: request.reviewedAt,
+      createdAt: request.createdAt,
+      updatedAt: request.updatedAt,
+      organization: this.toOrganizationPreview(request.organization),
+      requester: request.user,
+      reviewedBy: request.reviewedBy,
+    }));
+  }
+
   async discoverOrganizations(userId: string, query: DiscoverOrganizationsQueryDto) {
     const limit = query.limit ?? 24;
     const search = this.trimOrNull(query.search)?.toLowerCase();
@@ -492,6 +543,199 @@ export class OrganizationsService {
       createdAt: joinRequest.createdAt,
       updatedAt: joinRequest.updatedAt,
       organization: this.toOrganizationPreview(organization),
+    };
+  }
+
+  async reviewJoinRequest(
+    organizationId: string,
+    requestId: string,
+    actorUserId: string,
+    dto: ReviewJoinRequestDto,
+  ) {
+    const organization = await this.findOrganizationOrThrow(organizationId);
+    const joinRequest = await this.prisma.organizationJoinRequest.findFirst({
+      where: {
+        id: requestId,
+        organizationId,
+      },
+      select: {
+        id: true,
+        status: true,
+        message: true,
+        reviewedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            isActive: true,
+            deletedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!joinRequest || !joinRequest.user) {
+      throw new NotFoundException('Заявка на вступление не найдена');
+    }
+
+    if (joinRequest.status !== OrganizationJoinRequestStatus.PENDING) {
+      throw new ConflictException('Эта заявка уже обработана');
+    }
+
+    const now = new Date();
+    const blockedMembershipStatuses: MembershipStatus[] = [
+      MembershipStatus.ACTIVE,
+      MembershipStatus.INVITED,
+      MembershipStatus.SUSPENDED,
+    ];
+
+    const reviewedRequest = await this.prisma.$transaction(async (tx) => {
+      if (dto.status === OrganizationJoinRequestStatus.APPROVED) {
+        if (!joinRequest.user.isActive || joinRequest.user.deletedAt !== null) {
+          throw new ConflictException('Пользователь больше недоступен для вступления в организацию');
+        }
+
+        const existingMembership = await tx.membership.findUnique({
+          where: {
+            organizationId_userId: {
+              organizationId,
+              userId: joinRequest.user.id,
+            },
+          },
+          select: {
+            id: true,
+            status: true,
+          },
+        });
+
+        if (!existingMembership) {
+          await tx.membership.create({
+            data: {
+              organizationId,
+              userId: joinRequest.user.id,
+              role: OrganizationRole.MEMBER,
+              status: MembershipStatus.ACTIVE,
+              invitedByUserId: actorUserId,
+              invitedAt: now,
+              acceptedAt: now,
+            },
+          });
+        } else if (!blockedMembershipStatuses.includes(existingMembership.status)) {
+          await tx.membership.update({
+            where: {
+              id: existingMembership.id,
+            },
+            data: {
+              role: OrganizationRole.MEMBER,
+              status: MembershipStatus.ACTIVE,
+              invitedByUserId: actorUserId,
+              invitedAt: now,
+              acceptedAt: now,
+              leftAt: null,
+              suspendedAt: null,
+            },
+          });
+        }
+      }
+
+      const updatedRequest = await tx.organizationJoinRequest.update({
+        where: {
+          id: joinRequest.id,
+        },
+        data: {
+          status: dto.status,
+          reviewedByUserId: actorUserId,
+          reviewedAt: now,
+        },
+        select: {
+          id: true,
+          status: true,
+          message: true,
+          reviewedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          organization: {
+            select: organizationSelect,
+          },
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          reviewedBy: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          targetType: AuditTargetType.MEMBERSHIP,
+          targetId: joinRequest.id,
+          action:
+            dto.status === OrganizationJoinRequestStatus.APPROVED
+              ? 'membership.join_request_approved'
+              : 'membership.join_request_rejected',
+          description:
+            dto.status === OrganizationJoinRequestStatus.APPROVED
+              ? 'Organization join request approved'
+              : 'Organization join request rejected',
+          payload: this.toAuditPayload({
+            requestId: joinRequest.id,
+            requesterUserId: joinRequest.user.id,
+            status: dto.status,
+          }),
+        },
+      });
+
+      return updatedRequest;
+    });
+
+    await this.notificationsService.notifyUsers({
+      organizationId,
+      actorUserId,
+      type: NotificationType.SYSTEM,
+      title:
+        dto.status === OrganizationJoinRequestStatus.APPROVED
+          ? `Заявка в ${organization.name} одобрена`
+          : `Заявка в ${organization.name} отклонена`,
+      body:
+        dto.status === OrganizationJoinRequestStatus.APPROVED
+          ? 'Теперь вы можете работать в организации.'
+          : 'Администратор пока не подтвердил вступление.',
+      payload: {
+        kind: 'organization.join_request.reviewed',
+        requestId: reviewedRequest.id,
+        organizationId,
+        status: reviewedRequest.status,
+      },
+      userIds: [joinRequest.user.id],
+    });
+
+    return {
+      requestId: reviewedRequest.id,
+      status: reviewedRequest.status,
+      message: reviewedRequest.message,
+      reviewedAt: reviewedRequest.reviewedAt,
+      createdAt: reviewedRequest.createdAt,
+      updatedAt: reviewedRequest.updatedAt,
+      organization: this.toOrganizationPreview(reviewedRequest.organization),
+      requester: reviewedRequest.user,
+      reviewedBy: reviewedRequest.reviewedBy,
     };
   }
 

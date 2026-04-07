@@ -318,7 +318,18 @@ class InMemoryPrisma {
   assert.equal(prisma.state.notifications.some((notification) => notification.type === NotificationType.SYSTEM && notification.organizationId === organization.id), true);
   const discovered = await organizationsService.discoverOrganizations(requesterAuth.user.id, { search: 'QA' });
   assert.equal(discovered[0].joinRequestStatus, OrganizationJoinRequestStatus.PENDING);
-  results.push('6. discover organizations and notify admins about join request');
+  const organizationJoinRequests = await organizationsService.listOrganizationJoinRequests(organization.id);
+  assert.equal(organizationJoinRequests.length, 1);
+  const approvedJoinRequest = await organizationsService.reviewJoinRequest(
+    organization.id,
+    joinRequest.requestId,
+    adminAuth.user.id,
+    { status: 'APPROVED' },
+  );
+  assert.equal(approvedJoinRequest.status, OrganizationJoinRequestStatus.APPROVED);
+  assert.equal(prisma.state.memberships.some((m) => m.organizationId === organization.id && m.userId === requesterAuth.user.id && m.status === MembershipStatus.ACTIVE), true);
+  assert.equal(prisma.state.notificationRecipients.some((recipient) => recipient.userId === requesterAuth.user.id && recipient.channel === NotificationChannel.WEB), true);
+  results.push('6. discover organizations, notify admins, and approve join request');
 
   const leaveResult = await organizationsService.leaveOrganization(organization.id, assistantAuth.user.id);
   assert.equal(leaveResult.success, true);

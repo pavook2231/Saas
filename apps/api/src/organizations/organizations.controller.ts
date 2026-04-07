@@ -22,6 +22,7 @@ import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { CreateJoinRequestDto } from './dto/create-join-request.dto';
 import { DiscoverOrganizationsQueryDto } from './dto/discover-organizations-query.dto';
 import { InviteMembershipDto } from './dto/invite-membership.dto';
+import { ReviewJoinRequestDto } from './dto/review-join-request.dto';
 import { UpdateMembershipDto } from './dto/update-membership.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationRoleGuard } from './guards/organization-role.guard';
@@ -119,6 +120,16 @@ export class OrganizationsController {
     return this.organizationsService.listMemberships(organizationId);
   }
 
+  @Get(':organizationId/join-requests')
+  @UseGuards(OrganizationRoleGuard)
+  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
+  async listJoinRequests(
+    @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
+    organizationId: string,
+  ) {
+    return this.organizationsService.listOrganizationJoinRequests(organizationId);
+  }
+
   @Post(':organizationId/invite')
   @Post(':organizationId/memberships/invite')
   @UseGuards(OrganizationRoleGuard)
@@ -140,6 +151,25 @@ export class OrganizationsController {
     @Body() dto: CreateJoinRequestDto,
   ) {
     return this.organizationsService.createJoinRequest(organizationId, user.sub, dto);
+  }
+
+  @Patch(':organizationId/join-requests/:requestId')
+  @UseGuards(OrganizationRoleGuard)
+  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
+  async reviewJoinRequest(
+    @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
+    organizationId: string,
+    @Param('requestId', new ParseUUIDPipe({ version: '4' }))
+    requestId: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: ReviewJoinRequestDto,
+  ) {
+    return this.organizationsService.reviewJoinRequest(
+      organizationId,
+      requestId,
+      user.sub,
+      dto,
+    );
   }
 
   @Post(':organizationId/memberships/:membershipId/accept')

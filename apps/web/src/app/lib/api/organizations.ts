@@ -81,6 +81,21 @@ export type OrganizationJoinRequestRecord = {
   organization: OrganizationSummary;
 };
 
+export type OrganizationJoinRequestAdminRecord = OrganizationJoinRequestRecord & {
+  requester: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  };
+  reviewedBy: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
+};
+
 export type DiscoverOrganizationRecord = OrganizationSummary & {
   joinLink?: string;
   joinRequestStatus: OrganizationJoinRequestStatus | null;
@@ -102,6 +117,10 @@ export type CreateOrganizationPayload = {
 
 export type CreateJoinRequestPayload = {
   message?: string;
+};
+
+export type ReviewJoinRequestPayload = {
+  status: Extract<OrganizationJoinRequestStatus, 'APPROVED' | 'REJECTED'>;
 };
 
 type AuthenticatedRequest = {
@@ -182,6 +201,32 @@ export const organizationsApi = {
       method: 'POST',
       path: `/organizations/${params.organizationId}/join-requests`,
       body: params.payload ?? {},
+    });
+  },
+
+  listOrganizationJoinRequests(
+    params: AuthenticatedRequest & {
+      organizationId: string;
+    },
+  ) {
+    return apiRequest<OrganizationJoinRequestAdminRecord[]>({
+      accessToken: params.accessToken,
+      path: `/organizations/${params.organizationId}/join-requests`,
+    });
+  },
+
+  reviewJoinRequest(
+    params: AuthenticatedRequest & {
+      organizationId: string;
+      requestId: string;
+      payload: ReviewJoinRequestPayload;
+    },
+  ) {
+    return apiRequest<OrganizationJoinRequestAdminRecord>({
+      accessToken: params.accessToken,
+      method: 'PATCH',
+      path: `/organizations/${params.organizationId}/join-requests/${params.requestId}`,
+      body: params.payload,
     });
   },
 

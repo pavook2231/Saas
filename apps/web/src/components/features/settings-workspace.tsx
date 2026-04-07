@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   organizationsApi,
   type OrganizationDetails,
+  type OrganizationJoinRequestAdminRecord,
   type OrganizationMember,
 } from '@/app/lib/api/organizations';
 import { Badge } from '@/components/ui/badge';
@@ -38,13 +39,30 @@ const displayMemberName = (member: OrganizationMember) => {
   return fullName || member.user.email;
 };
 
+const displayRequesterName = (request: OrganizationJoinRequestAdminRecord) => {
+  const fullName = [request.requester.firstName, request.requester.lastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  return fullName || request.requester.email;
+};
+
+const joinRequestStatusLabel: Record<string, string> = {
+  PENDING: 'Ожидает решения',
+  APPROVED: 'Одобрено',
+  REJECTED: 'Отклонено',
+  CANCELLED: 'Отменено',
+};
+
 export function SettingsWorkspace() {
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const [organization, setOrganization] = useState<OrganizationDetails | null>(null);
   const [memberships, setMemberships] = useState<OrganizationMember[]>([]);
+  const [joinRequests, setJoinRequests] = useState<OrganizationJoinRequestAdminRecord[]>([]);
   const [form, setForm] = useState<OrganizationFormState>(initialFormState);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const canManageSettings = activeRole === 'ADMIN' || activeRole === 'DIRECTOR';
@@ -62,6 +80,7 @@ export function SettingsWorkspace() {
     if (!accessToken || !activeOrganizationId) {
       setOrganization(null);
       setMemberships([]);
+      setJoinRequests([]);
       setLoading(false);
       return;
     }
@@ -79,14 +98,22 @@ export function SettingsWorkspace() {
             organizationId: activeOrganizationId,
           })
         : Promise.resolve([]);
+      const joinRequestsPromise = canManageSettings
+        ? organizationsApi.listOrganizationJoinRequests({
+            accessToken,
+            organizationId: activeOrganizationId,
+          })
+        : Promise.resolve([]);
 
-      const [organizationResponse, membershipResponse] = await Promise.all([
+      const [organizationResponse, membershipResponse, joinRequestsResponse] = await Promise.all([
         organizationPromise,
         membershipsPromise,
+        joinRequestsPromise,
       ]);
 
       setOrganization(organizationResponse);
       setMemberships(membershipResponse);
+      setJoinRequests(joinRequestsResponse);
       setForm({
         name: organizationResponse.name,
         description: organizationResponse.description ?? '',
@@ -98,10 +125,11 @@ export function SettingsWorkspace() {
       setErrorText(
         error instanceof Error ? error.message : 'Не удалось загрузить настройки организации.',
       );
+      setJoinRequests([]);
     } finally {
       setLoading(false);
     }
-  }, [accessToken, activeOrganizationId, canViewMemberships]);
+  }, [accessToken, activeOrganizationId, canManageSettings, canViewMemberships]);
 
   useEffect(() => {
     void loadData();
@@ -109,7 +137,7 @@ export function SettingsWorkspace() {
 
   const metrics = useMemo(() => {
     const activeMembers = memberships.filter((membership) => membership.status === 'ACTIVE').length;
-    const admins = memberships.filter((membership) => membership.role === 'ADMIN').length;
+    const pendingJoinRequests = joinRequests.filter((request) => request.status === 'PENDING').length;
 
     return [
       {
@@ -123,12 +151,12 @@ export function SettingsWorkspace() {
         meta: 'В ежедневной работе участвуют только membership со статусом ACTIVE.',
       },
       {
-        label: 'Администраторы',
-        value: loading ? '—' : String(admins),
-        meta: 'У организации должен оставаться хотя бы один активный администратор.',
+        label: 'Заявки на вступление',
+        value: loading ? '—' : String(pendingJoinRequests),
+        meta: 'Новые запросы на вступление появляются здесь и обрабатываются в один клик.',
       },
     ];
-  }, [activeRole, loading, memberships]);
+  }, [activeRole, joinRequests, loading, memberships]);
 
   const handleSave = async () => {
     if (!accessToken || !activeOrganizationId || !canManageSettings) {
@@ -167,6 +195,43 @@ export function SettingsWorkspace() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleReviewJoinRequest = async (
+    request: OrganizationJoinRequestAdminRecord,
+    status: 'APPROVED' | 'REJECTED',
+  ) => {
+    if (!accessToken || !activeOrganizationId || !canManageSettings) {
+      return;
+    }
+
+    setReviewingRequestId(request.requestId);
+    setErrorText(null);
+    setNoticeText(null);
+
+    try {
+      await organizationsApi.reviewJoinRequest({
+        accessToken,
+        organizationId: activeOrganizationId,
+        requestId: request.requestId,
+        payload: {
+          status,
+        },
+      });
+
+      await loadData();
+      setNoticeText(
+        status === 'APPROVED'
+          ? `Заявка от ${displayRequesterName(request)} одобрена.`
+          : `Заявка от ${displayRequesterName(request)} отклонена.`,
+      );
+    } catch (error) {
+      setErrorText(
+        error instanceof Error ? error.message : 'Не удалось обработать заявку на вступление.',
+      );
+    } finally {
+      setReviewingRequestId(null);
     }
   };
 
@@ -306,6 +371,89 @@ export function SettingsWorkspace() {
                 <strong>Финансы</strong>
                 <span>{organization?.financeEnabled ? 'Включены' : 'Отключены'}</span>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Заявки на вступление</CardTitle>
+              <CardDescription>
+                Новые запросы от пользователей, которые хотят войти в вашу организацию.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!canManageSettings ? (
+                <div className="resource-empty-inline">
+                  <strong>Недостаточно прав</strong>
+                  <p>Обрабатывать заявки на вступление могут только ADMIN и DIRECTOR.</p>
+                </div>
+              ) : loading ? (
+                <div className="resource-skeleton-grid">
+                  {Array.from({ length: 2 }, (_, index) => (
+                    <Skeleton key={index} className="resource-skeleton-card" />
+                  ))}
+                </div>
+              ) : joinRequests.length === 0 ? (
+                <div className="resource-empty-inline">
+                  <strong>Новых заявок нет</strong>
+                  <p>Когда кто-то отправит запрос на вступление, он появится здесь.</p>
+                </div>
+              ) : (
+                <div className="resource-card__list">
+                  {joinRequests.map((request) => (
+                    <div key={request.requestId} className="profile-item-card">
+                      <div className="resource-inline-info">
+                        <strong>{displayRequesterName(request)}</strong>
+                        <span>{request.requester.email}</span>
+                        <span>
+                          {joinRequestStatusLabel[request.status] ?? request.status} ·{' '}
+                          {new Intl.DateTimeFormat('ru-RU', {
+                            day: '2-digit',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          }).format(new Date(request.createdAt))}
+                        </span>
+                        {request.message ? <span>{request.message}</span> : null}
+                      </div>
+                      <div className="resource-card__actions">
+                        <Badge
+                          variant={
+                            request.status === 'APPROVED'
+                              ? 'success'
+                              : request.status === 'REJECTED'
+                                ? 'error'
+                                : 'warning'
+                          }
+                        >
+                          {joinRequestStatusLabel[request.status] ?? request.status}
+                        </Badge>
+                        {request.status === 'PENDING' ? (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => void handleReviewJoinRequest(request, 'APPROVED')}
+                              loading={reviewingRequestId === request.requestId}
+                            >
+                              Одобрить
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => void handleReviewJoinRequest(request, 'REJECTED')}
+                              loading={reviewingRequestId === request.requestId}
+                            >
+                              Отклонить
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 

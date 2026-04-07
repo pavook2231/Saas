@@ -57,7 +57,7 @@ export function AppShell({ children }: PropsWithChildren) {
       pathname.startsWith('/events');
 
     if (isControlRoute && (!activeOrganizationId || !canAccessControlPanel(activeRole as never))) {
-      router.replace('/dashboard');
+      router.replace('/calendar');
       return;
     }
 

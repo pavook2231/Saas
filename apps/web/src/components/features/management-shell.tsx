@@ -33,7 +33,7 @@ export function ManagementShell({ title, description, children }: ManagementShel
 
   useEffect(() => {
     if (!hasAccess) {
-      router.replace('/dashboard');
+      router.replace('/calendar');
     }
   }, [hasAccess, router]);
 

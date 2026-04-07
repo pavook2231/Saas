@@ -16,7 +16,6 @@ import {
   CalendarIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  DashboardIcon,
   ProfileIcon,
   SettingsIcon,
 } from './nav-icons';
@@ -45,7 +44,6 @@ type AppSidebarProps = {
 };
 
 const baseNav: NavItem[] = [
-  { href: '/dashboard', label: 'Главная', icon: DashboardIcon },
   { href: '/calendar', label: 'Календарь', icon: CalendarIcon },
   { href: '/profile', label: 'Профиль', icon: ProfileIcon },
 ];
@@ -131,7 +129,7 @@ export function AppSidebar({
         <span className="app-sidebar__eyebrow">Навигация</span>
 
         {visibleNav.map((item) => {
-          const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
           const link = (
             <Link

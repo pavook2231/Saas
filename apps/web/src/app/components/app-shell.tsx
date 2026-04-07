@@ -14,7 +14,6 @@ type NavItem = {
 };
 
 const primaryNav: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard' },
   { href: '/calendar', label: 'Календарь' },
   { href: '/templates', label: 'Спектакли' },
   { href: '/events', label: 'Репетиции / События' },
@@ -214,3 +213,4 @@ export function AppShell({ children }: PropsWithChildren) {
     </div>
   );
 }
+

@@ -278,7 +278,11 @@ export function TemplatesWorkspace() {
       <PageHeader
         eyebrow="Спектакли"
         title="Шаблоны постановок"
-        description="Сначала создайте спектакль, затем одной кнопкой перенесите его в расписание с уже готовым составом."
+        description={
+          canManageTemplates
+            ? 'Сначала создайте спектакль, затем одной кнопкой перенесите его в расписание с уже готовым составом.'
+            : 'Участники могут только просматривать список спектаклей. Постановкой в расписание управляют администратор и помреж.'
+        }
         actions={
           <div className="feature-page-header__action-row">
             <Input
@@ -391,14 +395,16 @@ export function TemplatesWorkspace() {
                       )}
                     </div>
 
-                    <div className="resource-card__actions">
-                      <Link
-                        className="ui-button ui-button--primary ui-button--md"
-                        href={`/calendar?compose=1&kind=PERFORMANCE&templateId=${template.id}`}
-                      >
-                        <span className="ui-button__content">Добавить в расписание</span>
-                      </Link>
-                    </div>
+                    {canManageTemplates ? (
+                      <div className="resource-card__actions">
+                        <Link
+                          className="ui-button ui-button--primary ui-button--md"
+                          href={`/calendar?compose=1&kind=PERFORMANCE&templateId=${template.id}`}
+                        >
+                          <span className="ui-button__content">Добавить в расписание</span>
+                        </Link>
+                      </div>
+                    ) : null}
                   </CardContent>
                 </Card>
               ))}

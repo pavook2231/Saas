@@ -33,6 +33,11 @@ const quickActions = [
 export default function DashboardPage() {
   const { organizations, activeOrganization, activeRole } = useActiveWorkspace();
   const hasOrganizations = organizations.length > 0;
+  const canManageSchedule =
+    activeRole === 'ADMIN' || activeRole === 'DIRECTOR' || activeRole === 'ASSISTANT';
+  const visibleQuickActions = canManageSchedule
+    ? quickActions
+    : quickActions.filter((action) => action.href === '/calendar');
 
   return (
     <section className="app-page">
@@ -60,7 +65,7 @@ export default function DashboardPage() {
       ) : (
         <>
           <div className="dashboard-action-grid">
-            {quickActions.map((action) => (
+            {visibleQuickActions.map((action) => (
               <Link key={action.href} href={action.href} className="shortcut-card dashboard-action-card">
                 <div className="shortcut-card__head">
                   <Badge variant="primary">{action.badge}</Badge>
@@ -102,14 +107,23 @@ export default function DashboardPage() {
                   <strong>Расписание</strong>
                   <span>Открывается сразу из меню и с этого экрана.</span>
                 </div>
-                <div className="resource-inline-info">
-                  <strong>Событие</strong>
-                  <span>Создается в быстром режиме, дополнительные поля скрыты по умолчанию.</span>
-                </div>
-                <div className="resource-inline-info">
-                  <strong>Спектакль</strong>
-                  <span>После создания его можно одной кнопкой отправить в расписание.</span>
-                </div>
+                {canManageSchedule ? (
+                  <>
+                    <div className="resource-inline-info">
+                      <strong>Событие</strong>
+                      <span>Создается в быстром режиме, дополнительные поля скрыты по умолчанию.</span>
+                    </div>
+                    <div className="resource-inline-info">
+                      <strong>Спектакль</strong>
+                      <span>После создания его можно одной кнопкой отправить в расписание.</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="resource-inline-info">
+                    <strong>Доступ участника</strong>
+                    <span>Для вас открыт просмотр расписания и уведомления по событиям без редактирования.</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -46,6 +46,22 @@ export function AppShell({ children }: PropsWithChildren) {
     setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true');
   }, []);
 
+  useEffect(() => {
+    if (activeRole !== 'MEMBER') {
+      return;
+    }
+
+    const canOpenPage =
+      pathname === '/calendar' ||
+      pathname.startsWith('/calendar/') ||
+      pathname === '/profile' ||
+      pathname.startsWith('/profile/');
+
+    if (!canOpenPage) {
+      router.replace('/calendar');
+    }
+  }, [activeRole, pathname, router]);
+
   const userDisplayName = useMemo(() => {
     if (!user) {
       return '';

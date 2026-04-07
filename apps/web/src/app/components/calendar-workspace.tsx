@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import type { Route } from 'next';
 import dynamic from 'next/dynamic';
@@ -35,8 +35,8 @@ const LazyChatPanel = dynamic(() => import('./chat-panel').then((module) => modu
   ssr: false,
   loading: () => (
     <div className="resource-empty-inline">
-      <strong>Загружаем чат</strong>
-      <p>Панель сообщений подключается автоматически.</p>
+      <strong>Р—Р°РіСЂСѓР¶Р°РµРј С‡Р°С‚</strong>
+      <p>РџР°РЅРµР»СЊ СЃРѕРѕР±С‰РµРЅРёР№ РїРѕРґРєР»СЋС‡Р°РµС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.</p>
     </div>
   ),
 });
@@ -47,8 +47,8 @@ const LazyPointsIncomePanel = dynamic(
     ssr: false,
     loading: () => (
       <div className="resource-empty-inline">
-        <strong>Загружаем баллы</strong>
-        <p>Финансовая панель готовится для текущей организации.</p>
+        <strong>Р—Р°РіСЂСѓР¶Р°РµРј Р±Р°Р»Р»С‹</strong>
+        <p>Р¤РёРЅР°РЅСЃРѕРІР°СЏ РїР°РЅРµР»СЊ РіРѕС‚РѕРІРёС‚СЃСЏ РґР»СЏ С‚РµРєСѓС‰РµР№ РѕСЂРіР°РЅРёР·Р°С†РёРё.</p>
       </div>
     ),
   },
@@ -287,7 +287,7 @@ const createInitialComposer = (
 };
 
 export function CalendarWorkspace() {
-  const { accessToken, activeOrganizationId } = useActiveWorkspace();
+  const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -311,8 +311,10 @@ export function CalendarWorkspace() {
   const [participantFilter, setParticipantFilter] = useState('');
   const [templateFilter, setTemplateFilter] = useState('');
   const [templateSearch, setTemplateSearch] = useState('');
+  const canManageSchedule =
+    activeRole === 'ADMIN' || activeRole === 'DIRECTOR' || activeRole === 'ASSISTANT';
 
-  useToastFeedback({ noticeText, errorText, noticeTitle: 'Календарь', errorTitle: 'Календарь' });
+  useToastFeedback({ noticeText, errorText, noticeTitle: 'РљР°Р»РµРЅРґР°СЂСЊ', errorTitle: 'РљР°Р»РµРЅРґР°СЂСЊ' });
 
   const loadCalendarData = useCallback(async () => {
     if (!accessToken || !activeOrganizationId) {
@@ -338,7 +340,7 @@ export function CalendarWorkspace() {
       setParticipants(participantsResponse);
       setErrorText(null);
     } catch (error) {
-      setErrorText(error instanceof Error ? error.message : 'Не удалось загрузить расписание.');
+      setErrorText(error instanceof Error ? error.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЂР°СЃРїРёСЃР°РЅРёРµ.');
     } finally {
       setLoading(false);
     }
@@ -497,6 +499,10 @@ export function CalendarWorkspace() {
 
   const openComposerAt = useCallback(
     (baseDate: Date, nextKind?: ComposerKind) => {
+      if (!canManageSchedule) {
+        return;
+      }
+
       setActiveSidePanel('compose');
       setCursorDate(startOfDay(baseDate));
       setComposer((current) => {
@@ -514,11 +520,27 @@ export function CalendarWorkspace() {
         return nextBase;
       });
     },
-    [hydrateComposerFromTemplate],
+    [canManageSchedule, hydrateComposerFromTemplate],
   );
 
   useEffect(() => {
     if (!activeOrganizationId) {
+      return;
+    }
+
+    if (!canManageSchedule) {
+      if (searchParams.get('compose') === '1') {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('compose');
+        params.delete('kind');
+        params.delete('templateId');
+        params.delete('date');
+        params.delete('time');
+        const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+        router.replace(nextUrl as Route);
+      }
+
+      setHandledComposeKey(null);
       return;
     }
 
@@ -569,7 +591,15 @@ export function CalendarWorkspace() {
     params.delete('time');
     const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     router.replace(nextUrl as Route);
-  }, [activeOrganizationId, handledComposeKey, hydrateComposerFromTemplate, pathname, router, searchParams]);
+  }, [
+    activeOrganizationId,
+    canManageSchedule,
+    handledComposeKey,
+    hydrateComposerFromTemplate,
+    pathname,
+    router,
+    searchParams,
+  ]);
 
   useEffect(() => {
     if (!accessToken || !activeOrganizationId) {
@@ -620,7 +650,7 @@ export function CalendarWorkspace() {
   };
 
   const persistEvent = async (baseEvent: CalendarEvent, nextEvent: CalendarEvent, successMessage: string) => {
-    if (!accessToken || !activeOrganizationId) {
+    if (!accessToken || !activeOrganizationId || !canManageSchedule) {
       return;
     }
 
@@ -641,7 +671,7 @@ export function CalendarWorkspace() {
       setNoticeText(successMessage);
     } catch (error) {
       replaceEvent(baseEvent);
-      setErrorText(error instanceof Error ? error.message : 'Не удалось обновить событие.');
+      setErrorText(error instanceof Error ? error.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ СЃРѕР±С‹С‚РёРµ.');
     } finally {
       setSaving(false);
     }
@@ -658,6 +688,10 @@ export function CalendarWorkspace() {
   };
 
   const handleDropDay = (targetDay: Date) => (event: DragEvent<HTMLElement>) => {
+    if (!canManageSchedule) {
+      return;
+    }
+
     event.preventDefault();
     const eventId = event.dataTransfer.getData('text/calendar-event-id') || draggingEventId;
 
@@ -672,10 +706,14 @@ export function CalendarWorkspace() {
 
     const nextEvent = moveEventToDay(baseEvent, targetDay);
     setDraggingEventId(null);
-    void persistEvent(baseEvent, nextEvent, 'Событие перенесено на другой день.');
+    void persistEvent(baseEvent, nextEvent, 'РЎРѕР±С‹С‚РёРµ РїРµСЂРµРЅРµСЃРµРЅРѕ РЅР° РґСЂСѓРіРѕР№ РґРµРЅСЊ.');
   };
 
   const handleDropWeekSlot = (targetDay: Date, hour: number) => (event: DragEvent<HTMLElement>) => {
+    if (!canManageSchedule) {
+      return;
+    }
+
     event.preventDefault();
     const eventId = event.dataTransfer.getData('text/calendar-event-id') || draggingEventId;
 
@@ -690,10 +728,14 @@ export function CalendarWorkspace() {
 
     const nextEvent = moveEventToWeekSlot(baseEvent, targetDay, hour);
     setDraggingEventId(null);
-    void persistEvent(baseEvent, nextEvent, 'Событие перенесено по сетке недели.');
+    void persistEvent(baseEvent, nextEvent, 'РЎРѕР±С‹С‚РёРµ РїРµСЂРµРЅРµСЃРµРЅРѕ РїРѕ СЃРµС‚РєРµ РЅРµРґРµР»Рё.');
   };
 
   const handleKindChange = (nextKind: ComposerKind) => {
+    if (!canManageSchedule) {
+      return;
+    }
+
     setComposer((current) => {
       const nextState: ComposerState = { ...current, kind: nextKind };
 
@@ -707,6 +749,10 @@ export function CalendarWorkspace() {
   };
 
   const handleTemplateSearchInput = (value: string) => {
+    if (!canManageSchedule) {
+      return;
+    }
+
     setTemplateSearch(value);
     const normalizedQuery = value.trim().toLocaleLowerCase('ru-RU');
 
@@ -734,18 +780,23 @@ export function CalendarWorkspace() {
       return;
     }
 
+    if (!canManageSchedule) {
+      setErrorText('РЈС‡Р°СЃС‚РЅРёРєРё РјРѕРіСѓС‚ С‚РѕР»СЊРєРѕ РїСЂРѕСЃРјР°С‚СЂРёРІР°С‚СЊ СЂР°СЃРїРёСЃР°РЅРёРµ. Р”РѕР±Р°РІР»РµРЅРёРµ Рё РёР·РјРµРЅРµРЅРёРµ РґРѕСЃС‚СѓРїРЅС‹ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂСѓ Рё РїРѕРјСЂРµР¶Сѓ.');
+      return;
+    }
+
     if (composer.kind === 'PERFORMANCE' && !composer.templateId) {
-      setErrorText('Сначала выберите спектакль из списка.');
+      setErrorText('РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ СЃРїРµРєС‚Р°РєР»СЊ РёР· СЃРїРёСЃРєР°.');
       return;
     }
 
     if (composer.kind !== 'PERFORMANCE' && composer.title.trim().length < 2) {
-      setErrorText('Укажите название события.');
+      setErrorText('РЈРєР°Р¶РёС‚Рµ РЅР°Р·РІР°РЅРёРµ СЃРѕР±С‹С‚РёСЏ.');
       return;
     }
 
     if (conflicts?.hasConflicts && !ignoreConflicts) {
-      setErrorText('Есть конфликты по занятости. Проверьте состав или создайте событие несмотря на предупреждение.');
+      setErrorText('Р•СЃС‚СЊ РєРѕРЅС„Р»РёРєС‚С‹ РїРѕ Р·Р°РЅСЏС‚РѕСЃС‚Рё. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕСЃС‚Р°РІ РёР»Рё СЃРѕР·РґР°Р№С‚Рµ СЃРѕР±С‹С‚РёРµ РЅРµСЃРјРѕС‚СЂСЏ РЅР° РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ.');
       return;
     }
 
@@ -780,7 +831,7 @@ export function CalendarWorkspace() {
       const mapped = mapEventRecordToCalendarEvent(created);
       setEvents((current) => [...current, mapped]);
       setSelectedEventId(mapped.id);
-      setNoticeText('Событие добавлено в расписание.');
+      setNoticeText('РЎРѕР±С‹С‚РёРµ РґРѕР±Р°РІР»РµРЅРѕ РІ СЂР°СЃРїРёСЃР°РЅРёРµ.');
       const currentDefaults = loadWorkspaceDefaults(activeOrganizationId);
       const defaults = saveWorkspaceDefaults(activeOrganizationId, {
         lastEventType: composer.kind,
@@ -805,7 +856,7 @@ export function CalendarWorkspace() {
       }));
       setConflicts(null);
     } catch (error) {
-      setErrorText(error instanceof Error ? error.message : 'Не удалось добавить событие.');
+      setErrorText(error instanceof Error ? error.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ РґРѕР±Р°РІРёС‚СЊ СЃРѕР±С‹С‚РёРµ.');
     } finally {
       setSaving(false);
     }
@@ -815,13 +866,17 @@ export function CalendarWorkspace() {
     <button
       key={event.id}
       className={`event-chip type-${event.type.toLowerCase()}${selectedEventId === event.id ? ' is-selected' : ''}`}
-      draggable
-      onDragStart={(dragEvent) => {
-        dragEvent.dataTransfer.setData('text/calendar-event-id', event.id);
-        dragEvent.dataTransfer.effectAllowed = 'move';
-        setDraggingEventId(event.id);
-      }}
-      onDragEnd={() => setDraggingEventId(null)}
+      draggable={canManageSchedule}
+      onDragStart={
+        canManageSchedule
+          ? (dragEvent) => {
+              dragEvent.dataTransfer.setData('text/calendar-event-id', event.id);
+              dragEvent.dataTransfer.effectAllowed = 'move';
+              setDraggingEventId(event.id);
+            }
+          : undefined
+      }
+      onDragEnd={canManageSchedule ? () => setDraggingEventId(null) : undefined}
       onClick={(clickEvent) => {
         clickEvent.stopPropagation();
         setSelectedEventId(event.id);
@@ -833,7 +888,7 @@ export function CalendarWorkspace() {
       <span className="chip-meta">
         {event.type === 'PERFORMANCE'
           ? eventTypeLabels[event.type]
-          : `${eventTypeLabels[event.type]} · ${event.durationMinutes} ${ru.calendar.minuteShort}`}
+          : `${eventTypeLabels[event.type]} В· ${event.durationMinutes} ${ru.calendar.minuteShort}`}
       </span>
     </button>
   );
@@ -880,30 +935,32 @@ export function CalendarWorkspace() {
               <button onClick={() => navigate(1)} type="button">{ru.calendar.navigation.next}</button>
             </div>
 
-            <Button type="button" onClick={() => openComposerAt(roundToNextHalfHour(new Date()))}>
-              {ru.calendar.quickEvent}
-            </Button>
+            {canManageSchedule ? (
+              <Button type="button" onClick={() => openComposerAt(roundToNextHalfHour(new Date()))}>
+                {ru.calendar.quickEvent}
+              </Button>
+            ) : null}
           </div>
         </header>
 
         <div className="calendar-search-strip">
           <div className="calendar-search-grid">
             <Input
-              label="Найти спектакль"
+              label="РќР°Р№С‚Рё СЃРїРµРєС‚Р°РєР»СЊ"
               value={templateFilter}
               onChange={(event) => setTemplateFilter(event.target.value)}
-              placeholder="Начните вводить название спектакля"
+              placeholder="РќР°С‡РЅРёС‚Рµ РІРІРѕРґРёС‚СЊ РЅР°Р·РІР°РЅРёРµ СЃРїРµРєС‚Р°РєР»СЏ"
             />
             <Input
-              label="Найти участника"
+              label="РќР°Р№С‚Рё СѓС‡Р°СЃС‚РЅРёРєР°"
               value={participantFilter}
               onChange={(event) => setParticipantFilter(event.target.value)}
-              placeholder="Начните вводить имя участника"
+              placeholder="РќР°С‡РЅРёС‚Рµ РІРІРѕРґРёС‚СЊ РёРјСЏ СѓС‡Р°СЃС‚РЅРёРєР°"
             />
           </div>
           {hasActiveCalendarFilters ? (
             <div className="toolbar">
-              <p className="calendar-search-note">Показываю только совпадения по спектаклю и участнику.</p>
+              <p className="calendar-search-note">РџРѕРєР°Р·С‹РІР°СЋ С‚РѕР»СЊРєРѕ СЃРѕРІРїР°РґРµРЅРёСЏ РїРѕ СЃРїРµРєС‚Р°РєР»СЋ Рё СѓС‡Р°СЃС‚РЅРёРєСѓ.</p>
               <Button
                 type="button"
                 variant="ghost"
@@ -913,7 +970,7 @@ export function CalendarWorkspace() {
                   setParticipantFilter('');
                 }}
               >
-                Сбросить поиск
+                РЎР±СЂРѕСЃРёС‚СЊ РїРѕРёСЃРє
               </Button>
             </div>
           ) : null}
@@ -921,7 +978,7 @@ export function CalendarWorkspace() {
 
         {noticeText ? <p className="finance-notice">{noticeText}</p> : null}
         {errorText ? <p className="finance-error">{errorText}</p> : null}
-        {loading ? <p className="empty-state">Загружаем расписание организации...</p> : null}
+        {loading ? <p className="empty-state">Р—Р°РіСЂСѓР¶Р°РµРј СЂР°СЃРїРёСЃР°РЅРёРµ РѕСЂРіР°РЅРёР·Р°С†РёРё...</p> : null}
 
         {!loading && viewMode === 'month' ? (
           <section className="month-view">
@@ -940,9 +997,17 @@ export function CalendarWorkspace() {
                   <article
                     key={key}
                     className={`month-cell${isOutside ? ' outside' : ''}${isToday ? ' today' : ''}`}
-                    onClick={() => openComposerAt(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 19, 0), composer.kind)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={handleDropDay(day)}
+                    onClick={
+                      canManageSchedule
+                        ? () =>
+                            openComposerAt(
+                              new Date(day.getFullYear(), day.getMonth(), day.getDate(), 19, 0),
+                              composer.kind,
+                            )
+                        : undefined
+                    }
+                    onDragOver={canManageSchedule ? (event) => event.preventDefault() : undefined}
+                    onDrop={canManageSchedule ? handleDropDay(day) : undefined}
                   >
                     <div className="month-cell-header">
                       <span>{day.getDate()}</span>
@@ -984,13 +1049,17 @@ export function CalendarWorkspace() {
                       <div
                         key={`${toDayKey(day)}-${hour}`}
                         className="hour-slot"
-                        onClick={() => {
-                          const slotDate = new Date(day);
-                          slotDate.setHours(hour, 0, 0, 0);
-                          openComposerAt(slotDate, composer.kind);
-                        }}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={handleDropWeekSlot(day, hour)}
+                        onClick={
+                          canManageSchedule
+                            ? () => {
+                                const slotDate = new Date(day);
+                                slotDate.setHours(hour, 0, 0, 0);
+                                openComposerAt(slotDate, composer.kind);
+                              }
+                            : undefined
+                        }
+                        onDragOver={canManageSchedule ? (event) => event.preventDefault() : undefined}
+                        onDrop={canManageSchedule ? handleDropWeekSlot(day, hour) : undefined}
                       >
                         {slotEvents.map((item) => renderEventChip(item))}
                       </div>
@@ -1004,19 +1073,21 @@ export function CalendarWorkspace() {
       </section>
 
       <aside className="side-stack side-stack--calendar">
-        <div className="side-tabs side-tabs--premium">
-          <button type="button" className={activeSidePanel === 'compose' ? 'is-active' : ''} onClick={() => setActiveSidePanel('compose')}>
-            Добавить
-          </button>
-          <button type="button" className={activeSidePanel === 'chat' ? 'is-active' : ''} onClick={() => setActiveSidePanel('chat')}>
-            Чат
-          </button>
-          <button type="button" className={activeSidePanel === 'finance' ? 'is-active' : ''} onClick={() => setActiveSidePanel('finance')}>
-            Баллы
-          </button>
-        </div>
+        {canManageSchedule ? (
+          <div className="side-tabs side-tabs--premium">
+            <button type="button" className={activeSidePanel === 'compose' ? 'is-active' : ''} onClick={() => setActiveSidePanel('compose')}>
+              Добавить
+            </button>
+            <button type="button" className={activeSidePanel === 'chat' ? 'is-active' : ''} onClick={() => setActiveSidePanel('chat')}>
+              Чат
+            </button>
+            <button type="button" className={activeSidePanel === 'finance' ? 'is-active' : ''} onClick={() => setActiveSidePanel('finance')}>
+              Баллы
+            </button>
+          </div>
+        ) : null}
 
-        {activeSidePanel === 'compose' ? (
+        {canManageSchedule && activeSidePanel === 'compose' ? (
           <section className="composer-panel quick-panel">
             <div className="composer-panel__header">
               <div>
@@ -1103,21 +1174,19 @@ export function CalendarWorkspace() {
             </div>
 
             {composer.kind !== 'PERFORMANCE' ? (
-              <>
-                <Input
-                  label={ru.calendar.composer.fields.duration}
-                  min={15}
-                  step={15}
-                  type="number"
-                  value={String(composer.durationMinutes)}
-                  onChange={(event) =>
-                    setComposer((current) => ({
-                      ...current,
-                      durationMinutes: Math.max(15, Number(event.target.value) || 15),
-                    }))
-                  }
-                />
-              </>
+              <Input
+                label={ru.calendar.composer.fields.duration}
+                min={15}
+                step={15}
+                type="number"
+                value={String(composer.durationMinutes)}
+                onChange={(event) =>
+                  setComposer((current) => ({
+                    ...current,
+                    durationMinutes: Math.max(15, Number(event.target.value) || 15),
+                  }))
+                }
+              />
             ) : null}
 
             {recentParticipants.length > 0 ? (
@@ -1177,11 +1246,51 @@ export function CalendarWorkspace() {
           </section>
         ) : null}
 
-        {activeSidePanel === 'finance' ? (
+        {!canManageSchedule ? (
+          <section className="composer-panel quick-panel">
+            <div className="composer-panel__header">
+              <div>
+                <h2>Просмотр расписания</h2>
+                <p>Участник видит календарь и получает уведомления, но не может менять или добавлять события.</p>
+              </div>
+              <span className="composer-panel__hint">Уведомления приходят в профиль.</span>
+            </div>
+
+            {selectedEvent ? (
+              <div className="resource-card__list">
+                <div className="resource-inline-info">
+                  <strong>{selectedEvent.title}</strong>
+                  <span>
+                    {timeFormat.format(selectedEvent.startsAt)} · {eventTypeLabels[selectedEvent.type]}
+                  </span>
+                </div>
+                <div className="resource-inline-info">
+                  <strong>Состав</strong>
+                  <span>
+                    {selectedEvent.participants.length > 0
+                      ? selectedEvent.participants
+                          .map((item) => participantsById.get(item.participantId))
+                          .filter((participant): participant is ParticipantRecord => participant !== undefined)
+                          .map((participant) => participantDisplayName(participant))
+                          .join(', ')
+                      : 'Состав для этого события не указан.'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="resource-empty-inline">
+                <strong>Только просмотр</strong>
+                <p>Выберите событие в календаре, чтобы посмотреть его время, тип и состав.</p>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {canManageSchedule && activeSidePanel === 'finance' ? (
           <LazyPointsIncomePanel organizationId={activeOrganizationId} accessToken={accessToken} lockWorkspace />
         ) : null}
 
-        {activeSidePanel === 'chat' ? (
+        {canManageSchedule && activeSidePanel === 'chat' ? (
           <LazyChatPanel
             organizationId={activeOrganizationId}
             accessToken={accessToken}
@@ -1194,3 +1303,4 @@ export function CalendarWorkspace() {
     </main>
   );
 }
+

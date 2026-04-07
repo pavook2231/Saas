@@ -73,6 +73,10 @@ export function AppSidebar({
   onLogout,
   loggingOut,
 }: AppSidebarProps) {
+  const visibleNav = activeRole === 'MEMBER'
+    ? primaryNav.filter((item) => item.href === '/calendar' || item.href === '/profile')
+    : primaryNav;
+
   return (
     <aside className={cn('app-sidebar', collapsed && 'is-collapsed')}>
       <div className="app-sidebar__header">
@@ -124,7 +128,7 @@ export function AppSidebar({
       <nav className="app-sidebar__nav">
         <span className="app-sidebar__eyebrow">Навигация</span>
 
-        {primaryNav.map((item) => {
+        {visibleNav.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
           const link = (

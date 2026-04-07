@@ -35,8 +35,8 @@ const LazyChatPanel = dynamic(() => import('./chat-panel').then((module) => modu
   ssr: false,
   loading: () => (
     <div className="resource-empty-inline">
-      <strong>Р—Р°РіСЂСѓР¶Р°РµРј С‡Р°С‚</strong>
-      <p>РџР°РЅРµР»СЊ СЃРѕРѕР±С‰РµРЅРёР№ РїРѕРґРєР»СЋС‡Р°РµС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.</p>
+      <strong>Загружаем чат</strong>
+      <p>Панель сообщений подключается автоматически.</p>
     </div>
   ),
 });
@@ -47,8 +47,8 @@ const LazyPointsIncomePanel = dynamic(
     ssr: false,
     loading: () => (
       <div className="resource-empty-inline">
-        <strong>Р—Р°РіСЂСѓР¶Р°РµРј Р±Р°Р»Р»С‹</strong>
-        <p>Р¤РёРЅР°РЅСЃРѕРІР°СЏ РїР°РЅРµР»СЊ РіРѕС‚РѕРІРёС‚СЃСЏ РґР»СЏ С‚РµРєСѓС‰РµР№ РѕСЂРіР°РЅРёР·Р°С†РёРё.</p>
+        <strong>Загружаем баллы</strong>
+        <p>Финансовая панель готовится для текущей организации.</p>
       </div>
     ),
   },
@@ -314,7 +314,7 @@ export function CalendarWorkspace() {
   const canManageSchedule =
     activeRole === 'ADMIN' || activeRole === 'DIRECTOR' || activeRole === 'ASSISTANT';
 
-  useToastFeedback({ noticeText, errorText, noticeTitle: 'РљР°Р»РµРЅРґР°СЂСЊ', errorTitle: 'РљР°Р»РµРЅРґР°СЂСЊ' });
+  useToastFeedback({ noticeText, errorText, noticeTitle: 'Календарь', errorTitle: 'Календарь' });
 
   const loadCalendarData = useCallback(async () => {
     if (!accessToken || !activeOrganizationId) {
@@ -340,7 +340,7 @@ export function CalendarWorkspace() {
       setParticipants(participantsResponse);
       setErrorText(null);
     } catch (error) {
-      setErrorText(error instanceof Error ? error.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЂР°СЃРїРёСЃР°РЅРёРµ.');
+      setErrorText(error instanceof Error ? error.message : 'Не удалось загрузить расписание.');
     } finally {
       setLoading(false);
     }
@@ -671,7 +671,7 @@ export function CalendarWorkspace() {
       setNoticeText(successMessage);
     } catch (error) {
       replaceEvent(baseEvent);
-      setErrorText(error instanceof Error ? error.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ СЃРѕР±С‹С‚РёРµ.');
+      setErrorText(error instanceof Error ? error.message : 'Не удалось обновить событие.');
     } finally {
       setSaving(false);
     }
@@ -706,7 +706,7 @@ export function CalendarWorkspace() {
 
     const nextEvent = moveEventToDay(baseEvent, targetDay);
     setDraggingEventId(null);
-    void persistEvent(baseEvent, nextEvent, 'РЎРѕР±С‹С‚РёРµ РїРµСЂРµРЅРµСЃРµРЅРѕ РЅР° РґСЂСѓРіРѕР№ РґРµРЅСЊ.');
+    void persistEvent(baseEvent, nextEvent, 'Событие перенесено на другой день.');
   };
 
   const handleDropWeekSlot = (targetDay: Date, hour: number) => (event: DragEvent<HTMLElement>) => {
@@ -728,7 +728,7 @@ export function CalendarWorkspace() {
 
     const nextEvent = moveEventToWeekSlot(baseEvent, targetDay, hour);
     setDraggingEventId(null);
-    void persistEvent(baseEvent, nextEvent, 'РЎРѕР±С‹С‚РёРµ РїРµСЂРµРЅРµСЃРµРЅРѕ РїРѕ СЃРµС‚РєРµ РЅРµРґРµР»Рё.');
+    void persistEvent(baseEvent, nextEvent, 'Событие перенесено по сетке недели.');
   };
 
   const handleKindChange = (nextKind: ComposerKind) => {
@@ -781,22 +781,22 @@ export function CalendarWorkspace() {
     }
 
     if (!canManageSchedule) {
-      setErrorText('РЈС‡Р°СЃС‚РЅРёРєРё РјРѕРіСѓС‚ С‚РѕР»СЊРєРѕ РїСЂРѕСЃРјР°С‚СЂРёРІР°С‚СЊ СЂР°СЃРїРёСЃР°РЅРёРµ. Р”РѕР±Р°РІР»РµРЅРёРµ Рё РёР·РјРµРЅРµРЅРёРµ РґРѕСЃС‚СѓРїРЅС‹ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂСѓ Рё РїРѕРјСЂРµР¶Сѓ.');
+      setErrorText('Участники могут только просматривать расписание. Добавление и изменение доступны администратору и помрежу.');
       return;
     }
 
     if (composer.kind === 'PERFORMANCE' && !composer.templateId) {
-      setErrorText('РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ СЃРїРµРєС‚Р°РєР»СЊ РёР· СЃРїРёСЃРєР°.');
+      setErrorText('Сначала выберите спектакль из списка.');
       return;
     }
 
     if (composer.kind !== 'PERFORMANCE' && composer.title.trim().length < 2) {
-      setErrorText('РЈРєР°Р¶РёС‚Рµ РЅР°Р·РІР°РЅРёРµ СЃРѕР±С‹С‚РёСЏ.');
+      setErrorText('Укажите название события.');
       return;
     }
 
     if (conflicts?.hasConflicts && !ignoreConflicts) {
-      setErrorText('Р•СЃС‚СЊ РєРѕРЅС„Р»РёРєС‚С‹ РїРѕ Р·Р°РЅСЏС‚РѕСЃС‚Рё. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕСЃС‚Р°РІ РёР»Рё СЃРѕР·РґР°Р№С‚Рµ СЃРѕР±С‹С‚РёРµ РЅРµСЃРјРѕС‚СЂСЏ РЅР° РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ.');
+      setErrorText('Есть конфликты по занятости. Проверьте состав или создайте событие несмотря на предупреждение.');
       return;
     }
 
@@ -831,7 +831,7 @@ export function CalendarWorkspace() {
       const mapped = mapEventRecordToCalendarEvent(created);
       setEvents((current) => [...current, mapped]);
       setSelectedEventId(mapped.id);
-      setNoticeText('РЎРѕР±С‹С‚РёРµ РґРѕР±Р°РІР»РµРЅРѕ РІ СЂР°СЃРїРёСЃР°РЅРёРµ.');
+      setNoticeText('Событие добавлено в расписание.');
       const currentDefaults = loadWorkspaceDefaults(activeOrganizationId);
       const defaults = saveWorkspaceDefaults(activeOrganizationId, {
         lastEventType: composer.kind,
@@ -856,7 +856,7 @@ export function CalendarWorkspace() {
       }));
       setConflicts(null);
     } catch (error) {
-      setErrorText(error instanceof Error ? error.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ РґРѕР±Р°РІРёС‚СЊ СЃРѕР±С‹С‚РёРµ.');
+      setErrorText(error instanceof Error ? error.message : 'Не удалось добавить событие.');
     } finally {
       setSaving(false);
     }
@@ -946,21 +946,21 @@ export function CalendarWorkspace() {
         <div className="calendar-search-strip">
           <div className="calendar-search-grid">
             <Input
-              label="РќР°Р№С‚Рё СЃРїРµРєС‚Р°РєР»СЊ"
+              label="Найти спектакль"
               value={templateFilter}
               onChange={(event) => setTemplateFilter(event.target.value)}
-              placeholder="РќР°С‡РЅРёС‚Рµ РІРІРѕРґРёС‚СЊ РЅР°Р·РІР°РЅРёРµ СЃРїРµРєС‚Р°РєР»СЏ"
+              placeholder="Начните вводить название спектакля"
             />
             <Input
-              label="РќР°Р№С‚Рё СѓС‡Р°СЃС‚РЅРёРєР°"
+              label="Найти участника"
               value={participantFilter}
               onChange={(event) => setParticipantFilter(event.target.value)}
-              placeholder="РќР°С‡РЅРёС‚Рµ РІРІРѕРґРёС‚СЊ РёРјСЏ СѓС‡Р°СЃС‚РЅРёРєР°"
+              placeholder="Начните вводить имя участника"
             />
           </div>
           {hasActiveCalendarFilters ? (
             <div className="toolbar">
-              <p className="calendar-search-note">РџРѕРєР°Р·С‹РІР°СЋ С‚РѕР»СЊРєРѕ СЃРѕРІРїР°РґРµРЅРёСЏ РїРѕ СЃРїРµРєС‚Р°РєР»СЋ Рё СѓС‡Р°СЃС‚РЅРёРєСѓ.</p>
+              <p className="calendar-search-note">Показываю только совпадения по спектаклю и участнику.</p>
               <Button
                 type="button"
                 variant="ghost"
@@ -970,7 +970,7 @@ export function CalendarWorkspace() {
                   setParticipantFilter('');
                 }}
               >
-                РЎР±СЂРѕСЃРёС‚СЊ РїРѕРёСЃРє
+                Сбросить поиск
               </Button>
             </div>
           ) : null}
@@ -978,7 +978,7 @@ export function CalendarWorkspace() {
 
         {noticeText ? <p className="finance-notice">{noticeText}</p> : null}
         {errorText ? <p className="finance-error">{errorText}</p> : null}
-        {loading ? <p className="empty-state">Р—Р°РіСЂСѓР¶Р°РµРј СЂР°СЃРїРёСЃР°РЅРёРµ РѕСЂРіР°РЅРёР·Р°С†РёРё...</p> : null}
+        {loading ? <p className="empty-state">Загружаем расписание организации...</p> : null}
 
         {!loading && viewMode === 'month' ? (
           <section className="month-view">

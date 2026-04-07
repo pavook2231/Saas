@@ -3,7 +3,7 @@
 import type { Route } from 'next';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type DragEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   operationsApi,
@@ -15,6 +15,7 @@ import {
   type EventType,
   type ParticipantRecord,
   type TemplateRecord,
+  type UpdateEventPayload,
 } from '@/app/lib/api/operations';
 import { ParticipantPicker } from '@/components/features/participant-picker';
 import { useToastFeedback } from '@/components/features/use-toast-feedback';
@@ -28,6 +29,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+
+import { ru } from '../lib/i18n/ru';
 
 const LazyChatPanel = dynamic(() => import('./chat-panel').then((module) => module.ChatPanel), {
   ssr: false,
@@ -55,7 +58,6 @@ const LazyPointsIncomePanel = dynamic(
 type ViewMode = 'week' | 'month';
 type SidePanel = 'compose' | 'chat' | 'finance';
 type ComposerKind = 'PERFORMANCE' | 'REHEARSAL' | 'EVENT';
-type BoardColumnKey = 'PERFORMANCE' | 'REHEARSAL' | 'OTHER';
 
 type CalendarEventParticipant = {
   participantId: string;
@@ -75,7 +77,10 @@ type CalendarEvent = {
   durationMinutes: number;
   participants: CalendarEventParticipant[];
   templateId: string | null;
+  description: string | null;
   location: string | null;
+  timezone: string | null;
+  isAllDay: boolean;
 };
 
 type ComposerState = {
@@ -88,86 +93,28 @@ type ComposerState = {
   participantIds: string[];
 };
 
-type LaneSection = {
-  key: string;
-  label: string;
-  items: CalendarEvent[];
-};
-
-const boardColumns: Array<{
-  key: BoardColumnKey;
-  title: string;
-  description: string;
-  composeKind: ComposerKind;
-}> = [
-  {
-    key: 'PERFORMANCE',
-    title: 'Спектакли',
-    description: 'Только готовые постановки из шаблонов организации.',
-    composeKind: 'PERFORMANCE',
-  },
-  {
-    key: 'REHEARSAL',
-    title: 'Репетиции',
-    description: 'Все репетиции с временем и составом.',
-    composeKind: 'REHEARSAL',
-  },
-  {
-    key: 'OTHER',
-    title: 'Прочее',
-    description: 'Сборы, встречи и остальные мероприятия.',
-    composeKind: 'EVENT',
-  },
-];
-
-const kindDescriptions: Record<ComposerKind, string> = {
-  PERFORMANCE: 'Выберите спектакль из уже заведенных в организации.',
-  REHEARSAL: 'Добавьте репетицию, выберите время и состав.',
-  EVENT: 'Добавьте любое другое мероприятие без лишних полей.',
-};
-
+const weekDayLabels = ru.calendar.weekDayLabels;
+const weekHours = Array.from({ length: 14 }, (_, index) => index + 8);
+const durationPresets = [60, 90, 120, 180];
 const kindLabels: Record<ComposerKind, string> = {
-  PERFORMANCE: 'Спектакль',
-  REHEARSAL: 'Репетиция',
-  EVENT: 'Прочее',
+  PERFORMANCE: ru.calendar.composer.types.performance,
+  REHEARSAL: ru.calendar.composer.types.rehearsal,
+  EVENT: ru.calendar.composer.types.event,
 };
+const eventTypeLabels: Record<EventType, string> = ru.calendar.eventTypeLabels;
 
-const eventTypeLabels: Record<EventType, string> = {
-  PERFORMANCE: 'Спектакль',
-  REHEARSAL: 'Репетиция',
-  EVENT: 'Мероприятие',
-  CUSTOM: 'Другое',
-};
-
-const monthTitleFormat = new Intl.DateTimeFormat('ru-RU', {
-  month: 'long',
-  year: 'numeric',
-});
-
-const periodDateFormat = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'short',
-});
-
-const sectionDateFormat = new Intl.DateTimeFormat('ru-RU', {
+const monthTitleFormat = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' });
+const weekdayLongFormat = new Intl.DateTimeFormat('ru-RU', {
   weekday: 'short',
-  day: 'numeric',
   month: 'short',
+  day: 'numeric',
 });
-
-const eventDateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'short',
+const timeFormat = new Intl.DateTimeFormat('ru-RU', {
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
 });
-
-const eventTimeFormat = new Intl.DateTimeFormat('ru-RU', {
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-});
+const shortDateFormat = new Intl.DateTimeFormat('ru-RU', { month: 'short', day: 'numeric' });
 
 const addDays = (date: Date, amount: number): Date => {
   const clone = new Date(date);
@@ -188,6 +135,11 @@ const startOfWeek = (date: Date): Date => {
   const day = clone.getDay();
   const mondayShift = day === 0 ? -6 : 1 - day;
   return addDays(clone, mondayShift);
+};
+
+const startOfMonthGrid = (date: Date): Date => {
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+  return startOfWeek(monthStart);
 };
 
 const formatDateInput = (date: Date): string => {
@@ -218,6 +170,13 @@ const parseDateTimeInput = (dateInput: string, timeInput: string): Date => {
   );
 };
 
+const isSameDay = (left: Date, right: Date): boolean =>
+  left.getFullYear() === right.getFullYear() &&
+  left.getMonth() === right.getMonth() &&
+  left.getDate() === right.getDate();
+
+const toDayKey = (date: Date): string => formatDateInput(date);
+
 const roundToNextHalfHour = (value: Date): Date => {
   const rounded = new Date(value);
   rounded.setSeconds(0, 0);
@@ -235,35 +194,16 @@ const roundToNextHalfHour = (value: Date): Date => {
   return rounded;
 };
 
-const sameIds = (left: string[], right: string[]) =>
-  left.length === right.length && left.every((value, index) => value === right[index]);
-
-const uniqueIds = (ids: string[]) => ids.filter((value, index, list) => list.indexOf(value) === index);
-
-const toDayKey = (date: Date) => formatDateInput(date);
-
-const getBoardColumnKey = (type: EventType): BoardColumnKey => {
-  if (type === 'PERFORMANCE') {
-    return 'PERFORMANCE';
-  }
-
-  if (type === 'REHEARSAL') {
-    return 'REHEARSAL';
-  }
-
-  return 'OTHER';
-};
-
 const rangeForCursor = (cursorDate: Date, viewMode: ViewMode) => {
   if (viewMode === 'month') {
-    const from = new Date(cursorDate.getFullYear(), cursorDate.getMonth(), 1);
-    const to = new Date(cursorDate.getFullYear(), cursorDate.getMonth() + 1, 1);
-    return { from: from.toISOString(), to: to.toISOString() };
+    const gridStart = startOfMonthGrid(cursorDate);
+    const gridEnd = addDays(gridStart, 42);
+    return { from: addDays(gridStart, -7).toISOString(), to: addDays(gridEnd, 7).toISOString() };
   }
 
   const weekStart = startOfWeek(cursorDate);
   const weekEnd = addDays(weekStart, 7);
-  return { from: weekStart.toISOString(), to: weekEnd.toISOString() };
+  return { from: addDays(weekStart, -14).toISOString(), to: addDays(weekEnd, 21).toISOString() };
 };
 
 const mapEventRecordToCalendarEvent = (event: EventRecord): CalendarEvent => ({
@@ -282,32 +222,53 @@ const mapEventRecordToCalendarEvent = (event: EventRecord): CalendarEvent => ({
     notes: participant.notes ?? undefined,
   })),
   templateId: event.templateId,
+  description: event.description,
   location: event.location,
+  timezone: event.timezone,
+  isAllDay: event.isAllDay,
 });
 
-const sortEvents = (events: CalendarEvent[]) =>
-  [...events].sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
+const toUpdatePayload = (event: CalendarEvent): UpdateEventPayload => ({
+  title: event.title,
+  description: event.description ?? undefined,
+  type: event.type,
+  status: event.status,
+  startsAt: event.startsAt.toISOString(),
+  endsAt: addMinutes(event.startsAt, event.durationMinutes).toISOString(),
+  timezone: event.timezone ?? undefined,
+  location: event.location ?? undefined,
+  isAllDay: event.isAllDay,
+  templateId: event.templateId,
+  participants: event.participants.map((participant) => ({
+    participantId: participant.participantId,
+    templateRoleId: participant.templateRoleId,
+    roleName: participant.roleName,
+    attendanceStatus: participant.attendanceStatus,
+    isRequired: participant.isRequired,
+    notes: participant.notes,
+  })),
+});
+
+const moveEventToDay = (event: CalendarEvent, targetDay: Date): CalendarEvent => {
+  const next = new Date(targetDay);
+  next.setHours(event.startsAt.getHours(), event.startsAt.getMinutes(), 0, 0);
+  return { ...event, startsAt: next };
+};
+
+const moveEventToWeekSlot = (event: CalendarEvent, targetDay: Date, hour: number): CalendarEvent => {
+  const next = new Date(targetDay);
+  next.setHours(hour, 0, 0, 0);
+  return { ...event, startsAt: next };
+};
+
+const uniqueIds = (ids: string[]) => ids.filter((value, index, list) => list.indexOf(value) === index);
 
 const templateParticipantIds = (template: TemplateRecord | null | undefined): string[] => {
   if (!template) {
     return [];
   }
 
-  return uniqueIds(
-    template.roles.flatMap((role) => role.assignments.map((assignment) => assignment.participantId)),
-  );
-};
-
-const defaultTitleForKind = (kind: ComposerKind): string => {
-  if (kind === 'REHEARSAL') {
-    return 'Репетиция';
-  }
-
-  if (kind === 'EVENT') {
-    return 'Мероприятие';
-  }
-
-  return '';
+  return uniqueIds(template.roles.flatMap((role) => role.assignments.map((assignment) => assignment.participantId)));
 };
 
 const createInitialComposer = (
@@ -315,16 +276,11 @@ const createInitialComposer = (
   baseDate = roundToNextHalfHour(new Date()),
 ): ComposerState => {
   const defaults = loadWorkspaceDefaults(organizationId);
-  const lastKind = defaults.lastEventType;
-  const normalizedKind: ComposerKind =
-    lastKind === 'PERFORMANCE' || lastKind === 'REHEARSAL' || lastKind === 'EVENT'
-      ? lastKind
-      : 'EVENT';
 
   return {
-    kind: normalizedKind,
+    kind: (defaults.lastEventType as ComposerKind | undefined) ?? 'EVENT',
     templateId: defaults.recentTemplateIds?.[0] ?? '',
-    title: defaultTitleForKind(normalizedKind),
+    title: '',
     dateInput: formatDateInput(baseDate),
     timeInput: formatTimeInput(baseDate),
     durationMinutes: defaults.lastEventDurationMinutes ?? 120,
@@ -332,1000 +288,832 @@ const createInitialComposer = (
   };
 };
 
-const createParticipantsPayload = (
-  kind: ComposerKind,
-  participantIds: string[],
-  template: TemplateRecord | null,
-) => {
-  if (kind === 'PERFORMANCE' && template) {
-    const mapped = template.roles.flatMap((role) =>
-      role.assignments
-        .filter((assignment) => participantIds.includes(assignment.participantId))
-        .map((assignment) => ({
-          participantId: assignment.participantId,
-          templateRoleId: role.id,
-          roleName: role.name,
-          isRequired: role.requiredCount > 0,
-        })),
-    );
-
-    const mappedIds = new Set(mapped.map((item) => item.participantId));
-    const extras = participantIds
-      .filter((participantId) => !mappedIds.has(participantId))
-      .map((participantId) => ({
-        participantId,
-        isRequired: true,
-      }));
-
-    return [...mapped, ...extras];
-  }
-
-  return participantIds.map((participantId) => ({
-    participantId,
-    isRequired: true,
-  }));
-};
-
 export function CalendarWorkspace() {
-  const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
+  const { accessToken, activeOrganizationId } = useActiveWorkspace();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const canManageEvents =
-    activeRole === 'ADMIN' || activeRole === 'DIRECTOR' || activeRole === 'ASSISTANT';
-
   const [viewMode, setViewMode] = useState<ViewMode>('week');
-  const [cursorDate, setCursorDate] = useState(() => new Date());
+  const [cursorDate, setCursorDate] = useState<Date>(() => startOfDay(new Date()));
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [templates, setTemplates] = useState<TemplateRecord[]>([]);
   const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [checkingConflicts, setCheckingConflicts] = useState(false);
+  const [draggingEventId, setDraggingEventId] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [activeSidePanel, setActiveSidePanel] = useState<SidePanel>('compose');
-  const [handledComposeKey, setHandledComposeKey] = useState('');
   const [errorText, setErrorText] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
+  const [activeSidePanel, setActiveSidePanel] = useState<SidePanel>('compose');
+  const [composer, setComposer] = useState<ComposerState>(() => createInitialComposer(null));
+  const [handledComposeKey, setHandledComposeKey] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictCheckResult | null>(null);
-  const [recentParticipantIds, setRecentParticipantIds] = useState<string[]>([]);
-  const [recentTemplateIds, setRecentTemplateIds] = useState<string[]>([]);
-  const [composer, setComposer] = useState<ComposerState>(() => createInitialComposer(activeOrganizationId));
+  const [checkingConflicts, setCheckingConflicts] = useState(false);
 
-  useToastFeedback({
-    noticeText,
-    errorText,
-    noticeTitle: 'Календарь',
-    errorTitle: 'Календарь',
-  });
+  useToastFeedback({ noticeText, errorText, noticeTitle: 'Календарь', errorTitle: 'Календарь' });
+
+  const loadCalendarData = useCallback(async () => {
+    if (!accessToken || !activeOrganizationId) {
+      setEvents([]);
+      setTemplates([]);
+      setParticipants([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const range = rangeForCursor(cursorDate, viewMode);
+      const [eventsResponse, templatesResponse, participantsResponse] = await Promise.all([
+        operationsApi.listEvents({ organizationId: activeOrganizationId, accessToken, from: range.from, to: range.to, limit: 300 }),
+        operationsApi.listTemplates({ organizationId: activeOrganizationId, accessToken, limit: 100, isActive: true }),
+        operationsApi.listParticipants({ organizationId: activeOrganizationId, accessToken, limit: 300 }),
+      ]);
+
+      setEvents(eventsResponse.map(mapEventRecordToCalendarEvent));
+      setTemplates(templatesResponse);
+      setParticipants(participantsResponse);
+      setErrorText(null);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось загрузить расписание.');
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken, activeOrganizationId, cursorDate, viewMode]);
 
   useEffect(() => {
-    const defaults = loadWorkspaceDefaults(activeOrganizationId);
+    void loadCalendarData();
+  }, [loadCalendarData]);
 
-    setRecentParticipantIds(defaults.recentParticipantIds ?? []);
-    setRecentTemplateIds(defaults.recentTemplateIds ?? []);
+  useEffect(() => {
     setComposer(createInitialComposer(activeOrganizationId));
-    setSelectedEventId(null);
-    setConflicts(null);
-    setHandledComposeKey('');
-    setActiveSidePanel('compose');
-    setCursorDate(new Date());
-    setErrorText(null);
-    setNoticeText(null);
   }, [activeOrganizationId]);
 
-  const selectedTemplate = useMemo(
-    () => templates.find((template) => template.id === composer.templateId) ?? null,
-    [composer.templateId, templates],
-  );
+  useEffect(() => {
+    if (!selectedEventId) {
+      return;
+    }
+
+    if (!events.some((event) => event.id === selectedEventId)) {
+      setSelectedEventId(null);
+    }
+  }, [events, selectedEventId]);
 
   const selectedEvent = useMemo(
     () => events.find((event) => event.id === selectedEventId) ?? null,
     [events, selectedEventId],
   );
 
-  useEffect(() => {
-    if (selectedEventId && !selectedEvent) {
-      setSelectedEventId(null);
+  const templatesById = useMemo(() => new Map(templates.map((template) => [template.id, template])), [templates]);
+  const selectedTemplate = composer.templateId ? templatesById.get(composer.templateId) ?? null : null;
+
+  const sortedEvents = useMemo(
+    () => [...events].sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime()),
+    [events],
+  );
+
+  const weekDays = useMemo(() => {
+    const start = startOfWeek(cursorDate);
+    return Array.from({ length: 7 }, (_, index) => addDays(start, index));
+  }, [cursorDate]);
+
+  const monthDays = useMemo(() => {
+    const start = startOfMonthGrid(cursorDate);
+    return Array.from({ length: 42 }, (_, index) => addDays(start, index));
+  }, [cursorDate]);
+
+  const monthEventMap = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+
+    for (const event of sortedEvents) {
+      const key = toDayKey(event.startsAt);
+      const list = map.get(key) ?? [];
+      list.push(event);
+      map.set(key, list);
     }
-  }, [selectedEvent, selectedEventId]);
+
+    return map;
+  }, [sortedEvents]);
 
   const periodLabel = useMemo(() => {
     if (viewMode === 'month') {
       return monthTitleFormat.format(cursorDate);
     }
 
-    const weekStart = startOfWeek(cursorDate);
-    const weekEnd = addDays(weekStart, 6);
-    return `${periodDateFormat.format(weekStart)} — ${periodDateFormat.format(weekEnd)}`;
-  }, [cursorDate, viewMode]);
+    const start = weekDays[0];
+    const end = weekDays[weekDays.length - 1];
+    return `${shortDateFormat.format(start)} - ${shortDateFormat.format(end)}`;
+  }, [cursorDate, viewMode, weekDays]);
 
-  const loadCalendarData = useCallback(
-    async (signal?: AbortSignal) => {
-      if (!activeOrganizationId || !accessToken) {
-        setEvents([]);
-        setTemplates([]);
-        setParticipants([]);
-        setLoading(false);
-        return;
-      }
+  const recentDefaults = useMemo(() => loadWorkspaceDefaults(activeOrganizationId), [activeOrganizationId, events.length]);
 
-      setLoading(true);
-      setErrorText(null);
-
-      try {
-        const { from, to } = rangeForCursor(cursorDate, viewMode);
-
-        const [eventsResponse, templatesResponse, participantsResponse] = await Promise.all([
-          operationsApi.listEvents({
-            accessToken,
-            organizationId: activeOrganizationId,
-            from,
-            to,
-            limit: 400,
-            signal,
-          }),
-          operationsApi.listTemplates({
-            accessToken,
-            organizationId: activeOrganizationId,
-            isActive: true,
-            limit: 200,
-            signal,
-          }),
-          operationsApi.listParticipants({
-            accessToken,
-            organizationId: activeOrganizationId,
-            limit: 300,
-            signal,
-          }),
-        ]);
-
-        setEvents(sortEvents(eventsResponse.map(mapEventRecordToCalendarEvent)));
-        setTemplates(templatesResponse);
-        setParticipants(participantsResponse);
-      } catch (error) {
-        if ((error as { name?: string } | undefined)?.name === 'AbortError') {
-          return;
-        }
-
-        setErrorText(error instanceof Error ? error.message : 'Не удалось загрузить календарь.');
-      } finally {
-        if (!signal?.aborted) {
-          setLoading(false);
-        }
-      }
-    },
-    [accessToken, activeOrganizationId, cursorDate, viewMode],
+  const recentTemplateCards = useMemo(
+    () =>
+      (recentDefaults.recentTemplateIds ?? [])
+        .map((templateId) => templatesById.get(templateId) ?? null)
+        .filter((template): template is TemplateRecord => template !== null),
+    [recentDefaults.recentTemplateIds, templatesById],
   );
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void loadCalendarData(controller.signal);
-    return () => controller.abort();
-  }, [loadCalendarData]);
+  const recentParticipants = useMemo(() => {
+    const byId = new Map(participants.map((participant) => [participant.id, participant]));
+    return (recentDefaults.recentParticipantIds ?? [])
+      .map((participantId) => byId.get(participantId) ?? null)
+      .filter((participant): participant is ParticipantRecord => participant !== null);
+  }, [participants, recentDefaults.recentParticipantIds]);
 
-  useEffect(() => {
-    if (composer.kind !== 'PERFORMANCE' || !selectedTemplate) {
-      return;
-    }
+  const hydrateComposerFromTemplate = useCallback(
+    (templateId: string, baseState?: ComposerState): ComposerState => {
+      const template = templatesById.get(templateId) ?? null;
+      const nextState = baseState ?? composer;
 
-    const nextParticipantIds = templateParticipantIds(selectedTemplate);
-
-    setComposer((current) => {
-      if (current.kind !== 'PERFORMANCE') {
-        return current;
-      }
-
-      const nextTitle = selectedTemplate.name;
-      const nextDuration = selectedTemplate.durationMinutes;
-      const shouldUpdateParticipants =
-        nextParticipantIds.length > 0 && !sameIds(current.participantIds, nextParticipantIds);
-
-      if (
-        current.title === nextTitle &&
-        current.durationMinutes === nextDuration &&
-        !shouldUpdateParticipants
-      ) {
-        return current;
+      if (!template) {
+        return { ...nextState, kind: 'PERFORMANCE', templateId };
       }
 
       return {
-        ...current,
-        title: nextTitle,
-        durationMinutes: nextDuration,
-        participantIds: shouldUpdateParticipants ? nextParticipantIds : current.participantIds,
+        ...nextState,
+        kind: 'PERFORMANCE',
+        templateId: template.id,
+        title: template.name,
+        durationMinutes: template.durationMinutes,
+        participantIds: templateParticipantIds(template),
       };
-    });
-  }, [composer.kind, selectedTemplate]);
+    },
+    [composer, templatesById],
+  );
+
+  const openComposerAt = useCallback(
+    (baseDate: Date, nextKind?: ComposerKind) => {
+      setActiveSidePanel('compose');
+      setCursorDate(startOfDay(baseDate));
+      setComposer((current) => {
+        const nextBase = {
+          ...current,
+          dateInput: formatDateInput(baseDate),
+          timeInput: formatTimeInput(baseDate),
+          kind: nextKind ?? current.kind,
+        };
+
+        if ((nextKind ?? current.kind) === 'PERFORMANCE' && nextBase.templateId) {
+          return hydrateComposerFromTemplate(nextBase.templateId, nextBase);
+        }
+
+        return nextBase;
+      });
+    },
+    [hydrateComposerFromTemplate],
+  );
 
   useEffect(() => {
-    if (!canManageEvents) {
+    if (!activeOrganizationId) {
       return;
     }
 
-    if (searchParams.get('compose') !== '1') {
+    const composeRequested = searchParams.get('compose') === '1';
+    const templateId = searchParams.get('templateId');
+    const kind = (searchParams.get('kind') as ComposerKind | null) ?? null;
+    const dateInput = searchParams.get('date');
+    const timeInput = searchParams.get('time');
+
+    const composeKey = composeRequested
+      ? `${activeOrganizationId}:${templateId ?? 'none'}:${kind ?? 'none'}:${dateInput ?? 'none'}:${timeInput ?? 'none'}`
+      : null;
+
+    if (!composeRequested) {
+      setHandledComposeKey(null);
       return;
     }
 
-    const composeKey = searchParams.toString();
-
-    if (!composeKey || composeKey === handledComposeKey) {
+    if (!composeKey || handledComposeKey === composeKey) {
       return;
     }
 
-    const requestedKind = searchParams.get('kind');
-    const nextKind: ComposerKind =
-      requestedKind === 'PERFORMANCE' || requestedKind === 'REHEARSAL' || requestedKind === 'EVENT'
-        ? requestedKind
-        : 'EVENT';
+    const baseDate = dateInput && timeInput ? parseDateTimeInput(dateInput, timeInput) : roundToNextHalfHour(new Date());
 
-    const requestedDate = searchParams.get('date');
-    const requestedTime = searchParams.get('time');
-    let baseDate = roundToNextHalfHour(new Date());
-
-    if (requestedDate && requestedTime) {
-      const parsed = parseDateTimeInput(requestedDate, requestedTime);
-
-      if (!Number.isNaN(parsed.getTime())) {
-        baseDate = parsed;
-      }
-    }
-
-    const nextComposer = createInitialComposer(activeOrganizationId, baseDate);
-
-    setComposer({
-      ...nextComposer,
-      kind: nextKind,
-      title: nextKind === 'PERFORMANCE' ? '' : defaultTitleForKind(nextKind),
-      templateId:
-        nextKind === 'PERFORMANCE' ? searchParams.get('templateId')?.trim() ?? nextComposer.templateId : '',
-    });
     setActiveSidePanel('compose');
-    setConflicts(null);
+    setComposer((current) => {
+      let nextState: ComposerState = {
+        ...current,
+        kind: kind ?? current.kind,
+        dateInput: formatDateInput(baseDate),
+        timeInput: formatTimeInput(baseDate),
+      };
+
+      if ((kind ?? current.kind) === 'PERFORMANCE' && templateId) {
+        nextState = hydrateComposerFromTemplate(templateId, nextState);
+      }
+
+      return nextState;
+    });
+
     setHandledComposeKey(composeKey);
 
-    const nextUrl = pathname || '/calendar';
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('compose');
+    params.delete('kind');
+    params.delete('templateId');
+    params.delete('date');
+    params.delete('time');
+    const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     router.replace(nextUrl as Route);
-  }, [activeOrganizationId, canManageEvents, handledComposeKey, pathname, router, searchParams]);
+  }, [activeOrganizationId, handledComposeKey, hydrateComposerFromTemplate, pathname, router, searchParams]);
 
-  const groupedColumns = useMemo(() => {
-    const buckets = new Map<
-      BoardColumnKey,
-      Map<string, LaneSection & { dateValue: number }>
-    >();
-
-    for (const column of boardColumns) {
-      buckets.set(column.key, new Map());
-    }
-
-    for (const event of sortEvents(events)) {
-      const columnKey = getBoardColumnKey(event.type);
-      const columnBucket = buckets.get(columnKey);
-
-      if (!columnBucket) {
-        continue;
-      }
-
-      const sectionKey = toDayKey(event.startsAt);
-      const dayStart = startOfDay(event.startsAt);
-
-      if (!columnBucket.has(sectionKey)) {
-        columnBucket.set(sectionKey, {
-          key: sectionKey,
-          label: sectionDateFormat.format(event.startsAt),
-          items: [],
-          dateValue: dayStart.getTime(),
-        });
-      }
-
-      columnBucket.get(sectionKey)?.items.push(event);
-    }
-
-    return boardColumns.map((column) => {
-      const sections = [...(buckets.get(column.key)?.values() ?? [])]
-        .sort((left, right) => left.dateValue - right.dateValue)
-        .map(({ dateValue: _dateValue, ...section }) => section);
-
-      return {
-        ...column,
-        count: sections.reduce((total, section) => total + section.items.length, 0),
-        sections,
-      };
-    });
-  }, [events]);
-
-  const applyKind = useCallback(
-    (kind: ComposerKind) => {
-      const defaults = loadWorkspaceDefaults(activeOrganizationId);
-
-      setComposer((current) => {
-        if (kind === 'PERFORMANCE') {
-          const fallbackTemplateId =
-            current.templateId || defaults.recentTemplateIds?.[0] || templates[0]?.id || '';
-          const fallbackTemplate =
-            templates.find((template) => template.id === fallbackTemplateId) ?? templates[0] ?? null;
-
-          return {
-            ...current,
-            kind,
-            templateId: fallbackTemplate?.id ?? '',
-            title: fallbackTemplate?.name ?? '',
-            durationMinutes:
-              fallbackTemplate?.durationMinutes ??
-              defaults.lastEventDurationMinutes ??
-              current.durationMinutes,
-            participantIds:
-              fallbackTemplate?.roles.length
-                ? templateParticipantIds(fallbackTemplate)
-                : current.participantIds,
-          };
-        }
-
-        return {
-          ...current,
-          kind,
-          templateId: '',
-          title: defaultTitleForKind(kind),
-          durationMinutes: defaults.lastEventDurationMinutes ?? current.durationMinutes,
-        };
-      });
-
+  useEffect(() => {
+    if (!accessToken || !activeOrganizationId) {
       setConflicts(null);
-      setActiveSidePanel('compose');
-    },
-    [activeOrganizationId, templates],
-  );
+      return;
+    }
 
-  const openComposerForKind = useCallback(
-    (kind: ComposerKind) => {
-      applyKind(kind);
-      setNoticeText(null);
-      setErrorText(null);
-    },
-    [applyKind],
-  );
+    if (composer.participantIds.length === 0) {
+      setConflicts(null);
+      return;
+    }
 
-  const handleTemplateChange = (templateId: string) => {
-    const template = templates.find((item) => item.id === templateId) ?? null;
-    const participantIds = templateParticipantIds(template);
-
-    setComposer((current) => ({
-      ...current,
-      templateId,
-      title: template?.name ?? '',
-      durationMinutes: template?.durationMinutes ?? current.durationMinutes,
-      participantIds: participantIds.length > 0 ? participantIds : current.participantIds,
-    }));
-    setConflicts(null);
-  };
-
-  const handleCursorShift = (direction: 'prev' | 'next') => {
-    setCursorDate((current) => {
-      if (viewMode === 'month') {
-        const next = new Date(current);
-        next.setMonth(current.getMonth() + (direction === 'next' ? 1 : -1), 1);
-        return next;
-      }
-
-      return addDays(current, direction === 'next' ? 7 : -7);
-    });
-  };
-
-  const runConflictCheck = useCallback(
-    async (startsAtIso: string, endsAtIso: string, participantIds: string[]) => {
-      if (!activeOrganizationId || !accessToken || participantIds.length === 0) {
-        setConflicts(null);
-        return null;
-      }
-
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
       setCheckingConflicts(true);
 
       try {
+        const startsAt = parseDateTimeInput(composer.dateInput, composer.timeInput);
         const result = await operationsApi.checkConflicts({
-          accessToken,
           organizationId: activeOrganizationId,
-          startsAt: startsAtIso,
-          endsAt: endsAtIso,
-          participantIds,
+          accessToken,
+          participantIds: composer.participantIds,
+          startsAt: startsAt.toISOString(),
+          endsAt: addMinutes(startsAt, Math.max(15, composer.durationMinutes)).toISOString(),
+          signal: controller.signal,
         });
 
-        setConflicts(result);
-        return result;
-      } catch (error) {
-        setErrorText(error instanceof Error ? error.message : 'Не удалось проверить конфликты.');
-        return null;
+        setConflicts(result.hasConflicts ? result : null);
+      } catch {
+        if (!controller.signal.aborted) {
+          setConflicts(null);
+        }
       } finally {
-        setCheckingConflicts(false);
+        if (!controller.signal.aborted) {
+          setCheckingConflicts(false);
+        }
       }
-    },
-    [accessToken, activeOrganizationId],
-  );
+    }, 260);
 
-  const submitComposer = async (ignoreConflicts = false) => {
-    if (!activeOrganizationId || !accessToken || !canManageEvents) {
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [accessToken, activeOrganizationId, composer.dateInput, composer.durationMinutes, composer.participantIds, composer.timeInput]);
+
+  const replaceEvent = (updatedEvent: CalendarEvent) => {
+    setEvents((current) => current.map((item) => (item.id === updatedEvent.id ? updatedEvent : item)));
+  };
+
+  const persistEvent = async (baseEvent: CalendarEvent, nextEvent: CalendarEvent, successMessage: string) => {
+    if (!accessToken || !activeOrganizationId) {
       return;
     }
+
+    setSaving(true);
+    setErrorText(null);
+
+    replaceEvent(nextEvent);
+
+    try {
+      const updated = await operationsApi.updateEvent({
+        organizationId: activeOrganizationId,
+        accessToken,
+        eventId: baseEvent.id,
+        payload: toUpdatePayload(nextEvent),
+      });
+
+      replaceEvent(mapEventRecordToCalendarEvent(updated));
+      setNoticeText(successMessage);
+    } catch (error) {
+      replaceEvent(baseEvent);
+      setErrorText(error instanceof Error ? error.message : 'Не удалось обновить событие.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const navigate = (direction: -1 | 1) => {
+    setCursorDate((current) => {
+      if (viewMode === 'month') {
+        return new Date(current.getFullYear(), current.getMonth() + direction, 1);
+      }
+
+      return addDays(current, direction * 7);
+    });
+  };
+
+  const handleDropDay = (targetDay: Date) => (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    const eventId = event.dataTransfer.getData('text/calendar-event-id') || draggingEventId;
+
+    if (!eventId) {
+      return;
+    }
+
+    const baseEvent = events.find((item) => item.id === eventId);
+    if (!baseEvent) {
+      return;
+    }
+
+    const nextEvent = moveEventToDay(baseEvent, targetDay);
+    setDraggingEventId(null);
+    void persistEvent(baseEvent, nextEvent, 'Событие перенесено на другой день.');
+  };
+
+  const handleDropWeekSlot = (targetDay: Date, hour: number) => (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    const eventId = event.dataTransfer.getData('text/calendar-event-id') || draggingEventId;
+
+    if (!eventId) {
+      return;
+    }
+
+    const baseEvent = events.find((item) => item.id === eventId);
+    if (!baseEvent) {
+      return;
+    }
+
+    const nextEvent = moveEventToWeekSlot(baseEvent, targetDay, hour);
+    setDraggingEventId(null);
+    void persistEvent(baseEvent, nextEvent, 'Событие перенесено по сетке недели.');
+  };
+
+  const handleKindChange = (nextKind: ComposerKind) => {
+    setComposer((current) => {
+      const nextState: ComposerState = { ...current, kind: nextKind };
+
+      if (nextKind === 'PERFORMANCE' && current.templateId) {
+        return hydrateComposerFromTemplate(current.templateId, nextState);
+      }
+
+      return nextState;
+    });
+    setActiveSidePanel('compose');
+  };
+
+  const handleTemplateChange = (templateId: string) => {
+    setComposer((current) => hydrateComposerFromTemplate(templateId, current));
+  };
+
+  const submitComposer = async (ignoreConflicts = false) => {
+    if (!accessToken || !activeOrganizationId) {
+      return;
+    }
+
+    if (composer.kind === 'PERFORMANCE' && !composer.templateId) {
+      setErrorText('Сначала выберите спектакль из списка.');
+      return;
+    }
+
+    if (composer.kind !== 'PERFORMANCE' && composer.title.trim().length < 2) {
+      setErrorText('Укажите название события.');
+      return;
+    }
+
+    if (conflicts?.hasConflicts && !ignoreConflicts) {
+      setErrorText('Есть конфликты по занятости. Проверьте состав или создайте событие несмотря на предупреждение.');
+      return;
+    }
+
+    const startsAt = parseDateTimeInput(composer.dateInput, composer.timeInput);
+    const durationMinutes = Math.max(15, composer.durationMinutes);
+    const template = composer.templateId ? templatesById.get(composer.templateId) ?? null : null;
+    const trimmedTitle = composer.title.trim();
+    const performanceTitle =
+      template?.name ?? (trimmedTitle.length > 0 ? trimmedTitle : ru.calendar.untitledEvent);
+    const title = composer.kind === 'PERFORMANCE' ? performanceTitle : composer.title.trim();
 
     setSaving(true);
     setErrorText(null);
     setNoticeText(null);
 
     try {
-      if (!composer.dateInput || !composer.timeInput) {
-        throw new Error('Укажите дату и время.');
-      }
-
-      if (composer.kind === 'PERFORMANCE' && !composer.templateId) {
-        throw new Error('Выберите спектакль из списка.');
-      }
-
-      if (composer.kind !== 'PERFORMANCE' && !composer.title.trim()) {
-        throw new Error('Укажите название события.');
-      }
-
-      if (composer.durationMinutes <= 0) {
-        throw new Error('Длительность должна быть больше нуля.');
-      }
-
-      const startsAt = parseDateTimeInput(composer.dateInput, composer.timeInput);
-
-      if (Number.isNaN(startsAt.getTime())) {
-        throw new Error('Проверьте дату и время.');
-      }
-
-      const endsAt = addMinutes(startsAt, composer.durationMinutes);
-      const startsAtIso = startsAt.toISOString();
-      const endsAtIso = endsAt.toISOString();
-
-      if (!ignoreConflicts) {
-        const result = await runConflictCheck(startsAtIso, endsAtIso, composer.participantIds);
-
-        if (result?.hasConflicts) {
-          setNoticeText('Нашли пересечения. Проверьте состав или сохраните несмотря на конфликты.');
-          return;
-        }
-      }
-
-      const payload = {
-        type: composer.kind,
-        title:
-          composer.kind === 'PERFORMANCE'
-            ? selectedTemplate?.name ?? composer.title.trim()
-            : composer.title.trim(),
-        startsAt: startsAtIso,
-        endsAt: endsAtIso,
-        templateId: composer.kind === 'PERFORMANCE' ? composer.templateId : undefined,
-        participants: createParticipantsPayload(
-          composer.kind,
-          composer.participantIds,
-          composer.kind === 'PERFORMANCE' ? selectedTemplate : null,
-        ),
-        ignoreConflicts,
-      };
-
       const created = await operationsApi.createEvent({
-        accessToken,
         organizationId: activeOrganizationId,
-        payload,
+        accessToken,
+        payload: {
+          title,
+          type: composer.kind,
+          status: 'PLANNED',
+          startsAt: startsAt.toISOString(),
+          endsAt: addMinutes(startsAt, durationMinutes).toISOString(),
+          templateId: composer.kind === 'PERFORMANCE' ? composer.templateId || undefined : undefined,
+          ignoreConflicts,
+          participants: composer.participantIds.map((participantId) => ({ participantId })),
+        },
       });
 
-      const createdEvent = mapEventRecordToCalendarEvent(created);
+      const mapped = mapEventRecordToCalendarEvent(created);
+      setEvents((current) => [...current, mapped]);
+      setSelectedEventId(mapped.id);
+      setNoticeText('Событие добавлено в расписание.');
+      const currentDefaults = loadWorkspaceDefaults(activeOrganizationId);
       const defaults = saveWorkspaceDefaults(activeOrganizationId, {
         lastEventType: composer.kind,
-        lastEventDurationMinutes: composer.durationMinutes,
+        lastEventDurationMinutes: durationMinutes,
         recentParticipantIds: composer.participantIds,
         recentTemplateIds:
-          composer.kind === 'PERFORMANCE'
-            ? pushRecentId(recentTemplateIds, composer.templateId)
-            : recentTemplateIds,
+          composer.kind === 'PERFORMANCE' && composer.templateId
+            ? pushRecentId(currentDefaults.recentTemplateIds, composer.templateId)
+            : currentDefaults.recentTemplateIds,
       });
 
-      setEvents((current) => sortEvents([...current, createdEvent]));
-      setRecentParticipantIds(defaults.recentParticipantIds ?? []);
-      setRecentTemplateIds(defaults.recentTemplateIds ?? []);
-      setSelectedEventId(created.id);
-      setConflicts(null);
-      setNoticeText(
-        composer.kind === 'PERFORMANCE'
-          ? 'Спектакль добавлен в расписание.'
-          : 'Событие добавлено в расписание.',
-      );
-
-      const nextBaseDate = addMinutes(startsAt, composer.durationMinutes);
-      const nextComposer = createInitialComposer(activeOrganizationId, roundToNextHalfHour(nextBaseDate));
-      setComposer({
-        ...nextComposer,
-        kind: composer.kind,
-        title: composer.kind === 'PERFORMANCE' ? '' : defaultTitleForKind(composer.kind),
-        templateId: composer.kind === 'PERFORMANCE' ? composer.templateId : '',
+      const nextStart = addMinutes(startsAt, durationMinutes);
+      setComposer((current) => ({
+        ...current,
+        dateInput: formatDateInput(nextStart),
+        timeInput: formatTimeInput(nextStart),
+        title: current.kind === 'PERFORMANCE' ? current.title : '',
         participantIds:
-          composer.kind === 'PERFORMANCE'
-            ? composer.participantIds
-            : defaults.recentParticipantIds ?? [],
-        durationMinutes:
-          composer.kind === 'PERFORMANCE'
-            ? composer.durationMinutes
-            : defaults.lastEventDurationMinutes ?? nextComposer.durationMinutes,
-      });
+          current.kind === 'PERFORMANCE' && current.templateId
+            ? templateParticipantIds(template)
+            : defaults.recentParticipantIds ?? current.participantIds,
+      }));
+      setConflicts(null);
     } catch (error) {
-      setErrorText(error instanceof Error ? error.message : 'Не удалось сохранить событие.');
+      setErrorText(error instanceof Error ? error.message : 'Не удалось добавить событие.');
     } finally {
       setSaving(false);
     }
   };
 
-  const recentParticipants = useMemo(
-    () =>
-      recentParticipantIds
-        .map((participantId) => participants.find((participant) => participant.id === participantId))
-        .filter((participant): participant is ParticipantRecord => Boolean(participant)),
-    [participants, recentParticipantIds],
+  const renderEventChip = (event: CalendarEvent) => (
+    <button
+      key={event.id}
+      className={`event-chip type-${event.type.toLowerCase()}${selectedEventId === event.id ? ' is-selected' : ''}`}
+      draggable
+      onDragStart={(dragEvent) => {
+        dragEvent.dataTransfer.setData('text/calendar-event-id', event.id);
+        dragEvent.dataTransfer.effectAllowed = 'move';
+        setDraggingEventId(event.id);
+      }}
+      onDragEnd={() => setDraggingEventId(null)}
+      onClick={(clickEvent) => {
+        clickEvent.stopPropagation();
+        setSelectedEventId(event.id);
+      }}
+      type="button"
+    >
+      <span className="chip-time">{timeFormat.format(event.startsAt)}</span>
+      <span className="chip-title">{event.title}</span>
+      <span className="chip-meta">{eventTypeLabels[event.type]} · {event.durationMinutes} {ru.calendar.minuteShort}</span>
+    </button>
   );
 
-  if (!activeOrganizationId) {
+  if (!activeOrganizationId || !accessToken) {
     return (
       <section className="app-page">
-        <div className="feature-page-header">
-          <div className="feature-page-header__copy">
-            <p className="feature-page-header__eyebrow">Календарь</p>
-            <h1>Расписание организации</h1>
-            <p className="feature-page-header__description">
-              Сначала нужен активный membership в организации.
-            </p>
-          </div>
+        <div className="calendar-shell">
+          <header className="calendar-header">
+            <div>
+              <p className="kicker">{ru.calendar.liveKicker}</p>
+              <h1>{ru.calendar.title}</h1>
+            </div>
+          </header>
+          <WorkspaceOrgEmpty />
         </div>
-        <WorkspaceOrgEmpty />
       </section>
     );
   }
 
   return (
-    <section className="app-page">
-      <div className="calendar-page">
-        <div className="calendar-shell calendar-shell--premium">
-          <header className="calendar-header">
-            <div>
-              <p className="kicker">Календарь</p>
-              <h1>Расписание без лишних шагов</h1>
-              <p className="period-label">
-                Теперь экран собран по колонкам: спектакли, репетиции и прочие мероприятия.
-              </p>
-            </div>
-
-            <div className="toolbar">
-              <div className="segmented">
-                <button
-                  type="button"
-                  className={viewMode === 'week' ? 'active' : undefined}
-                  onClick={() => setViewMode('week')}
-                >
-                  Неделя
-                </button>
-                <button
-                  type="button"
-                  className={viewMode === 'month' ? 'active' : undefined}
-                  onClick={() => setViewMode('month')}
-                >
-                  Месяц
-                </button>
-              </div>
-
-              <div className="nav-controls">
-                <button type="button" onClick={() => handleCursorShift('prev')}>
-                  Назад
-                </button>
-                <button type="button" onClick={() => setCursorDate(new Date())}>
-                  Сегодня
-                </button>
-                <button type="button" onClick={() => handleCursorShift('next')}>
-                  Вперед
-                </button>
-              </div>
-            </div>
-          </header>
-
-          <div className="calendar-board-toolbar">
-            <div className="calendar-board-toolbar__period">
-              <strong>{periodLabel}</strong>
-              <span>Вся информация остается на одном экране, без сетки с внутренним скроллом.</span>
-            </div>
-
-            {canManageEvents ? (
-              <Button type="button" onClick={() => openComposerForKind('EVENT')}>
-                Добавить событие
-              </Button>
-            ) : null}
+    <main className="calendar-page">
+      <section className="calendar-shell calendar-shell--premium">
+        <header className="calendar-header">
+          <div>
+            <p className="kicker">{ru.calendar.liveKicker}</p>
+            <h1>{ru.calendar.title}</h1>
+            <p className="period-label">{periodLabel}</p>
           </div>
 
-          {errorText && !loading ? <p className="finance-error">{errorText}</p> : null}
+          <div className="toolbar">
+            <div className="segmented">
+              <button className={viewMode === 'week' ? 'active' : ''} onClick={() => setViewMode('week')} type="button">
+                {ru.calendar.views.week}
+              </button>
+              <button className={viewMode === 'month' ? 'active' : ''} onClick={() => setViewMode('month')} type="button">
+                {ru.calendar.views.month}
+              </button>
+            </div>
 
-          {loading ? (
-            <div className="calendar-board">
-              {boardColumns.map((column) => (
-                <article key={column.key} className="calendar-lane">
-                  <div className="calendar-lane__header">
-                    <div className="ui-skeleton" style={{ height: 22, width: '55%' }} />
-                    <div className="ui-skeleton" style={{ height: 14, width: '78%' }} />
-                  </div>
-                  <div className="calendar-lane__sections">
-                    <div className="ui-skeleton" style={{ height: 98 }} />
-                    <div className="ui-skeleton" style={{ height: 98 }} />
-                  </div>
-                </article>
+            <div className="nav-controls">
+              <button onClick={() => navigate(-1)} type="button">{ru.calendar.navigation.previous}</button>
+              <button onClick={() => setCursorDate(startOfDay(new Date()))} type="button">{ru.calendar.navigation.today}</button>
+              <button onClick={() => navigate(1)} type="button">{ru.calendar.navigation.next}</button>
+            </div>
+
+            <Button type="button" onClick={() => openComposerAt(roundToNextHalfHour(new Date()))}>
+              {ru.calendar.quickEvent}
+            </Button>
+          </div>
+        </header>
+
+        {noticeText ? <p className="finance-notice">{noticeText}</p> : null}
+        {errorText ? <p className="finance-error">{errorText}</p> : null}
+        {loading ? <p className="empty-state">Загружаем расписание организации...</p> : null}
+
+        {!loading && viewMode === 'month' ? (
+          <section className="month-view">
+            <div className="month-weekday-row">
+              {weekDayLabels.map((day) => <div key={day}>{day}</div>)}
+            </div>
+
+            <div className="month-grid">
+              {monthDays.map((day) => {
+                const key = toDayKey(day);
+                const items = monthEventMap.get(key) ?? [];
+                const isOutside = day.getMonth() !== cursorDate.getMonth();
+                const isToday = isSameDay(day, new Date());
+
+                return (
+                  <article
+                    key={key}
+                    className={`month-cell${isOutside ? ' outside' : ''}${isToday ? ' today' : ''}`}
+                    onClick={() => openComposerAt(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 19, 0), composer.kind)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={handleDropDay(day)}
+                  >
+                    <div className="month-cell-header">
+                      <span>{day.getDate()}</span>
+                      {isToday ? <small>{ru.calendar.todayBadge}</small> : null}
+                    </div>
+                    <div className="month-events">
+                      {items.slice(0, 3).map((item) => renderEventChip(item))}
+                      {items.length > 3 ? <p className="more-events">{ru.calendar.moreEvents(items.length - 3)}</p> : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {!loading && viewMode === 'week' ? (
+          <section className="week-view">
+            <div className="week-grid-head">
+              <div className="time-col-label">{ru.calendar.timeColumn}</div>
+              {weekDays.map((day) => (
+                <div key={toDayKey(day)} className={isSameDay(day, new Date()) ? 'today' : ''}>
+                  <strong>{weekdayLongFormat.format(day)}</strong>
+                </div>
               ))}
             </div>
-          ) : (
-            <div className="calendar-board">
-              {groupedColumns.map((column) => (
-                <article key={column.key} className={`calendar-lane calendar-lane--${column.key.toLowerCase()}`}>
-                  <div className="calendar-lane__header">
-                    <div className="calendar-lane__header-row">
-                      <div>
-                        <h2>{column.title}</h2>
-                        <p>{column.description}</p>
-                      </div>
-                      <span className="calendar-lane__count">{column.count}</span>
-                    </div>
 
-                    {canManageEvents ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openComposerForKind(column.composeKind)}
+            <div className="week-grid-body">
+              {weekHours.map((hour) => (
+                <div key={hour} className="hour-row">
+                  <div className="hour-label">{String(hour).padStart(2, '0')}:00</div>
+
+                  {weekDays.map((day) => {
+                    const slotEvents = sortedEvents.filter(
+                      (item) => isSameDay(item.startsAt, day) && item.startsAt.getHours() === hour,
+                    );
+
+                    return (
+                      <div
+                        key={`${toDayKey(day)}-${hour}`}
+                        className="hour-slot"
+                        onClick={() => {
+                          const slotDate = new Date(day);
+                          slotDate.setHours(hour, 0, 0, 0);
+                          openComposerAt(slotDate, composer.kind);
+                        }}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={handleDropWeekSlot(day, hour)}
                       >
-                        Добавить
-                      </Button>
-                    ) : null}
-                  </div>
-
-                  {column.sections.length === 0 ? (
-                    <div className="calendar-lane__empty">
-                      <strong>Пока пусто</strong>
-                      <p>
-                        {column.key === 'PERFORMANCE'
-                          ? 'Новый спектакль появится здесь после добавления в расписание.'
-                          : column.key === 'REHEARSAL'
-                            ? 'Добавьте первую репетицию и она сразу появится в этой колонке.'
-                            : 'Прочие мероприятия будут собираться в этой колонке.'}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="calendar-lane__sections">
-                      {column.sections.map((section) => (
-                        <section key={section.key} className="calendar-lane__section">
-                          <header className="calendar-lane__section-head">
-                            <strong>{section.label}</strong>
-                            <span>{section.items.length}</span>
-                          </header>
-
-                          <div className="calendar-lane__cards">
-                            {section.items.map((event) => (
-                              <button
-                                key={event.id}
-                                type="button"
-                                className={[
-                                  'schedule-card',
-                                  `schedule-card--${getBoardColumnKey(event.type).toLowerCase()}`,
-                                  selectedEventId === event.id ? 'is-selected' : '',
-                                  event.status === 'CANCELLED' ? 'is-cancelled' : '',
-                                ]
-                                  .filter(Boolean)
-                                  .join(' ')}
-                                onClick={() => {
-                                  setSelectedEventId(event.id);
-                                  setActiveSidePanel('chat');
-                                }}
-                              >
-                                <div className="schedule-card__top">
-                                  <span className="schedule-card__type">{eventTypeLabels[event.type]}</span>
-                                  <span className="schedule-card__time">
-                                    {eventTimeFormat.format(event.startsAt)}
-                                  </span>
-                                </div>
-
-                                <div className="schedule-card__copy">
-                                  <strong>{event.title}</strong>
-                                  <p>
-                                    {eventDateTimeFormat.format(event.startsAt)} · {event.durationMinutes} мин
-                                  </p>
-                                </div>
-
-                                <div className="schedule-card__meta">
-                                  <span>
-                                    {event.participants.length > 0
-                                      ? `${event.participants.length} в составе`
-                                      : 'Состав не указан'}
-                                  </span>
-                                  {event.location ? <span>{event.location}</span> : null}
-                                  {event.status !== 'PLANNED' ? <span>{event.status}</span> : null}
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </section>
-                      ))}
-                    </div>
-                  )}
-                </article>
+                        {slotEvents.map((item) => renderEventChip(item))}
+                      </div>
+                    );
+                  })}
+                </div>
               ))}
             </div>
-          )}
+          </section>
+        ) : null}
+      </section>
+
+      <aside className="side-stack">
+        <div className="side-tabs side-tabs--premium">
+          <button type="button" className={activeSidePanel === 'compose' ? 'is-active' : ''} onClick={() => setActiveSidePanel('compose')}>
+            Добавить
+          </button>
+          <button type="button" className={activeSidePanel === 'chat' ? 'is-active' : ''} onClick={() => setActiveSidePanel('chat')}>
+            Чат
+          </button>
+          <button type="button" className={activeSidePanel === 'finance' ? 'is-active' : ''} onClick={() => setActiveSidePanel('finance')}>
+            Баллы
+          </button>
         </div>
 
-        <div className="side-stack">
-          <div className="side-tabs side-tabs--premium">
-            <button
-              type="button"
-              className={activeSidePanel === 'compose' ? 'is-active' : undefined}
-              onClick={() => setActiveSidePanel('compose')}
-            >
-              Добавить
-            </button>
-            <button
-              type="button"
-              className={activeSidePanel === 'chat' ? 'is-active' : undefined}
-              onClick={() => setActiveSidePanel('chat')}
-            >
-              Чат
-            </button>
-            <button
-              type="button"
-              className={activeSidePanel === 'finance' ? 'is-active' : undefined}
-              onClick={() => setActiveSidePanel('finance')}
-            >
-              Баллы
-            </button>
-          </div>
-
-          {activeSidePanel === 'compose' ? (
-            <aside className="quick-panel composer-panel">
-              <div className="composer-panel__header">
-                <div>
-                  <h2>Добавить в расписание</h2>
-                  <p>Оставили только базовый сценарий: выбрать тип, время и сохранить.</p>
-                </div>
-                {!canManageEvents ? (
-                  <div className="composer-panel__hint">У вас доступ только на просмотр расписания.</div>
-                ) : (
-                  <div className="composer-panel__hint">{kindDescriptions[composer.kind]}</div>
-                )}
+        {activeSidePanel === 'compose' ? (
+          <section className="composer-panel quick-panel">
+            <div className="composer-panel__header">
+              <div>
+                <h2>{ru.calendar.composer.title}</h2>
+                <p>{ru.calendar.composer.description}</p>
               </div>
+              <span className="composer-panel__hint">{ru.calendar.composer.helpers.slotHint}</span>
+            </div>
 
-              <div className="composer-kind-switcher">
-                {(['PERFORMANCE', 'REHEARSAL', 'EVENT'] as ComposerKind[]).map((kind) => (
+            <div className="composer-kind-switcher">
+              {(['PERFORMANCE', 'REHEARSAL', 'EVENT'] as const).map((kind) => (
+                <button key={kind} type="button" className={composer.kind === kind ? 'is-active' : ''} onClick={() => handleKindChange(kind)}>
+                  <strong>{kindLabels[kind]}</strong>
+                  <span>
+                    {kind === 'PERFORMANCE'
+                      ? 'Из готового шаблона'
+                      : kind === 'REHEARSAL'
+                        ? 'Название и состав'
+                        : 'Свободный формат'}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {selectedEvent ? (
+              <div className="calendar-selected-note">
+                <strong>Выбрано событие: {selectedEvent.title}</strong>
+                <span>{timeFormat.format(selectedEvent.startsAt)} · {eventTypeLabels[selectedEvent.type]}</span>
+              </div>
+            ) : null}
+
+            {composer.kind === 'PERFORMANCE' ? (
+              <Select
+                label={ru.calendar.composer.fields.template}
+                value={composer.templateId}
+                onChange={(event) => handleTemplateChange(event.target.value)}
+                hint={ru.calendar.composer.helpers.performance}
+              >
+                <option value="">Выберите спектакль</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name} · {template.durationMinutes} мин
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <Input
+                label={ru.calendar.composer.fields.title}
+                value={composer.title}
+                onChange={(event) => setComposer((current) => ({ ...current, title: event.target.value }))}
+                placeholder={composer.kind === 'REHEARSAL' ? 'Репетиция состава' : 'Встреча, сбор, мастер-класс'}
+              />
+            )}
+
+            {composer.kind === 'PERFORMANCE' && selectedTemplate ? (
+              <div className="composer-template-preview">
+                <strong>{selectedTemplate.name}</strong>
+                <span>{selectedTemplate.durationMinutes} мин · {templateParticipantIds(selectedTemplate).length} участников</span>
+              </div>
+            ) : null}
+
+            {composer.kind === 'PERFORMANCE' && templates.length === 0 ? (
+              <div className="resource-empty-inline">
+                <strong>Спектаклей пока нет</strong>
+                <p>{ru.calendar.composer.helpers.emptyTemplate}</p>
+              </div>
+            ) : null}
+
+            <div className="resource-form-grid resource-form-grid--double">
+              <Input
+                label={ru.calendar.composer.fields.date}
+                type="date"
+                value={composer.dateInput}
+                onChange={(event) => setComposer((current) => ({ ...current, dateInput: event.target.value }))}
+              />
+              <Input
+                label={ru.calendar.composer.fields.time}
+                type="time"
+                value={composer.timeInput}
+                onChange={(event) => setComposer((current) => ({ ...current, timeInput: event.target.value }))}
+              />
+            </div>
+
+            <div className="modal-form-section">
+              <span className="quick-choice-label">{ru.calendar.composer.defaults.duration}</span>
+              <div className="quick-choice-row quick-choice-row--wide">
+                {durationPresets.map((duration) => (
                   <button
-                    key={kind}
+                    key={duration}
                     type="button"
-                    className={composer.kind === kind ? 'is-active' : undefined}
-                    onClick={() => applyKind(kind)}
-                    disabled={!canManageEvents}
+                    className={`quick-choice-chip${composer.durationMinutes === duration ? ' is-active' : ''}`}
+                    onClick={() => setComposer((current) => ({ ...current, durationMinutes: duration }))}
                   >
-                    <strong>{kindLabels[kind]}</strong>
-                    <span>{kindDescriptions[kind]}</span>
+                    {duration} мин
                   </button>
                 ))}
               </div>
+            </div>
 
-              {selectedEvent ? (
-                <div className="calendar-selected-note">
-                  <strong>Выбрано в расписании</strong>
-                  <span>
-                    {selectedEvent.title} · {eventDateTimeFormat.format(selectedEvent.startsAt)}
-                  </span>
+            <Input
+              label={ru.calendar.composer.fields.duration}
+              min={15}
+              step={15}
+              type="number"
+              value={String(composer.durationMinutes)}
+              onChange={(event) =>
+                setComposer((current) => ({
+                  ...current,
+                  durationMinutes: Math.max(15, Number(event.target.value) || 15),
+                }))
+              }
+            />
+
+            {recentTemplateCards.length > 0 && composer.kind === 'PERFORMANCE' ? (
+              <div className="composer-chip-group">
+                <span className="quick-choice-label">{ru.calendar.composer.defaults.recentTemplates}</span>
+                <div className="quick-choice-row quick-choice-row--wide">
+                  {recentTemplateCards.map((template) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      className={`quick-choice-chip${composer.templateId === template.id ? ' is-active' : ''}`}
+                      onClick={() => handleTemplateChange(template.id)}
+                    >
+                      {template.name}
+                    </button>
+                  ))}
                 </div>
-              ) : null}
-
-              {composer.kind === 'PERFORMANCE' ? (
-                <>
-                  <Select
-                    label="Спектакль"
-                    value={composer.templateId}
-                    onChange={(event) => handleTemplateChange(event.target.value)}
-                    disabled={!canManageEvents}
-                  >
-                    <option value="">Выберите спектакль</option>
-                    {templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name} · {template.durationMinutes} мин
-                      </option>
-                    ))}
-                  </Select>
-
-                  {selectedTemplate ? (
-                    <div className="composer-template-preview">
-                      <strong>{selectedTemplate.name}</strong>
-                      <span>
-                        Длительность {selectedTemplate.durationMinutes} мин · ролей{' '}
-                        {selectedTemplate.roles.length}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="calendar-selected-note">
-                      <strong>Нет выбранного спектакля</strong>
-                      <span>Сначала выберите готовый шаблон из организации.</span>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <Input
-                  label="Название"
-                  value={composer.title}
-                  onChange={(event) => {
-                    setComposer((current) => ({ ...current, title: event.target.value }));
-                    setConflicts(null);
-                  }}
-                  disabled={!canManageEvents}
-                  placeholder="Например, генеральная репетиция"
-                />
-              )}
-
-              <div className="resource-form-grid resource-form-grid--double">
-                <Input
-                  label="Дата"
-                  type="date"
-                  value={composer.dateInput}
-                  onChange={(event) => {
-                    setComposer((current) => ({ ...current, dateInput: event.target.value }));
-                    setConflicts(null);
-                  }}
-                  disabled={!canManageEvents}
-                />
-                <Input
-                  label="Время"
-                  type="time"
-                  value={composer.timeInput}
-                  onChange={(event) => {
-                    setComposer((current) => ({ ...current, timeInput: event.target.value }));
-                    setConflicts(null);
-                  }}
-                  disabled={!canManageEvents}
-                />
               </div>
+            ) : null}
 
-              <Input
-                label="Длительность, минут"
-                type="number"
-                min={15}
-                step={15}
-                value={String(composer.durationMinutes)}
-                onChange={(event) => {
-                  const nextValue = Number(event.target.value);
-
-                  setComposer((current) => ({
-                    ...current,
-                    durationMinutes: Number.isFinite(nextValue) && nextValue > 0 ? nextValue : 0,
-                  }));
-                  setConflicts(null);
-                }}
-                disabled={!canManageEvents || composer.kind === 'PERFORMANCE'}
-                hint={
-                  composer.kind === 'PERFORMANCE'
-                    ? 'Для спектакля длительность берется из выбранного шаблона.'
-                    : undefined
-                }
-              />
-
-              {composer.kind === 'PERFORMANCE' && recentTemplateIds.length > 0 ? (
-                <div className="resource-inline-actions">
-                  <span className="table-muted-copy">Недавние спектакли</span>
-                  <div className="quick-choice-row quick-choice-row--wide">
-                    {recentTemplateIds
-                      .map((templateId) => templates.find((template) => template.id === templateId))
-                      .filter((template): template is TemplateRecord => Boolean(template))
-                      .map((template) => (
-                        <button
-                          key={template.id}
-                          type="button"
-                          className="quick-choice-chip"
-                          onClick={() => handleTemplateChange(template.id)}
-                          disabled={!canManageEvents}
-                        >
-                          {template.name}
-                        </button>
-                      ))}
-                  </div>
+            {recentParticipants.length > 0 ? (
+              <div className="composer-chip-group">
+                <span className="quick-choice-label">{ru.calendar.composer.defaults.recentParticipants}</span>
+                <div className="quick-choice-row quick-choice-row--wide">
+                  {recentParticipants.map((participant) => {
+                    const active = composer.participantIds.includes(participant.id);
+                    return (
+                      <button
+                        key={participant.id}
+                        type="button"
+                        className={`quick-choice-chip${active ? ' is-active' : ''}`}
+                        onClick={() =>
+                          setComposer((current) => ({
+                            ...current,
+                            participantIds: active
+                              ? current.participantIds.filter((item) => item !== participant.id)
+                              : uniqueIds([...current.participantIds, participant.id]),
+                          }))
+                        }
+                      >
+                        {participantDisplayName(participant)}
+                      </button>
+                    );
+                  })}
                 </div>
-              ) : null}
+              </div>
+            ) : null}
 
-              {recentParticipants.length > 0 ? (
-                <div className="resource-inline-actions">
-                  <span className="table-muted-copy">Недавние участники</span>
-                  <div className="quick-choice-row quick-choice-row--wide">
-                    {recentParticipants.map((participant) => {
-                      const isSelected = composer.participantIds.includes(participant.id);
+            <ParticipantPicker
+              participants={participants}
+              recentIds={recentDefaults.recentParticipantIds ?? []}
+              value={composer.participantIds}
+              onChange={(value) => setComposer((current) => ({ ...current, participantIds: value }))}
+            />
 
-                      return (
-                        <button
-                          key={participant.id}
-                          type="button"
-                          className={['quick-choice-chip', isSelected ? 'is-active' : '']
-                            .filter(Boolean)
-                            .join(' ')}
-                          onClick={() => {
-                            setComposer((current) => ({
-                              ...current,
-                              participantIds: isSelected
-                                ? current.participantIds.filter((participantId) => participantId !== participant.id)
-                                : uniqueIds([...current.participantIds, participant.id]),
-                            }));
-                            setConflicts(null);
-                          }}
-                          disabled={!canManageEvents}
-                        >
-                          {participantDisplayName(participant)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
+            {checkingConflicts ? <p className="empty-state">Проверяем пересечения по занятости...</p> : null}
+            {conflicts?.hasConflicts ? (
+              <div className="composer-conflict-card">
+                <strong>{ru.calendar.composer.conflictTitle}</strong>
+                <p>{conflicts.summary.conflictedParticipants} участников пересекаются с другим расписанием.</p>
+              </div>
+            ) : null}
 
-              <ParticipantPicker
-                participants={participants}
-                recentIds={recentParticipantIds}
-                value={composer.participantIds}
-                onChange={(participantIds) => {
-                  setComposer((current) => ({ ...current, participantIds }));
-                  setConflicts(null);
-                }}
-              />
-
+            <div className="composer-panel__actions">
+              <Button type="button" fullWidth onClick={() => void submitComposer()} loading={saving}>
+                {ru.calendar.composer.actions.submit}
+              </Button>
               {conflicts?.hasConflicts ? (
-                <div className="composer-conflict-card">
-                  <strong>Есть пересечения</strong>
-                  <span>
-                    Конфликтов по людям: {conflicts.summary.conflictedParticipants}, пересечений по
-                    событиям: {conflicts.summary.eventConflicts}.
-                  </span>
-                  {conflicts.suggestion ? <span>{conflicts.suggestion}</span> : null}
-                </div>
-              ) : null}
-
-              <div className="composer-panel__actions">
-                <Button
-                  type="button"
-                  loading={saving || checkingConflicts}
-                  disabled={!canManageEvents}
-                  onClick={() => void submitComposer(false)}
-                >
-                  {composer.kind === 'PERFORMANCE' ? 'Добавить спектакль' : 'Сохранить в календарь'}
+                <Button type="button" variant="ghost" fullWidth onClick={() => void submitComposer(true)} loading={saving}>
+                  {ru.calendar.composer.actions.forceSubmit}
                 </Button>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
-                {conflicts?.hasConflicts ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={!canManageEvents || saving}
-                    onClick={() => void submitComposer(true)}
-                  >
-                    Создать несмотря на конфликты
-                  </Button>
-                ) : null}
-              </div>
-            </aside>
-          ) : null}
+        {activeSidePanel === 'finance' ? (
+          <LazyPointsIncomePanel organizationId={activeOrganizationId} accessToken={accessToken} lockWorkspace />
+        ) : null}
 
-          {activeSidePanel === 'chat' ? (
-            <LazyChatPanel
-              organizationId={activeOrganizationId}
-              accessToken={accessToken}
-              defaultScope={selectedEvent ? 'EVENT' : 'ORGANIZATION'}
-              defaultEventId={selectedEvent?.id ?? null}
-              lockWorkspace
-            />
-          ) : null}
-
-          {activeSidePanel === 'finance' ? (
-            <LazyPointsIncomePanel
-              organizationId={activeOrganizationId}
-              accessToken={accessToken}
-              lockWorkspace
-            />
-          ) : null}
-        </div>
-      </div>
-    </section>
+        {activeSidePanel === 'chat' ? (
+          <LazyChatPanel
+            organizationId={activeOrganizationId}
+            accessToken={accessToken}
+            defaultEventId={selectedEventId}
+            defaultScope={selectedEventId ? 'EVENT' : 'ORGANIZATION'}
+            lockWorkspace
+          />
+        ) : null}
+      </aside>
+    </main>
   );
 }
+
+

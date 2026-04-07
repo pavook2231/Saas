@@ -3099,6 +3099,80 @@ textarea.ui-field {
   gap: 12px;
 }
 
+.calendar-simple__utility-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.calendar-simple__details-card .ui-card__header,
+.calendar-simple__details-card .ui-card__content {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+.calendar-page--compact .calendar-simple__header h1 {
+  font-size: clamp(1.55rem, 2.4vw, 2rem);
+}
+
+.calendar-page--compact .calendar-simple__actions {
+  gap: 8px;
+}
+
+.calendar-page--compact .calendar-simple__filters {
+  gap: 10px;
+}
+
+.calendar-page--compact .calendar-simple__utility-grid {
+  gap: 12px;
+}
+
+.calendar-page--compact .period-label {
+  font-size: 0.8rem;
+}
+
+.calendar-page--compact .month-view {
+  gap: 8px;
+}
+
+.calendar-page--compact .month-cell {
+  min-height: 96px;
+  padding: 6px;
+}
+
+.calendar-page--compact .month-events {
+  gap: 4px;
+}
+
+.calendar-page--compact .week-grid-body {
+  max-height: 52vh;
+}
+
+.calendar-page--compact .hour-row {
+  min-height: 60px;
+}
+
+.calendar-page--compact .hour-slot {
+  padding: 4px;
+  gap: 4px;
+}
+
+.calendar-page--compact .event-chip {
+  padding: 6px 8px;
+  gap: 2px;
+}
+
+.calendar-page--compact .chip-time,
+.calendar-page--compact .chip-meta {
+  font-size: 0.68rem;
+}
+
+.calendar-page--compact .chip-title {
+  font-size: 0.79rem;
+  line-height: 1.18;
+}
+
 @media (max-width: 1240px) {
   .page-grid--four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-action-grid,
@@ -3135,6 +3209,10 @@ textarea.ui-field {
   .calendar-simple__header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .calendar-simple__utility-grid {
+    grid-template-columns: 1fr;
   }
 
   .calendar-simple__actions,

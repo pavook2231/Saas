@@ -73,6 +73,7 @@ export function ControlScheduleWorkspace() {
   const [form, setForm] = useState<ScheduleFormState>(initialFormState);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [processingEventId, setProcessingEventId] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -233,6 +234,67 @@ export function ControlScheduleWorkspace() {
     }
   };
 
+  const handleCancelEvent = async (event: EventRecord) => {
+    if (!accessToken || !activeOrganizationId) {
+      return;
+    }
+
+    if (!window.confirm(`Отменить событие «${event.title}»?`)) {
+      return;
+    }
+
+    setProcessingEventId(event.id);
+    setNoticeText(null);
+    setErrorText(null);
+
+    try {
+      const updated = await operationsApi.updateEvent({
+        organizationId: activeOrganizationId,
+        accessToken,
+        eventId: event.id,
+        payload: {
+          status: 'CANCELLED',
+        },
+      });
+
+      setEvents((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setNoticeText(`Событие «${event.title}» отменено.`);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось отменить событие.');
+    } finally {
+      setProcessingEventId(null);
+    }
+  };
+
+  const handleDeleteEvent = async (event: EventRecord) => {
+    if (!accessToken || !activeOrganizationId) {
+      return;
+    }
+
+    if (!window.confirm(`Удалить событие «${event.title}» из расписания?`)) {
+      return;
+    }
+
+    setProcessingEventId(event.id);
+    setNoticeText(null);
+    setErrorText(null);
+
+    try {
+      await operationsApi.deleteEvent({
+        organizationId: activeOrganizationId,
+        accessToken,
+        eventId: event.id,
+      });
+
+      setEvents((current) => current.filter((item) => item.id !== event.id));
+      setNoticeText(`Событие «${event.title}» удалено из расписания.`);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось удалить событие.');
+    } finally {
+      setProcessingEventId(null);
+    }
+  };
+
   return (
     <ManagementShell title="Составить расписание" description="Создание спектаклей, репетиций, сборов и других событий.">
       {noticeText ? <p className="finance-notice">{noticeText}</p> : null}
@@ -345,7 +407,7 @@ export function ControlScheduleWorkspace() {
                 <p>Первое событие появится здесь сразу после сохранения.</p>
               </div>
             ) : (
-              <div className="resource-card__list">
+            <div className="resource-card__list">
                 {events.slice(0, 12).map((event) => {
                   const venue = venueOptions.includes(event.location as VenueName)
                     ? (event.location as VenueName)
@@ -367,6 +429,29 @@ export function ControlScheduleWorkspace() {
                         <Badge variant="neutral">
                           {event.type === 'PERFORMANCE' ? 'Спектакль' : event.type === 'REHEARSAL' ? 'Репетиция' : 'Событие'}
                         </Badge>
+                        <Badge variant={event.status === 'CANCELLED' ? 'warning' : 'neutral'}>
+                          {event.status === 'CANCELLED' ? 'Отменено' : 'Активно'}
+                        </Badge>
+                        {event.status !== 'CANCELLED' ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void handleCancelEvent(event)}
+                            loading={processingEventId === event.id}
+                          >
+                            Отменить
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => void handleDeleteEvent(event)}
+                          loading={processingEventId === event.id}
+                        >
+                          Удалить
+                        </Button>
                       </div>
                     </div>
                   );

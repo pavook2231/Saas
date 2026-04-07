@@ -205,7 +205,7 @@ export function CalendarWorkspace() {
       <button
         key={event.id}
         type="button"
-        className={`event-chip type-${event.type.toLowerCase()}${selectedEventId === event.id ? ' is-selected' : ''}`}
+        className={`event-chip type-${event.type.toLowerCase()}${selectedEventId === event.id ? ' is-selected' : ''}${event.status === 'CANCELLED' ? ' status-cancelled' : ''}`}
         onClick={() => setSelectedEventId(event.id)}
       >
         <span className="chip-time">{timeFormat.format(new Date(event.startsAt))}</span>
@@ -234,7 +234,7 @@ export function CalendarWorkspace() {
   }
 
   return (
-    <section className="app-page">
+    <section className="app-page calendar-page--compact">
       <div className="calendar-simple__header">
         <div>
           <p className="kicker">Календарь</p>
@@ -263,22 +263,68 @@ export function CalendarWorkspace() {
         </div>
       </div>
 
-      <Card>
-        <CardContent className="calendar-simple__filters">
-          <Input
-            label="Поиск по спектаклю"
-            value={playFilter}
-            onChange={(event) => setPlayFilter(event.target.value)}
-            placeholder="Название спектакля или события"
-          />
-          <Input
-            label="Поиск по участнику"
-            value={participantFilter}
-            onChange={(event) => setParticipantFilter(event.target.value)}
-            placeholder="Имя участника"
-          />
-        </CardContent>
-      </Card>
+      <div className="calendar-simple__utility-grid">
+        <Card>
+          <CardContent className="calendar-simple__filters">
+            <Input
+              label="Поиск по спектаклю"
+              value={playFilter}
+              onChange={(event) => setPlayFilter(event.target.value)}
+              placeholder="Название спектакля или события"
+            />
+            <Input
+              label="Поиск по участнику"
+              value={participantFilter}
+              onChange={(event) => setParticipantFilter(event.target.value)}
+              placeholder="Имя участника"
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="calendar-simple__details-card">
+          <CardHeader>
+            <CardTitle>Событие</CardTitle>
+            <CardDescription>Короткая карточка выбранного события.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!selectedEvent ? (
+              <div className="resource-empty-inline">
+                <strong>Событие не выбрано</strong>
+                <p>Нажмите на событие в календаре.</p>
+              </div>
+            ) : (
+              <div className="resource-card__list">
+                <div className="resource-inline-info">
+                  <strong>{selectedEvent.title}</strong>
+                  <span>{typeLabel[selectedEvent.type]} · {timeFormat.format(new Date(selectedEvent.startsAt))}</span>
+                </div>
+                <div className="resource-card__actions">
+                  {isVenueName(selectedEvent.location) ? (
+                    <Badge className={`venue-badge ${venueToneClass[selectedEvent.location as VenueName]}`}>
+                      {selectedEvent.location}
+                    </Badge>
+                  ) : null}
+                  <Badge variant={selectedEvent.status === 'CANCELLED' ? 'warning' : 'neutral'}>
+                    {selectedEvent.status === 'CANCELLED' ? 'Отменено' : 'Активно'}
+                  </Badge>
+                </div>
+                <div className="resource-inline-info">
+                  <strong>Состав</strong>
+                  <span>
+                    {selectedEvent.participants.length > 0
+                      ? selectedEvent.participants
+                          .map((item) => participantsById.get(item.participantId))
+                          .filter((participant): participant is ParticipantRecord => participant !== undefined)
+                          .map((participant) => participantDisplayName(participant))
+                          .join(', ')
+                      : 'Состав не указан'}
+                  </span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {errorText ? <p className="finance-error">{errorText}</p> : null}
       {loading ? <p className="empty-state">Загружаем расписание...</p> : null}
@@ -345,47 +391,6 @@ export function CalendarWorkspace() {
           </div>
         </section>
       ) : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Детали события</CardTitle>
-          <CardDescription>Короткая карточка выбранного события.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!selectedEvent ? (
-            <div className="resource-empty-inline">
-              <strong>Событие не выбрано</strong>
-              <p>Нажмите на событие в календаре, чтобы посмотреть состав и площадку.</p>
-            </div>
-          ) : (
-            <div className="resource-card__list">
-              <div className="resource-inline-info">
-                <strong>{selectedEvent.title}</strong>
-                <span>{typeLabel[selectedEvent.type]} · {timeFormat.format(new Date(selectedEvent.startsAt))}</span>
-              </div>
-              <div className="resource-card__actions">
-                {isVenueName(selectedEvent.location) ? (
-                  <Badge className={`venue-badge ${venueToneClass[selectedEvent.location as VenueName]}`}>
-                    {selectedEvent.location}
-                  </Badge>
-                ) : null}
-              </div>
-              <div className="resource-inline-info">
-                <strong>Состав</strong>
-                <span>
-                  {selectedEvent.participants.length > 0
-                    ? selectedEvent.participants
-                        .map((item) => participantsById.get(item.participantId))
-                        .filter((participant): participant is ParticipantRecord => participant !== undefined)
-                        .map((participant) => participantDisplayName(participant))
-                        .join(', ')
-                    : 'Состав не указан'}
-                </span>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </section>
   );
 }

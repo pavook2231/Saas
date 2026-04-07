@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import type { Route } from 'next';
 import dynamic from 'next/dynamic';
@@ -55,7 +55,6 @@ const LazyPointsIncomePanel = dynamic(
 type ViewMode = 'week' | 'month';
 type SidePanel = 'compose' | 'chat' | 'finance';
 type ComposerKind = 'PERFORMANCE' | 'REHEARSAL' | 'EVENT';
-type BoardColumnKey = 'PERFORMANCE' | 'REHEARSAL' | 'OTHER';
 
 type CalendarEventParticipant = {
   participantId: string;
@@ -88,40 +87,8 @@ type ComposerState = {
   participantIds: string[];
 };
 
-type LaneSection = {
-  key: string;
-  label: string;
-  items: CalendarEvent[];
-};
-
-const boardColumns: Array<{
-  key: BoardColumnKey;
-  title: string;
-  description: string;
-  composeKind: ComposerKind;
-}> = [
-  {
-    key: 'PERFORMANCE',
-    title: 'Спектакли',
-    description: 'Только готовые постановки из шаблонов организации.',
-    composeKind: 'PERFORMANCE',
-  },
-  {
-    key: 'REHEARSAL',
-    title: 'Репетиции',
-    description: 'Все репетиции с временем и составом.',
-    composeKind: 'REHEARSAL',
-  },
-  {
-    key: 'OTHER',
-    title: 'Прочее',
-    description: 'Сборы, встречи и остальные мероприятия.',
-    composeKind: 'EVENT',
-  },
-];
-
 const kindDescriptions: Record<ComposerKind, string> = {
-  PERFORMANCE: 'Выберите спектакль из уже заведенных в организации.',
+  PERFORMANCE: 'Выберите спектакль из существующего списка организации.',
   REHEARSAL: 'Добавьте репетицию, выберите время и состав.',
   EVENT: 'Добавьте любое другое мероприятие без лишних полей.',
 };
@@ -149,12 +116,6 @@ const periodDateFormat = new Intl.DateTimeFormat('ru-RU', {
   month: 'short',
 });
 
-const sectionDateFormat = new Intl.DateTimeFormat('ru-RU', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-});
-
 const eventDateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
   month: 'short',
@@ -167,6 +128,16 @@ const eventTimeFormat = new Intl.DateTimeFormat('ru-RU', {
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
+});
+
+const weekdayTitleFormat = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'short',
+});
+
+const weekdayLongFormat = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'short',
 });
 
 const addDays = (date: Date, amount: number): Date => {
@@ -242,16 +213,32 @@ const uniqueIds = (ids: string[]) => ids.filter((value, index, list) => list.ind
 
 const toDayKey = (date: Date) => formatDateInput(date);
 
-const getBoardColumnKey = (type: EventType): BoardColumnKey => {
+const getEventToneClass = (type: EventType): string => {
   if (type === 'PERFORMANCE') {
-    return 'PERFORMANCE';
+    return 'type-performance';
   }
 
   if (type === 'REHEARSAL') {
-    return 'REHEARSAL';
+    return 'type-rehearsal';
   }
 
-  return 'OTHER';
+  if (type === 'CUSTOM') {
+    return 'type-custom';
+  }
+
+  return 'type-event';
+};
+
+const isSameDay = (left: Date, right: Date) =>
+  left.getFullYear() === right.getFullYear() &&
+  left.getMonth() === right.getMonth() &&
+  left.getDate() === right.getDate();
+
+const buildMonthGridDays = (cursorDate: Date): Date[] => {
+  const firstDay = new Date(cursorDate.getFullYear(), cursorDate.getMonth(), 1);
+  const gridStart = startOfWeek(firstDay);
+
+  return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
 };
 
 const rangeForCursor = (cursorDate: Date, viewMode: ViewMode) => {
@@ -518,22 +505,16 @@ export function CalendarWorkspace() {
       }
 
       const nextTitle = selectedTemplate.name;
-      const nextDuration = selectedTemplate.durationMinutes;
       const shouldUpdateParticipants =
         nextParticipantIds.length > 0 && !sameIds(current.participantIds, nextParticipantIds);
 
-      if (
-        current.title === nextTitle &&
-        current.durationMinutes === nextDuration &&
-        !shouldUpdateParticipants
-      ) {
+      if (current.title === nextTitle && !shouldUpdateParticipants) {
         return current;
       }
 
       return {
         ...current,
         title: nextTitle,
-        durationMinutes: nextDuration,
         participantIds: shouldUpdateParticipants ? nextParticipantIds : current.participantIds,
       };
     });
@@ -589,51 +570,25 @@ export function CalendarWorkspace() {
     router.replace(nextUrl as Route);
   }, [activeOrganizationId, canManageEvents, handledComposeKey, pathname, router, searchParams]);
 
-  const groupedColumns = useMemo(() => {
-    const buckets = new Map<
-      BoardColumnKey,
-      Map<string, LaneSection & { dateValue: number }>
-    >();
-
-    for (const column of boardColumns) {
-      buckets.set(column.key, new Map());
-    }
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
 
     for (const event of sortEvents(events)) {
-      const columnKey = getBoardColumnKey(event.type);
-      const columnBucket = buckets.get(columnKey);
-
-      if (!columnBucket) {
-        continue;
-      }
-
-      const sectionKey = toDayKey(event.startsAt);
-      const dayStart = startOfDay(event.startsAt);
-
-      if (!columnBucket.has(sectionKey)) {
-        columnBucket.set(sectionKey, {
-          key: sectionKey,
-          label: sectionDateFormat.format(event.startsAt),
-          items: [],
-          dateValue: dayStart.getTime(),
-        });
-      }
-
-      columnBucket.get(sectionKey)?.items.push(event);
+      const dayKey = toDayKey(event.startsAt);
+      const currentItems = map.get(dayKey) ?? [];
+      currentItems.push(event);
+      map.set(dayKey, currentItems);
     }
 
-    return boardColumns.map((column) => {
-      const sections = [...(buckets.get(column.key)?.values() ?? [])]
-        .sort((left, right) => left.dateValue - right.dateValue)
-        .map(({ dateValue: _dateValue, ...section }) => section);
-
-      return {
-        ...column,
-        count: sections.reduce((total, section) => total + section.items.length, 0),
-        sections,
-      };
-    });
+    return map;
   }, [events]);
+
+  const monthGridDays = useMemo(() => buildMonthGridDays(cursorDate), [cursorDate]);
+
+  const weekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(cursorDate), index)),
+    [cursorDate],
+  );
 
   const applyKind = useCallback(
     (kind: ComposerKind) => {
@@ -651,10 +606,7 @@ export function CalendarWorkspace() {
             kind,
             templateId: fallbackTemplate?.id ?? '',
             title: fallbackTemplate?.name ?? '',
-            durationMinutes:
-              fallbackTemplate?.durationMinutes ??
-              defaults.lastEventDurationMinutes ??
-              current.durationMinutes,
+            durationMinutes: defaults.lastEventDurationMinutes ?? current.durationMinutes,
             participantIds:
               fallbackTemplate?.roles.length
                 ? templateParticipantIds(fallbackTemplate)
@@ -677,13 +629,22 @@ export function CalendarWorkspace() {
     [activeOrganizationId, templates],
   );
 
-  const openComposerForKind = useCallback(
-    (kind: ComposerKind) => {
-      applyKind(kind);
+  const openComposerForDate = useCallback(
+    (date: Date, kind?: ComposerKind) => {
+      const nextKind = kind ?? composer.kind;
+      const normalizedDate = startOfDay(date);
+
+      applyKind(nextKind);
+      setComposer((current) => ({
+        ...current,
+        kind: nextKind,
+        dateInput: formatDateInput(normalizedDate),
+      }));
+      setActiveSidePanel('compose');
       setNoticeText(null);
       setErrorText(null);
     },
-    [applyKind],
+    [applyKind, composer.kind],
   );
 
   const handleTemplateChange = (templateId: string) => {
@@ -694,7 +655,6 @@ export function CalendarWorkspace() {
       ...current,
       templateId,
       title: template?.name ?? '',
-      durationMinutes: template?.durationMinutes ?? current.durationMinutes,
       participantIds: participantIds.length > 0 ? participantIds : current.participantIds,
     }));
     setConflicts(null);
@@ -782,7 +742,7 @@ export function CalendarWorkspace() {
         const result = await runConflictCheck(startsAtIso, endsAtIso, composer.participantIds);
 
         if (result?.hasConflicts) {
-          setNoticeText('Нашли пересечения. Проверьте состав или сохраните несмотря на конфликты.');
+          setNoticeText('Есть пересечения. Проверьте состав или сохраните событие несмотря на конфликты.');
           return;
         }
       }
@@ -887,9 +847,9 @@ export function CalendarWorkspace() {
           <header className="calendar-header">
             <div>
               <p className="kicker">Календарь</p>
-              <h1>Расписание без лишних шагов</h1>
+              <h1>Расписание по датам</h1>
               <p className="period-label">
-                Теперь экран собран по колонкам: спектакли, репетиции и прочие мероприятия.
+                Видно даты, время и тип события. Добавление в расписание остается в правой панели.
               </p>
             </div>
 
@@ -925,131 +885,144 @@ export function CalendarWorkspace() {
             </div>
           </header>
 
-          <div className="calendar-board-toolbar">
-            <div className="calendar-board-toolbar__period">
-              <strong>{periodLabel}</strong>
-              <span>Вся информация остается на одном экране, без сетки с внутренним скроллом.</span>
-            </div>
-
-            {canManageEvents ? (
-              <Button type="button" onClick={() => openComposerForKind('EVENT')}>
-                Добавить событие
-              </Button>
-            ) : null}
-          </div>
-
-          {errorText && !loading ? <p className="finance-error">{errorText}</p> : null}
+          {noticeText ? <p className="finance-notice">{noticeText}</p> : null}
+          {errorText ? <p className="finance-error">{errorText}</p> : null}
 
           {loading ? (
-            <div className="calendar-board">
-              {boardColumns.map((column) => (
-                <article key={column.key} className="calendar-lane">
-                  <div className="calendar-lane__header">
-                    <div className="ui-skeleton" style={{ height: 22, width: '55%' }} />
-                    <div className="ui-skeleton" style={{ height: 14, width: '78%' }} />
-                  </div>
-                  <div className="calendar-lane__sections">
-                    <div className="ui-skeleton" style={{ height: 98 }} />
-                    <div className="ui-skeleton" style={{ height: 98 }} />
-                  </div>
-                </article>
+            <div className="calendar-skeleton-grid">
+              {Array.from({ length: viewMode === 'month' ? 14 : 7 }, (_, index) => (
+                <div key={index} className="ui-skeleton" style={{ height: viewMode === 'month' ? 128 : 168 }} />
               ))}
             </div>
-          ) : (
-            <div className="calendar-board">
-              {groupedColumns.map((column) => (
-                <article key={column.key} className={`calendar-lane calendar-lane--${column.key.toLowerCase()}`}>
-                  <div className="calendar-lane__header">
-                    <div className="calendar-lane__header-row">
-                      <div>
-                        <h2>{column.title}</h2>
-                        <p>{column.description}</p>
+          ) : viewMode === 'month' ? (
+            <div className="month-view">
+              <div className="month-weekday-row">
+                {weekDays.map((day) => (
+                  <div key={day.toISOString()}>{weekdayTitleFormat.format(day)}</div>
+                ))}
+              </div>
+
+              <div className="month-grid">
+                {monthGridDays.map((day) => {
+                  const dayKey = toDayKey(day);
+                  const dayEvents = eventsByDay.get(dayKey) ?? [];
+                  const isCurrentMonth = day.getMonth() === cursorDate.getMonth();
+                  const isToday = isSameDay(day, new Date());
+
+                  return (
+                    <article
+                      key={dayKey}
+                      className={['month-cell', !isCurrentMonth ? 'outside' : '', isToday ? 'today' : '']
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      <div className="month-cell-header">
+                        <span>{day.getDate()}</span>
+                        {canManageEvents ? (
+                          <button
+                            type="button"
+                            className="month-cell-add"
+                            onClick={() => openComposerForDate(day)}
+                            aria-label={`Добавить событие на ${day.getDate()}`}
+                          >
+                            +
+                          </button>
+                        ) : null}
                       </div>
-                      <span className="calendar-lane__count">{column.count}</span>
-                    </div>
 
-                    {canManageEvents ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openComposerForKind(column.composeKind)}
-                      >
-                        Добавить
-                      </Button>
-                    ) : null}
-                  </div>
-
-                  {column.sections.length === 0 ? (
-                    <div className="calendar-lane__empty">
-                      <strong>Пока пусто</strong>
-                      <p>
-                        {column.key === 'PERFORMANCE'
-                          ? 'Новый спектакль появится здесь после добавления в расписание.'
-                          : column.key === 'REHEARSAL'
-                            ? 'Добавьте первую репетицию и она сразу появится в этой колонке.'
-                            : 'Прочие мероприятия будут собираться в этой колонке.'}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="calendar-lane__sections">
-                      {column.sections.map((section) => (
-                        <section key={section.key} className="calendar-lane__section">
-                          <header className="calendar-lane__section-head">
-                            <strong>{section.label}</strong>
-                            <span>{section.items.length}</span>
-                          </header>
-
-                          <div className="calendar-lane__cards">
-                            {section.items.map((event) => (
+                      <div className="month-events">
+                        {dayEvents.length === 0 ? (
+                          <p className="month-empty-text">Пусто</p>
+                        ) : (
+                          <>
+                            {dayEvents.slice(0, 4).map((event) => (
                               <button
                                 key={event.id}
                                 type="button"
                                 className={[
-                                  'schedule-card',
-                                  `schedule-card--${getBoardColumnKey(event.type).toLowerCase()}`,
+                                  'event-chip',
+                                  getEventToneClass(event.type),
                                   selectedEventId === event.id ? 'is-selected' : '',
-                                  event.status === 'CANCELLED' ? 'is-cancelled' : '',
+                                  event.status === 'CANCELLED' ? 'status-cancelled' : '',
                                 ]
                                   .filter(Boolean)
                                   .join(' ')}
-                                onClick={() => {
-                                  setSelectedEventId(event.id);
-                                  setActiveSidePanel('chat');
-                                }}
+                                onClick={() => setSelectedEventId(event.id)}
                               >
-                                <div className="schedule-card__top">
-                                  <span className="schedule-card__type">{eventTypeLabels[event.type]}</span>
-                                  <span className="schedule-card__time">
-                                    {eventTimeFormat.format(event.startsAt)}
-                                  </span>
-                                </div>
-
-                                <div className="schedule-card__copy">
-                                  <strong>{event.title}</strong>
-                                  <p>
-                                    {eventDateTimeFormat.format(event.startsAt)} · {event.durationMinutes} мин
-                                  </p>
-                                </div>
-
-                                <div className="schedule-card__meta">
-                                  <span>
-                                    {event.participants.length > 0
-                                      ? `${event.participants.length} в составе`
-                                      : 'Состав не указан'}
-                                  </span>
-                                  {event.location ? <span>{event.location}</span> : null}
-                                  {event.status !== 'PLANNED' ? <span>{event.status}</span> : null}
-                                </div>
+                                <span className="chip-time">{eventTimeFormat.format(event.startsAt)}</span>
+                                <strong className="chip-title">{event.title}</strong>
+                                <span className="chip-meta">{eventTypeLabels[event.type]}</span>
                               </button>
                             ))}
-                          </div>
-                        </section>
-                      ))}
+
+                            {dayEvents.length > 4 ? <p className="more-events">Еще {dayEvents.length - 4}</p> : null}
+                          </>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="week-strip">
+              {weekDays.map((day) => {
+                const dayKey = toDayKey(day);
+                const dayEvents = eventsByDay.get(dayKey) ?? [];
+                const isToday = isSameDay(day, new Date());
+
+                return (
+                  <article
+                    key={dayKey}
+                    className={['week-day-card', isToday ? 'today' : ''].filter(Boolean).join(' ')}
+                  >
+                    <header className="week-day-card__header">
+                      <div>
+                        <span>{weekdayLongFormat.format(day)}</span>
+                        <strong>{day.getDate()}</strong>
+                      </div>
+                      {canManageEvents ? (
+                        <button
+                          type="button"
+                          className="week-day-card__add"
+                          onClick={() => openComposerForDate(day)}
+                        >
+                          Добавить
+                        </button>
+                      ) : null}
+                    </header>
+
+                    <div className="week-day-card__body">
+                      {dayEvents.length === 0 ? (
+                        <p className="week-day-card__empty">На этот день пока ничего нет.</p>
+                      ) : (
+                        dayEvents.map((event) => (
+                          <button
+                            key={event.id}
+                            type="button"
+                            className={[
+                              'event-chip',
+                              'event-chip--dense',
+                              getEventToneClass(event.type),
+                              selectedEventId === event.id ? 'is-selected' : '',
+                              event.status === 'CANCELLED' ? 'status-cancelled' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            onClick={() => setSelectedEventId(event.id)}
+                          >
+                            <span className="chip-time">{eventTimeFormat.format(event.startsAt)}</span>
+                            <strong className="chip-title">{event.title}</strong>
+                            <span className="chip-meta">
+                              {eventTypeLabels[event.type]} · {event.durationMinutes} мин
+                            </span>
+                          </button>
+                        ))
+                      )}
                     </div>
-                  )}
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1084,10 +1057,10 @@ export function CalendarWorkspace() {
               <div className="composer-panel__header">
                 <div>
                   <h2>Добавить в расписание</h2>
-                  <p>Оставили только базовый сценарий: выбрать тип, время и сохранить.</p>
+                  <p>Выберите тип, дату, время и при необходимости длительность. Остальное подставим автоматически.</p>
                 </div>
                 {!canManageEvents ? (
-                  <div className="composer-panel__hint">У вас доступ только на просмотр расписания.</div>
+                  <div className="composer-panel__hint">У вас только просмотр расписания.</div>
                 ) : (
                   <div className="composer-panel__hint">{kindDescriptions[composer.kind]}</div>
                 )}
@@ -1128,7 +1101,7 @@ export function CalendarWorkspace() {
                     <option value="">Выберите спектакль</option>
                     {templates.map((template) => (
                       <option key={template.id} value={template.id}>
-                        {template.name} · {template.durationMinutes} мин
+                        {template.name}
                       </option>
                     ))}
                   </Select>
@@ -1137,14 +1110,13 @@ export function CalendarWorkspace() {
                     <div className="composer-template-preview">
                       <strong>{selectedTemplate.name}</strong>
                       <span>
-                        Длительность {selectedTemplate.durationMinutes} мин · ролей{' '}
-                        {selectedTemplate.roles.length}
+                        Ролей в шаблоне: {selectedTemplate.roles.length}. Состав подставится автоматически.
                       </span>
                     </div>
                   ) : (
                     <div className="calendar-selected-note">
-                      <strong>Нет выбранного спектакля</strong>
-                      <span>Сначала выберите готовый шаблон из организации.</span>
+                      <strong>Шаблон не выбран</strong>
+                      <span>Сначала выберите готовый спектакль из организации.</span>
                     </div>
                   )}
                 </>
@@ -1199,12 +1171,8 @@ export function CalendarWorkspace() {
                   }));
                   setConflicts(null);
                 }}
-                disabled={!canManageEvents || composer.kind === 'PERFORMANCE'}
-                hint={
-                  composer.kind === 'PERFORMANCE'
-                    ? 'Для спектакля длительность берется из выбранного шаблона.'
-                    : undefined
-                }
+                disabled={!canManageEvents}
+                hint="Длительность задается только здесь, во вкладке добавления в расписание."
               />
 
               {composer.kind === 'PERFORMANCE' && recentTemplateIds.length > 0 ? (
@@ -1276,8 +1244,8 @@ export function CalendarWorkspace() {
                 <div className="composer-conflict-card">
                   <strong>Есть пересечения</strong>
                   <span>
-                    Конфликтов по людям: {conflicts.summary.conflictedParticipants}, пересечений по
-                    событиям: {conflicts.summary.eventConflicts}.
+                    Конфликтов по людям: {conflicts.summary.conflictedParticipants}, пересечений по событиям:{' '}
+                    {conflicts.summary.eventConflicts}.
                   </span>
                   {conflicts.suggestion ? <span>{conflicts.suggestion}</span> : null}
                 </div>

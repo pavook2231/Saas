@@ -36,8 +36,6 @@ type TemplateFormState = {
   participantIds: string[];
 };
 
-const durationPresets = [60, 90, 120, 180];
-
 const createInitialTemplateForm = (): TemplateFormState => ({
   name: '',
   type: 'PERFORMANCE',
@@ -88,10 +86,7 @@ export function TemplatesWorkspace() {
   const resetForm = useCallback(() => {
     const defaults = loadWorkspaceDefaults(activeOrganizationId);
     setRecentParticipantIds(defaults.recentParticipantIds ?? []);
-    setForm((current) => ({
-      ...createInitialTemplateForm(),
-      durationMinutes: defaults.lastEventDurationMinutes ?? current.durationMinutes,
-    }));
+    setForm(createInitialTemplateForm());
     setShowAdvanced(false);
   }, [activeOrganizationId]);
 
@@ -187,18 +182,12 @@ export function TemplatesWorkspace() {
       (sum, template) => sum + uniqueParticipantCount(template),
       0,
     );
-    const averageDuration =
-      templates.length > 0
-        ? Math.round(
-            templates.reduce((sum, template) => sum + template.durationMinutes, 0) /
-              templates.length,
-          )
-        : 0;
+    const staffedTemplates = templates.filter((template) => uniqueParticipantCount(template) > 0).length;
 
     return {
       activeTemplates,
       totalParticipants,
-      averageDuration,
+      staffedTemplates,
     };
   }, [templates]);
 
@@ -232,10 +221,6 @@ export function TemplatesWorkspace() {
         throw new Error('Название спектакля должно содержать минимум 2 символа');
       }
 
-      if (form.durationMinutes < 1) {
-        throw new Error('Укажите корректную длительность');
-      }
-
       const created = await operationsApi.createTemplate({
         organizationId: activeOrganizationId,
         accessToken,
@@ -259,7 +244,6 @@ export function TemplatesWorkspace() {
       });
 
       const defaults = saveWorkspaceDefaults(activeOrganizationId, {
-        lastEventDurationMinutes: form.durationMinutes,
         recentParticipantIds: form.participantIds,
         recentTemplateIds: pushRecentId(loadWorkspaceDefaults(activeOrganizationId).recentTemplateIds, created.id),
       });
@@ -330,9 +314,9 @@ export function TemplatesWorkspace() {
           meta="Сколько людей уже заведено в постановки"
         />
         <MetricCard
-          label="Средняя длительность"
-          value={metrics.averageDuration > 0 ? `${metrics.averageDuration} мин` : '—'}
-          meta="Помогает быстро создавать похожие события"
+          label="Шаблоны с составом"
+          value={String(metrics.staffedTemplates)}
+          meta="Можно быстро поставить в расписание без лишних настроек"
         />
       </div>
 
@@ -381,7 +365,6 @@ export function TemplatesWorkspace() {
                   <CardContent className="resource-card__meta">
                     <div className="resource-pill-row">
                       <Badge variant="neutral">{template.type}</Badge>
-                      <Badge variant="primary">{template.durationMinutes} мин</Badge>
                       <Badge variant="neutral">{uniqueParticipantCount(template)} участников</Badge>
                     </div>
 
@@ -445,41 +428,6 @@ export function TemplatesWorkspace() {
             label="Название спектакля"
             value={form.name}
             onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-          />
-
-          <div className="modal-form-section">
-            <span className="quick-choice-label">Длительность</span>
-            <div className="quick-choice-row">
-              {durationPresets.map((duration) => (
-                <button
-                  key={duration}
-                  type="button"
-                  className={`quick-choice-chip${form.durationMinutes === duration ? ' is-active' : ''}`}
-                  onClick={() =>
-                    setForm((current) => ({
-                      ...current,
-                      durationMinutes: duration,
-                    }))
-                  }
-                >
-                  {duration} мин
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <Input
-            label="Длительность (мин)"
-            min={1}
-            step={5}
-            type="number"
-            value={String(form.durationMinutes)}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                durationMinutes: Number(event.target.value) || 0,
-              }))
-            }
           />
 
           {recentParticipants.length > 0 ? (

@@ -322,6 +322,70 @@ export class OrganizationsService {
     }));
   }
 
+  async listOrganizationInvitations(organizationId: string) {
+    await this.findOrganizationOrThrow(organizationId);
+    const now = new Date();
+
+    await this.prisma.organizationInvite.updateMany({
+      where: {
+        organizationId,
+        status: OrganizationInviteStatus.PENDING,
+        expiresAt: {
+          lte: now,
+        },
+      },
+      data: {
+        status: OrganizationInviteStatus.EXPIRED,
+      },
+    });
+
+    const invitations = await this.prisma.organizationInvite.findMany({
+      where: {
+        organizationId,
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        status: true,
+        expiresAt: true,
+        acceptedAt: true,
+        revokedAt: true,
+        createdAt: true,
+        invitedBy: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        acceptedBy: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    return invitations.map((invitation) => ({
+      invitationId: invitation.id,
+      email: invitation.email,
+      role: invitation.role,
+      status: invitation.status,
+      invitedAt: invitation.createdAt,
+      expiresAt: invitation.expiresAt,
+      acceptedAt: invitation.acceptedAt,
+      revokedAt: invitation.revokedAt,
+      invitedBy: invitation.invitedBy,
+      acceptedBy: invitation.acceptedBy,
+    }));
+  }
+
   async discoverOrganizations(userId: string, query: DiscoverOrganizationsQueryDto) {
     const limit = query.limit ?? 24;
     const search = this.trimOrNull(query.search)?.toLowerCase();
@@ -967,6 +1031,8 @@ export class OrganizationsService {
       where: { email },
       select: {
         id: true,
+        isActive: true,
+        deletedAt: true,
       },
     });
 
@@ -1066,6 +1132,24 @@ export class OrganizationsService {
       },
     });
 
+    if (existingUser && existingUser.isActive && existingUser.deletedAt === null) {
+      await this.notificationsService.notifyUsers({
+        organizationId,
+        actorUserId,
+        type: NotificationType.SYSTEM,
+        title: 'Новое приглашение в организацию',
+        body: 'Вас пригласили в организацию. Инвайт доступен в вашем профиле.',
+        payload: {
+          kind: 'organization.invitation.created',
+          invitationId: invite.id,
+          organizationId,
+          email,
+          role,
+        },
+        userIds: [existingUser.id],
+      });
+    }
+
     return {
       invitationId: invite.id,
       email,
@@ -1073,8 +1157,104 @@ export class OrganizationsService {
       status: invite.status,
       invitedAt: invite.createdAt,
       expiresAt: invite.expiresAt,
+      acceptedAt: null,
+      revokedAt: null,
+      invitedBy: null,
+      acceptedBy: null,
       inviteToken: rawInviteToken,
       inviteLink: this.buildInvitationLink(rawInviteToken),
+    };
+  }
+
+  async revokeInvitation(
+    organizationId: string,
+    invitationId: string,
+    actorUserId: string,
+  ) {
+    const invitation = await this.prisma.organizationInvite.findFirst({
+      where: {
+        id: invitationId,
+        organizationId,
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        status: true,
+        revokedAt: true,
+        expiresAt: true,
+      },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Приглашение не найдено');
+    }
+
+    if (invitation.status === OrganizationInviteStatus.ACCEPTED) {
+      throw new ConflictException('Принятое приглашение нельзя отозвать');
+    }
+
+    const now = new Date();
+
+    if (
+      invitation.status === OrganizationInviteStatus.EXPIRED ||
+      invitation.expiresAt <= now
+    ) {
+      if (invitation.status !== OrganizationInviteStatus.EXPIRED) {
+        await this.prisma.organizationInvite.update({
+          where: {
+            id: invitation.id,
+          },
+          data: {
+            status: OrganizationInviteStatus.EXPIRED,
+          },
+        });
+      }
+
+      return {
+        success: true as const,
+        status: OrganizationInviteStatus.EXPIRED,
+      };
+    }
+
+    if (
+      invitation.status === OrganizationInviteStatus.REVOKED ||
+      invitation.revokedAt !== null
+    ) {
+      return {
+        success: true as const,
+        status: OrganizationInviteStatus.REVOKED,
+      };
+    }
+
+    await this.prisma.organizationInvite.update({
+      where: {
+        id: invitation.id,
+      },
+      data: {
+        status: OrganizationInviteStatus.REVOKED,
+        revokedAt: now,
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId,
+        targetType: AuditTargetType.MEMBERSHIP,
+        targetId: invitation.id,
+        action: 'membership.invite_revoked',
+        description: 'Organization invitation revoked',
+        payload: this.toAuditPayload({
+          email: invitation.email,
+          role: invitation.role,
+        }),
+      },
+    });
+
+    return {
+      success: true as const,
+      status: OrganizationInviteStatus.REVOKED,
     };
   }
 

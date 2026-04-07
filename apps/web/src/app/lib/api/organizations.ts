@@ -65,6 +65,29 @@ export type OrganizationInvitation = {
   organization: OrganizationSummary;
 };
 
+export type OrganizationOutgoingInvitation = {
+  invitationId: string;
+  email: string;
+  role: OrganizationRole;
+  status: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
+  invitedAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  invitedBy: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
+  acceptedBy: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
+};
+
 export type OrganizationJoinRequestStatus =
   | 'PENDING'
   | 'APPROVED'
@@ -117,6 +140,11 @@ export type CreateOrganizationPayload = {
 
 export type CreateJoinRequestPayload = {
   message?: string;
+};
+
+export type InviteOrganizationMemberPayload = {
+  email: string;
+  role?: OrganizationRole;
 };
 
 export type ReviewJoinRequestPayload = {
@@ -263,6 +291,49 @@ export const organizationsApi = {
     return apiRequest<OrganizationMember[]>({
       accessToken: params.accessToken,
       path: `/organizations/${params.organizationId}/memberships`,
+    });
+  },
+
+  listOrganizationInvitations(
+    params: AuthenticatedRequest & {
+      organizationId: string;
+    },
+  ) {
+    return apiRequest<OrganizationOutgoingInvitation[]>({
+      accessToken: params.accessToken,
+      path: `/organizations/${params.organizationId}/invitations`,
+    });
+  },
+
+  inviteOrganizationMember(
+    params: AuthenticatedRequest & {
+      organizationId: string;
+      payload: InviteOrganizationMemberPayload;
+    },
+  ) {
+    return apiRequest<
+      OrganizationOutgoingInvitation & {
+        inviteToken: string;
+        inviteLink: string;
+      }
+    >({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: `/organizations/${params.organizationId}/invite`,
+      body: params.payload,
+    });
+  },
+
+  revokeOrganizationInvitation(
+    params: AuthenticatedRequest & {
+      organizationId: string;
+      invitationId: string;
+    },
+  ) {
+    return apiRequest<{ success: true; status: 'REVOKED' | 'EXPIRED' }>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: `/organizations/${params.organizationId}/invitations/${params.invitationId}/revoke`,
     });
   },
 

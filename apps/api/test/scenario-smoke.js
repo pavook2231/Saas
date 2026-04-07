@@ -293,10 +293,16 @@ class InMemoryPrisma {
 
   const assistantAuth = await authService.register({ email: 'assistant@example.com', password: 'StrongPass123', firstName: 'Assist', lastName: 'User' }, requestMeta);
   const assistantInvite = await organizationsService.inviteMembership(organization.id, adminAuth.user.id, { email: 'assistant@example.com', role: OrganizationRole.ASSISTANT });
+  const outgoingInvites = await organizationsService.listOrganizationInvitations(organization.id);
+  assert.equal(outgoingInvites.some((invite) => invite.email === 'assistant@example.com' && invite.status === 'PENDING'), true);
+  assert.equal(prisma.state.notificationRecipients.some((recipient) => recipient.userId === assistantAuth.user.id && recipient.channel === NotificationChannel.WEB), true);
   const acceptedMembership = await organizationsService.acceptInvitationByToken(assistantInvite.inviteToken, assistantAuth.user.id);
   assert.equal(acceptedMembership.role, OrganizationRole.ASSISTANT);
   assert.equal(acceptedMembership.status, MembershipStatus.ACTIVE);
-  results.push('3. existing user accepts organization invite by raw token');
+  const pendingInvite = await organizationsService.inviteMembership(organization.id, adminAuth.user.id, { email: 'pending@example.com', role: OrganizationRole.MEMBER });
+  const revokedInvite = await organizationsService.revokeInvitation(organization.id, pendingInvite.invitationId, adminAuth.user.id);
+  assert.equal(revokedInvite.status, 'REVOKED');
+  results.push('3. existing user accepts organization invite by raw token and admins can manage outgoing invites');
 
   const profileInvite = await organizationsService.inviteMembership(organization.id, adminAuth.user.id, { email: 'profile@example.com', role: OrganizationRole.MEMBER });
   const profileAuth = await authService.register({ email: 'profile@example.com', password: 'StrongPass123', firstName: 'Profile', lastName: 'User' }, requestMeta);

@@ -130,6 +130,16 @@ export class OrganizationsController {
     return this.organizationsService.listOrganizationJoinRequests(organizationId);
   }
 
+  @Get(':organizationId/invitations')
+  @UseGuards(OrganizationRoleGuard)
+  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
+  async listInvitations(
+    @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
+    organizationId: string,
+  ) {
+    return this.organizationsService.listOrganizationInvitations(organizationId);
+  }
+
   @Post(':organizationId/invite')
   @Post(':organizationId/memberships/invite')
   @UseGuards(OrganizationRoleGuard)
@@ -141,6 +151,23 @@ export class OrganizationsController {
     @Body() dto: InviteMembershipDto,
   ) {
     return this.organizationsService.inviteMembership(organizationId, user.sub, dto);
+  }
+
+  @Post(':organizationId/invitations/:invitationId/revoke')
+  @UseGuards(OrganizationRoleGuard)
+  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
+  async revokeInvitation(
+    @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
+    organizationId: string,
+    @Param('invitationId', new ParseUUIDPipe({ version: '4' }))
+    invitationId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.organizationsService.revokeInvitation(
+      organizationId,
+      invitationId,
+      user.sub,
+    );
   }
 
   @Post(':organizationId/join-requests')

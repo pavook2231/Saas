@@ -113,6 +113,7 @@ export type OAuthLoginResult = {
   provider: OAuthProvider;
   user: PublicUser;
   tokens: TokenPair;
+  clientState?: string | null;
 };
 
 export type OAuthLinkResult = {
@@ -121,6 +122,7 @@ export type OAuthLinkResult = {
   user: PublicUser;
   linked: boolean;
   alreadyLinked: boolean;
+  clientState?: string | null;
 };
 
 export type OAuthCallbackResult = OAuthLoginResult | OAuthLinkResult;

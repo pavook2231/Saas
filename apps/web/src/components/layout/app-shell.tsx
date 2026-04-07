@@ -1,9 +1,10 @@
-'use client';
+﻿'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
 import { type PropsWithChildren, useEffect, useMemo, useState } from 'react';
 
 import { cn } from '@/lib/cn';
+import { canAccessControlPanel } from '@/lib/organization-access';
 
 import { useActiveWorkspace } from '../features/use-active-workspace';
 import { useAuth } from '../../app/providers/auth-provider';
@@ -47,20 +48,45 @@ export function AppShell({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    if (activeRole !== 'MEMBER') {
+    const isControlRoute = pathname === '/control' || pathname.startsWith('/control/');
+    const isLegacyManagementRoute =
+      pathname.startsWith('/templates') ||
+      pathname.startsWith('/participants') ||
+      pathname.startsWith('/settings') ||
+      pathname.startsWith('/points') ||
+      pathname.startsWith('/events');
+
+    if (isControlRoute && (!activeOrganizationId || !canAccessControlPanel(activeRole as never))) {
+      router.replace('/dashboard');
       return;
     }
 
-    const canOpenPage =
-      pathname === '/calendar' ||
-      pathname.startsWith('/calendar/') ||
-      pathname === '/profile' ||
-      pathname.startsWith('/profile/');
-
-    if (!canOpenPage) {
-      router.replace('/calendar');
+    if (!isLegacyManagementRoute) {
+      return;
     }
-  }, [activeRole, pathname, router]);
+
+    if (!activeOrganizationId || !canAccessControlPanel(activeRole as never)) {
+      router.replace('/calendar');
+      return;
+    }
+
+    if (pathname.startsWith('/templates')) {
+      router.replace('/control/plays');
+      return;
+    }
+
+    if (pathname.startsWith('/participants')) {
+      router.replace('/control/participants');
+      return;
+    }
+
+    if (pathname.startsWith('/events')) {
+      router.replace('/control/schedule');
+      return;
+    }
+
+    router.replace('/profile');
+  }, [activeOrganizationId, activeRole, pathname, router]);
 
   const userDisplayName = useMemo(() => {
     if (!user) {
@@ -163,3 +189,4 @@ export function AppShell({ children }: PropsWithChildren) {
     </div>
   );
 }
+

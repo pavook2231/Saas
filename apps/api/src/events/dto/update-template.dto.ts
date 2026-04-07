@@ -33,6 +33,11 @@ export class UpdateTemplateDto {
   description?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  location?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)

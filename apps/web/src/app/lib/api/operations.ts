@@ -48,6 +48,7 @@ export type TemplateRecord = {
   name: string;
   type: EventType;
   description: string | null;
+  location: string | null;
   durationMinutes: number;
   isActive: boolean;
   createdAt: string;
@@ -59,6 +60,7 @@ export type EventTemplateSummary = {
   id: string;
   name: string;
   type: EventType;
+  location: string | null;
   durationMinutes: number;
   isActive: boolean;
 };
@@ -156,6 +158,7 @@ export type CreateTemplatePayload = {
   name: string;
   type?: EventType;
   description?: string;
+  location?: string;
   durationMinutes: number;
   isActive?: boolean;
   roles?: Array<{

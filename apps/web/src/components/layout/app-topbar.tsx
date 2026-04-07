@@ -4,6 +4,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
+import { roleLabels } from '@/lib/organization-access';
 
 import { MenuIcon } from './nav-icons';
 
@@ -51,8 +52,8 @@ export function AppTopbar({
         </Button>
 
         <div className="app-topbar__title">
-          <span>Активная организация</span>
-          <strong>Расписание, состав и постановки в одном потоке</strong>
+          <span>Рабочее пространство</span>
+          <strong>Внутренний сервис театра</strong>
         </div>
 
         <div className="app-topbar__workspace">
@@ -79,7 +80,9 @@ export function AppTopbar({
       </div>
 
       <div className="app-topbar__right">
-        {activeRole ? <Badge variant="neutral">{activeRole}</Badge> : null}
+        {activeRole ? (
+          <Badge variant="neutral">{roleLabels[activeRole as keyof typeof roleLabels] ?? activeRole}</Badge>
+        ) : null}
         <Link href="/profile" className="app-topbar__profile">
           <Avatar name={userName} src={userAvatar} size="sm" />
           <div>
@@ -91,3 +94,4 @@ export function AppTopbar({
     </header>
   );
 }
+

@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -10,9 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   AuditTargetType,
   MembershipStatus,
-  NotificationType,
   OrganizationInviteStatus,
-  OrganizationJoinRequestStatus,
   OrganizationRole,
   Prisma,
 } from '@prisma/client';
@@ -56,13 +54,13 @@ export class OrganizationsService {
     const normalizedName = dto.name.trim();
 
     if (normalizedName.length < 2) {
-      throw new BadRequestException('Название организации должно содержать минимум 2 символа');
+      throw new BadRequestException('РќР°Р·РІР°РЅРёРµ РѕСЂРіР°РЅРёР·Р°С†РёРё РґРѕР»Р¶РЅРѕ СЃРѕРґРµСЂР¶Р°С‚СЊ РјРёРЅРёРјСѓРј 2 СЃРёРјРІРѕР»Р°');
     }
 
     const slugBase = this.normalizeSlug(dto.slug ?? normalizedName);
 
     if (!slugBase) {
-      throw new BadRequestException('Из названия или slug организации не удалось получить корректный slug');
+      throw new BadRequestException('РР· РЅР°Р·РІР°РЅРёСЏ РёР»Рё slug РѕСЂРіР°РЅРёР·Р°С†РёРё РЅРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РєРѕСЂСЂРµРєС‚РЅС‹Р№ slug');
     }
 
     const uniqueSlug = await this.ensureUniqueSlug(slugBase);
@@ -166,641 +164,6 @@ export class OrganizationsService {
       membershipStatus: membership.status,
       acceptedAt: membership.acceptedAt,
     }));
-  }
-
-  async listMyInvitations(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-      select: {
-        id: true,
-        email: true,
-        isActive: true,
-        deletedAt: true,
-      },
-    });
-
-    if (!user || !user.isActive || user.deletedAt !== null) {
-      return [];
-    }
-
-    const invites = await this.prisma.organizationInvite.findMany({
-      where: {
-        email: user.email,
-        status: OrganizationInviteStatus.PENDING,
-        revokedAt: null,
-        expiresAt: {
-          gt: new Date(),
-        },
-        organization: {
-          deletedAt: null,
-        },
-      },
-      select: {
-        id: true,
-        role: true,
-        status: true,
-        expiresAt: true,
-        createdAt: true,
-        organization: {
-          select: organizationSelect,
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-
-    return invites.map((invite) => ({
-      invitationId: invite.id,
-      membershipId: invite.id,
-      role: invite.role,
-      status: invite.status,
-      invitedAt: invite.createdAt,
-      expiresAt: invite.expiresAt,
-      organization: {
-        id: invite.organization.id,
-        name: invite.organization.name,
-        slug: invite.organization.slug,
-        inviteCode: invite.organization.inviteCode,
-        description: invite.organization.description,
-        timezone: invite.organization.timezone,
-        createdAt: invite.organization.createdAt,
-        updatedAt: invite.organization.updatedAt,
-        deletedAt: invite.organization.deletedAt,
-        financeEnabled: this.getFinanceEnabled(invite.organization.settings),
-      },
-    }));
-  }
-
-  async acceptMyInvitation(invitationId: string, userId: string) {
-    const invite = await this.findInvitationByIdForUserOrThrow(invitationId, userId);
-    return this.acceptResolvedInvitation(invite, userId);
-  }
-
-  async listMyJoinRequests(userId: string) {
-    const requests = await this.prisma.organizationJoinRequest.findMany({
-      where: {
-        userId,
-        organization: {
-          deletedAt: null,
-        },
-      },
-      select: {
-        id: true,
-        status: true,
-        message: true,
-        reviewedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        organization: {
-          select: organizationSelect,
-        },
-      },
-      orderBy: [{ createdAt: 'desc' }],
-    });
-
-    return requests.map((request) => ({
-      requestId: request.id,
-      status: request.status,
-      message: request.message,
-      reviewedAt: request.reviewedAt,
-      createdAt: request.createdAt,
-      updatedAt: request.updatedAt,
-      organization: this.toOrganizationPreview(request.organization),
-    }));
-  }
-
-  async listOrganizationJoinRequests(organizationId: string) {
-    await this.findOrganizationOrThrow(organizationId);
-
-    const requests = await this.prisma.organizationJoinRequest.findMany({
-      where: {
-        organizationId,
-      },
-      select: {
-        id: true,
-        status: true,
-        message: true,
-        reviewedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        organization: {
-          select: organizationSelect,
-        },
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        reviewedBy: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-      },
-      orderBy: [{ createdAt: 'desc' }],
-    });
-
-    return requests.map((request) => ({
-      requestId: request.id,
-      status: request.status,
-      message: request.message,
-      reviewedAt: request.reviewedAt,
-      createdAt: request.createdAt,
-      updatedAt: request.updatedAt,
-      organization: this.toOrganizationPreview(request.organization),
-      requester: request.user,
-      reviewedBy: request.reviewedBy,
-    }));
-  }
-
-  async listOrganizationInvitations(organizationId: string) {
-    await this.findOrganizationOrThrow(organizationId);
-    const now = new Date();
-
-    await this.prisma.organizationInvite.updateMany({
-      where: {
-        organizationId,
-        status: OrganizationInviteStatus.PENDING,
-        expiresAt: {
-          lte: now,
-        },
-      },
-      data: {
-        status: OrganizationInviteStatus.EXPIRED,
-      },
-    });
-
-    const invitations = await this.prisma.organizationInvite.findMany({
-      where: {
-        organizationId,
-      },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        status: true,
-        expiresAt: true,
-        acceptedAt: true,
-        revokedAt: true,
-        createdAt: true,
-        invitedBy: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        acceptedBy: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-      },
-      orderBy: [{ createdAt: 'desc' }],
-    });
-
-    return invitations.map((invitation) => ({
-      invitationId: invitation.id,
-      email: invitation.email,
-      role: invitation.role,
-      status: invitation.status,
-      invitedAt: invitation.createdAt,
-      expiresAt: invitation.expiresAt,
-      acceptedAt: invitation.acceptedAt,
-      revokedAt: invitation.revokedAt,
-      invitedBy: invitation.invitedBy,
-      acceptedBy: invitation.acceptedBy,
-    }));
-  }
-
-  async discoverOrganizations(userId: string, query: DiscoverOrganizationsQueryDto) {
-    const limit = query.limit ?? 24;
-    const search = this.trimOrNull(query.search)?.toLowerCase();
-
-    const memberships = await this.prisma.membership.findMany({
-      where: {
-        userId,
-        status: {
-          in: [MembershipStatus.ACTIVE, MembershipStatus.INVITED, MembershipStatus.SUSPENDED],
-        },
-      },
-      select: {
-        organizationId: true,
-      },
-    });
-
-    const excludedOrganizationIds = memberships.map((membership) => membership.organizationId);
-    const requests = await this.prisma.organizationJoinRequest.findMany({
-      where: {
-        userId,
-      },
-      select: {
-        organizationId: true,
-        status: true,
-      },
-    });
-
-    const requestByOrganizationId = new Map(
-      requests.map((request) => [request.organizationId, request.status]),
-    );
-
-    const organizations = await this.prisma.organization.findMany({
-      where: {
-        deletedAt: null,
-        ...(excludedOrganizationIds.length > 0
-          ? {
-              id: {
-                notIn: excludedOrganizationIds,
-              },
-            }
-          : {}),
-        ...(search
-          ? {
-              OR: [
-                { name: { contains: search, mode: 'insensitive' } },
-                { slug: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
-      select: organizationSelect,
-      orderBy: [{ createdAt: 'desc' }],
-      take: limit,
-    });
-
-    return organizations.map((organization) => ({
-      ...this.toOrganizationPreview(organization),
-      joinRequestStatus: requestByOrganizationId.get(organization.id) ?? null,
-    }));
-  }
-
-  async createJoinRequest(
-    organizationId: string,
-    userId: string,
-    dto: CreateJoinRequestDto,
-  ) {
-    const user = await this.findActiveUserOrThrow(userId);
-    const organization = await this.findOrganizationOrThrow(organizationId);
-    const message = this.trimOrNull(dto.message);
-
-    const existingMembership = await this.prisma.membership.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId,
-          userId,
-        },
-      },
-      select: {
-        id: true,
-        status: true,
-      },
-    });
-
-    const blockedMembershipStatuses: MembershipStatus[] = [
-      MembershipStatus.ACTIVE,
-      MembershipStatus.INVITED,
-      MembershipStatus.SUSPENDED,
-    ];
-
-    if (
-      existingMembership &&
-      blockedMembershipStatuses.includes(existingMembership.status)
-    ) {
-      throw new ConflictException('Вы уже состоите в этой организации или уже приглашены.');
-    }
-
-    const pendingInvite = await this.prisma.organizationInvite.findFirst({
-      where: {
-        organizationId,
-        email: user.email,
-        status: OrganizationInviteStatus.PENDING,
-        revokedAt: null,
-        expiresAt: {
-          gt: new Date(),
-        },
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (pendingInvite) {
-      throw new ConflictException('Для вас уже есть активное приглашение в эту организацию.');
-    }
-
-    const now = new Date();
-    const existingRequest = await this.prisma.organizationJoinRequest.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId,
-          userId,
-        },
-      },
-      select: {
-        id: true,
-        status: true,
-      },
-    });
-
-    const joinRequest = existingRequest
-      ? await this.prisma.organizationJoinRequest.update({
-          where: {
-            organizationId_userId: {
-              organizationId,
-              userId,
-            },
-          },
-          data: {
-            status: OrganizationJoinRequestStatus.PENDING,
-            message,
-            reviewedAt: null,
-            reviewedByUserId: null,
-          },
-          select: {
-            id: true,
-            status: true,
-            message: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        })
-      : await this.prisma.organizationJoinRequest.create({
-          data: {
-            organizationId,
-            userId,
-            status: OrganizationJoinRequestStatus.PENDING,
-            message,
-          },
-          select: {
-            id: true,
-            status: true,
-            message: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
-
-    await this.prisma.auditLog.create({
-      data: {
-        organizationId,
-        actorUserId: userId,
-        targetType: AuditTargetType.MEMBERSHIP,
-        targetId: joinRequest.id,
-        action: 'membership.join_requested',
-        description: 'Organization join request created',
-        payload: this.toAuditPayload({
-          message,
-          requestId: joinRequest.id,
-        }),
-      },
-    });
-
-    const adminMemberships = await this.prisma.membership.findMany({
-      where: {
-        organizationId,
-        status: MembershipStatus.ACTIVE,
-        role: OrganizationRole.ADMIN,
-        user: {
-          isActive: true,
-          deletedAt: null,
-        },
-      },
-      select: {
-        userId: true,
-      },
-    });
-
-    await this.notificationsService.notifyUsers({
-      organizationId,
-      actorUserId: userId,
-      type: NotificationType.SYSTEM,
-      title: `Новая заявка в ${organization.name}`,
-      body: `${user.email} хочет вступить в организацию.`,
-      payload: {
-        kind: 'organization.join_request',
-        requestId: joinRequest.id,
-        organizationId,
-        requesterUserId: userId,
-        requesterEmail: user.email,
-        message,
-      },
-      userIds: adminMemberships.map((membership) => membership.userId),
-    });
-
-    return {
-      requestId: joinRequest.id,
-      status: joinRequest.status,
-      message: joinRequest.message,
-      createdAt: joinRequest.createdAt,
-      updatedAt: joinRequest.updatedAt,
-      organization: this.toOrganizationPreview(organization),
-    };
-  }
-
-  async reviewJoinRequest(
-    organizationId: string,
-    requestId: string,
-    actorUserId: string,
-    dto: ReviewJoinRequestDto,
-  ) {
-    const organization = await this.findOrganizationOrThrow(organizationId);
-    const joinRequest = await this.prisma.organizationJoinRequest.findFirst({
-      where: {
-        id: requestId,
-        organizationId,
-      },
-      select: {
-        id: true,
-        status: true,
-        message: true,
-        reviewedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            isActive: true,
-            deletedAt: true,
-          },
-        },
-      },
-    });
-
-    if (!joinRequest || !joinRequest.user) {
-      throw new NotFoundException('Заявка на вступление не найдена');
-    }
-
-    if (joinRequest.status !== OrganizationJoinRequestStatus.PENDING) {
-      throw new ConflictException('Эта заявка уже обработана');
-    }
-
-    const now = new Date();
-    const blockedMembershipStatuses: MembershipStatus[] = [
-      MembershipStatus.ACTIVE,
-      MembershipStatus.INVITED,
-      MembershipStatus.SUSPENDED,
-    ];
-
-    const reviewedRequest = await this.prisma.$transaction(async (tx) => {
-      if (dto.status === OrganizationJoinRequestStatus.APPROVED) {
-        if (!joinRequest.user.isActive || joinRequest.user.deletedAt !== null) {
-          throw new ConflictException('Пользователь больше недоступен для вступления в организацию');
-        }
-
-        const existingMembership = await tx.membership.findUnique({
-          where: {
-            organizationId_userId: {
-              organizationId,
-              userId: joinRequest.user.id,
-            },
-          },
-          select: {
-            id: true,
-            status: true,
-          },
-        });
-
-        if (!existingMembership) {
-          await tx.membership.create({
-            data: {
-              organizationId,
-              userId: joinRequest.user.id,
-              role: OrganizationRole.MEMBER,
-              status: MembershipStatus.ACTIVE,
-              invitedByUserId: actorUserId,
-              invitedAt: now,
-              acceptedAt: now,
-            },
-          });
-        } else if (!blockedMembershipStatuses.includes(existingMembership.status)) {
-          await tx.membership.update({
-            where: {
-              id: existingMembership.id,
-            },
-            data: {
-              role: OrganizationRole.MEMBER,
-              status: MembershipStatus.ACTIVE,
-              invitedByUserId: actorUserId,
-              invitedAt: now,
-              acceptedAt: now,
-              leftAt: null,
-              suspendedAt: null,
-            },
-          });
-        }
-      }
-
-      const updatedRequest = await tx.organizationJoinRequest.update({
-        where: {
-          id: joinRequest.id,
-        },
-        data: {
-          status: dto.status,
-          reviewedByUserId: actorUserId,
-          reviewedAt: now,
-        },
-        select: {
-          id: true,
-          status: true,
-          message: true,
-          reviewedAt: true,
-          createdAt: true,
-          updatedAt: true,
-          organization: {
-            select: organizationSelect,
-          },
-          user: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          reviewedBy: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          organizationId,
-          actorUserId,
-          targetType: AuditTargetType.MEMBERSHIP,
-          targetId: joinRequest.id,
-          action:
-            dto.status === OrganizationJoinRequestStatus.APPROVED
-              ? 'membership.join_request_approved'
-              : 'membership.join_request_rejected',
-          description:
-            dto.status === OrganizationJoinRequestStatus.APPROVED
-              ? 'Organization join request approved'
-              : 'Organization join request rejected',
-          payload: this.toAuditPayload({
-            requestId: joinRequest.id,
-            requesterUserId: joinRequest.user.id,
-            status: dto.status,
-          }),
-        },
-      });
-
-      return updatedRequest;
-    });
-
-    await this.notificationsService.notifyUsers({
-      organizationId,
-      actorUserId,
-      type: NotificationType.SYSTEM,
-      title:
-        dto.status === OrganizationJoinRequestStatus.APPROVED
-          ? `Заявка в ${organization.name} одобрена`
-          : `Заявка в ${organization.name} отклонена`,
-      body:
-        dto.status === OrganizationJoinRequestStatus.APPROVED
-          ? 'Теперь вы можете работать в организации.'
-          : 'Администратор пока не подтвердил вступление.',
-      payload: {
-        kind: 'organization.join_request.reviewed',
-        requestId: reviewedRequest.id,
-        organizationId,
-        status: reviewedRequest.status,
-      },
-      userIds: [joinRequest.user.id],
-    });
-
-    return {
-      requestId: reviewedRequest.id,
-      status: reviewedRequest.status,
-      message: reviewedRequest.message,
-      reviewedAt: reviewedRequest.reviewedAt,
-      createdAt: reviewedRequest.createdAt,
-      updatedAt: reviewedRequest.updatedAt,
-      organization: this.toOrganizationPreview(reviewedRequest.organization),
-      requester: reviewedRequest.user,
-      reviewedBy: reviewedRequest.reviewedBy,
-    };
   }
 
   async getOrganization(organizationId: string, userId: string) {
@@ -926,7 +289,6 @@ export class OrganizationsService {
 
   async archiveOrganization(organizationId: string, userId: string) {
     const organization = await this.findOrganizationOrThrow(organizationId);
-
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
@@ -941,7 +303,11 @@ export class OrganizationsService {
         where: {
           organizationId: organization.id,
           status: {
-            in: [MembershipStatus.ACTIVE, MembershipStatus.INVITED, MembershipStatus.SUSPENDED],
+            in: [
+              MembershipStatus.ACTIVE,
+              MembershipStatus.INVITED,
+              MembershipStatus.SUSPENDED,
+            ],
           },
         },
         data: {
@@ -970,7 +336,7 @@ export class OrganizationsService {
   async listMemberships(organizationId: string) {
     const organization = await this.findOrganizationOrThrow(organizationId);
 
-    const memberships = await this.prisma.membership.findMany({
+    return this.prisma.membership.findMany({
       where: {
         organizationId: organization.id,
       },
@@ -994,8 +360,155 @@ export class OrganizationsService {
       },
       orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
     });
+  }
 
-    return memberships;
+  async listMyInvitations(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        email: true,
+        isActive: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!user || !user.isActive || user.deletedAt !== null) {
+      return [];
+    }
+
+    const invites = await this.prisma.organizationInvite.findMany({
+      where: {
+        email: user.email,
+        status: OrganizationInviteStatus.PENDING,
+        revokedAt: null,
+        expiresAt: {
+          gt: new Date(),
+        },
+        organization: {
+          deletedAt: null,
+        },
+      },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        expiresAt: true,
+        createdAt: true,
+        organization: {
+          select: organizationSelect,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return invites.map((invite) => ({
+      invitationId: invite.id,
+      membershipId: invite.id,
+      role: invite.role,
+      status: invite.status,
+      invitedAt: invite.createdAt,
+      expiresAt: invite.expiresAt,
+      organization: {
+        id: invite.organization.id,
+        name: invite.organization.name,
+        slug: invite.organization.slug,
+        inviteCode: invite.organization.inviteCode,
+        description: invite.organization.description,
+        timezone: invite.organization.timezone,
+        createdAt: invite.organization.createdAt,
+        updatedAt: invite.organization.updatedAt,
+        deletedAt: invite.organization.deletedAt,
+        financeEnabled: this.getFinanceEnabled(invite.organization.settings),
+      },
+    }));
+  }
+
+  async acceptMyInvitation(invitationId: string, userId: string) {
+    const invite = await this.findInvitationByIdForUserOrThrow(invitationId, userId);
+    return this.acceptResolvedInvitation(invite, userId);
+  }
+
+  async listMyJoinRequests(userId: string) {
+    void userId;
+    throw new ForbiddenException(
+      'Р’СЃС‚СѓРїР»РµРЅРёРµ РІ РѕСЂРіР°РЅРёР·Р°С†РёСЋ РґРѕСЃС‚СѓРїРЅРѕ С‚РѕР»СЊРєРѕ РїРѕ РїСЂРёРіР»Р°С€РµРЅРёСЋ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°',
+    );
+  }
+
+  async listOrganizationJoinRequests(organizationId: string) {
+    void organizationId;
+    throw new ForbiddenException(
+      'РЎРІРѕР±РѕРґРЅС‹Рµ Р·Р°СЏРІРєРё РЅР° РІСЃС‚СѓРїР»РµРЅРёРµ РѕС‚РєР»СЋС‡РµРЅС‹. РСЃРїРѕР»СЊР·СѓР№С‚Рµ РїСЂРёРіР»Р°С€РµРЅРёСЏ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°.',
+    );
+  }
+
+  async listOrganizationInvitations(organizationId: string) {
+    await this.findOrganizationOrThrow(organizationId);
+    const now = new Date();
+
+    await this.prisma.organizationInvite.updateMany({
+      where: {
+        organizationId,
+        status: OrganizationInviteStatus.PENDING,
+        expiresAt: {
+          lte: now,
+        },
+      },
+      data: {
+        status: OrganizationInviteStatus.EXPIRED,
+      },
+    });
+
+    const invitations = await this.prisma.organizationInvite.findMany({
+      where: {
+        organizationId,
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        status: true,
+        expiresAt: true,
+        acceptedAt: true,
+        revokedAt: true,
+        createdAt: true,
+        invitedBy: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        acceptedBy: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    return invitations.map((invitation) => ({
+      invitationId: invitation.id,
+      email: invitation.email,
+      role: invitation.role,
+      status: invitation.status,
+      invitedAt: invitation.createdAt,
+      expiresAt: invitation.expiresAt,
+      acceptedAt: invitation.acceptedAt,
+      revokedAt: invitation.revokedAt,
+      invitedBy: invitation.invitedBy,
+      acceptedBy: invitation.acceptedBy,
+    }));
   }
 
   async inviteMembership(
@@ -1018,14 +531,19 @@ export class OrganizationsService {
     });
 
     const email = dto.email.trim().toLowerCase();
+
     if (!email) {
       throw new BadRequestException('Email обязателен');
     }
+
     if (!actorMembership || actorMembership.status !== MembershipStatus.ACTIVE) {
       throw new ForbiddenException('Требуется активное членство');
     }
 
-    const role = this.resolveInvitedRole(actorMembership.role, dto.role ?? OrganizationRole.MEMBER);
+    const role = this.resolveInvitedRole(
+      actorMembership.role,
+      dto.role ?? OrganizationRole.MEMBER,
+    );
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
@@ -1052,7 +570,9 @@ export class OrganizationsService {
       : null;
 
     if (existingMembership && existingMembership.status === MembershipStatus.ACTIVE) {
-      throw new ConflictException('Пользователь уже является активным участником этой организации');
+      throw new ConflictException(
+        'Пользователь уже является активным участником этой организации',
+      );
     }
 
     const now = new Date();
@@ -1123,32 +643,14 @@ export class OrganizationsService {
         targetType: AuditTargetType.MEMBERSHIP,
         targetId: invite.id,
         action: 'membership.invited',
-        description: 'Organization invitation sent',
-        payload: {
-          invitedEmail: email,
-          role,
-          expiresAt: expiresAt.toISOString(),
-        },
-      },
-    });
-
-    if (existingUser && existingUser.isActive && existingUser.deletedAt === null) {
-      await this.notificationsService.notifyUsers({
-        organizationId,
-        actorUserId,
-        type: NotificationType.SYSTEM,
-        title: 'Новое приглашение в организацию',
-        body: 'Вас пригласили в организацию. Инвайт доступен в вашем профиле.',
-        payload: {
-          kind: 'organization.invitation.created',
-          invitationId: invite.id,
-          organizationId,
+        description: 'Organization invitation created',
+        payload: this.toAuditPayload({
           email,
           role,
-        },
-        userIds: [existingUser.id],
-      });
-    }
+          expiresAt: invite.expiresAt.toISOString(),
+        }),
+      },
+    });
 
     return {
       invitationId: invite.id,
@@ -1157,12 +659,8 @@ export class OrganizationsService {
       status: invite.status,
       invitedAt: invite.createdAt,
       expiresAt: invite.expiresAt,
-      acceptedAt: null,
-      revokedAt: null,
-      invitedBy: null,
-      acceptedBy: null,
-      inviteToken: rawInviteToken,
       inviteLink: this.buildInvitationLink(rawInviteToken),
+      inviteToken: rawInviteToken,
     };
   }
 
@@ -1316,7 +814,7 @@ export class OrganizationsService {
     const now = new Date();
     const normalizedEmail = user.email.trim().toLowerCase();
 
-    const updatedMembership = await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const existingMembership = await tx.membership.findUnique({
         where: {
           organizationId_userId: {
@@ -1402,8 +900,42 @@ export class OrganizationsService {
 
       return membership;
     });
+  }
 
-    return updatedMembership;
+  async discoverOrganizations(userId: string, query: DiscoverOrganizationsQueryDto) {
+    void userId;
+    void query;
+    throw new ForbiddenException(
+      'РЎРІРѕР±РѕРґРЅС‹Р№ РїРѕРёСЃРє РѕСЂРіР°РЅРёР·Р°С†РёР№ РѕС‚РєР»СЋС‡РµРЅ. Р’СЃС‚СѓРїР»РµРЅРёРµ РІРѕР·РјРѕР¶РЅРѕ С‚РѕР»СЊРєРѕ РїРѕ РїСЂРёРіР»Р°С€РµРЅРёСЋ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°.',
+    );
+  }
+
+  async createJoinRequest(
+    organizationId: string,
+    userId: string,
+    dto: CreateJoinRequestDto,
+  ) {
+    void organizationId;
+    void userId;
+    void dto;
+    throw new ForbiddenException(
+      'Свободные заявки на вступление отключены. Используйте приглашение администратора.',
+    );
+  }
+
+  async reviewJoinRequest(
+    organizationId: string,
+    requestId: string,
+    actorUserId: string,
+    dto: ReviewJoinRequestDto,
+  ) {
+    void organizationId;
+    void requestId;
+    void actorUserId;
+    void dto;
+    throw new ForbiddenException(
+      'Свободные заявки на вступление отключены. Используйте приглашения администратора.',
+    );
   }
 
   async getInvitationByToken(inviteToken: string) {
@@ -1425,114 +957,20 @@ export class OrganizationsService {
     return this.acceptResolvedInvitation(invite, userId);
   }
 
-  async getJoinByInviteCode(inviteCode: string) {
-    const organization = await this.findJoinableOrganizationByInviteCode(inviteCode);
-
-    return {
-      organization: this.toOrganizationPreview(organization),
-      inviteCode: organization.inviteCode,
-      role: OrganizationRole.MEMBER,
-      requiresAuth: true as const,
-      registrationSupported: true as const,
-      acceptPath: `/join/${organization.inviteCode}/accept`,
-    };
+  async getJoinByInviteCode(inviteCode: string, userId?: string) {
+    void inviteCode;
+    void userId;
+    throw new ForbiddenException(
+      'Свободный вход в организацию отключен. Используйте приглашение администратора.',
+    );
   }
 
   async acceptJoinByInviteCode(inviteCode: string, userId: string) {
-    const user = await this.findActiveUserOrThrow(userId);
-    const organization = await this.findJoinableOrganizationByInviteCode(inviteCode);
-    const now = new Date();
-
-    const result = await this.prisma.$transaction(async (tx) => {
-      const existingMembership = await tx.membership.findUnique({
-        where: {
-          organizationId_userId: {
-            organizationId: organization.id,
-            userId,
-          },
-        },
-        select: {
-          id: true,
-          role: true,
-          status: true,
-          acceptedAt: true,
-        },
-      });
-
-      if (existingMembership?.status === MembershipStatus.ACTIVE) {
-        return {
-          alreadyMember: true,
-          membership: existingMembership,
-        };
-      }
-
-      const membership = existingMembership
-        ? await tx.membership.update({
-            where: { id: existingMembership.id },
-            data: {
-              role: existingMembership.role,
-              status: MembershipStatus.ACTIVE,
-              invitedByUserId: organization.createdByUserId ?? null,
-              invitedAt: now,
-              acceptedAt: now,
-              leftAt: null,
-              suspendedAt: null,
-            },
-            select: {
-              id: true,
-              role: true,
-              status: true,
-              acceptedAt: true,
-            },
-          })
-        : await tx.membership.create({
-            data: {
-              organizationId: organization.id,
-              userId,
-              role: OrganizationRole.MEMBER,
-              status: MembershipStatus.ACTIVE,
-              invitedByUserId: organization.createdByUserId ?? null,
-              invitedAt: now,
-              acceptedAt: now,
-            },
-            select: {
-              id: true,
-              role: true,
-              status: true,
-              acceptedAt: true,
-            },
-          });
-
-      await tx.auditLog.create({
-        data: {
-          organizationId: organization.id,
-          actorUserId: user.id,
-          targetType: AuditTargetType.MEMBERSHIP,
-          targetId: membership.id,
-          action: 'membership.joined_by_code',
-          description: 'Organization joined by invite code',
-          payload: {
-            inviteCode: organization.inviteCode,
-          },
-        },
-      });
-
-      return {
-        alreadyMember: false,
-        membership,
-      };
-    });
-
-    return {
-      joined: true as const,
-      alreadyMember: result.alreadyMember,
-      organization: this.toOrganizationPreview(organization),
-      membership: result.membership,
-    };
-  }
-
-  async acceptJoinByInviteCodeAfterRegistration(inviteCode: string, userId: string) {
-    await this.acceptJoinByInviteCode(inviteCode, userId);
+    void inviteCode;
+    void userId;
+    throw new ForbiddenException(
+      'Свободный вход в организацию отключен. Используйте приглашение администратора.',
+    );
   }
 
   async updateMembership(
@@ -1542,7 +980,7 @@ export class OrganizationsService {
     dto: UpdateMembershipDto,
   ) {
     if (dto.role === undefined && dto.status === undefined) {
-      throw new BadRequestException('Нужно передать хотя бы одно поле');
+      throw new BadRequestException('РќСѓР¶РЅРѕ РїРµСЂРµРґР°С‚СЊ С…РѕС‚СЏ Р±С‹ РѕРґРЅРѕ РїРѕР»Рµ');
     }
 
     const membership = await this.prisma.membership.findFirst({
@@ -1560,11 +998,30 @@ export class OrganizationsService {
     });
 
     if (!membership) {
-      throw new NotFoundException('Членство не найдено');
+      throw new NotFoundException('Р§Р»РµРЅСЃС‚РІРѕ РЅРµ РЅР°Р№РґРµРЅРѕ');
     }
 
     if (membership.userId === actorUserId && dto.role && dto.role !== membership.role) {
-      throw new ForbiddenException('Нельзя менять собственную роль');
+      throw new ForbiddenException('РќРµР»СЊР·СЏ РјРµРЅСЏС‚СЊ СЃРѕР±СЃС‚РІРµРЅРЅСѓСЋ СЂРѕР»СЊ');
+    }
+
+    const actorMembership = await this.prisma.membership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: actorUserId,
+        },
+      },
+      select: {
+        role: true,
+      },
+    });
+
+    if (
+      actorMembership?.role === OrganizationRole.DIRECTOR &&
+      dto.role === OrganizationRole.ADMIN
+    ) {
+      throw new ForbiddenException('Директор не может назначать роль админа');
     }
 
     const targetRole = dto.role ?? membership.role;
@@ -1640,7 +1097,26 @@ export class OrganizationsService {
     });
 
     if (!membership) {
-      throw new NotFoundException('Членство не найдено');
+      throw new NotFoundException('Р§Р»РµРЅСЃС‚РІРѕ РЅРµ РЅР°Р№РґРµРЅРѕ');
+    }
+
+    const actorMembership = await this.prisma.membership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: actorUserId,
+        },
+      },
+      select: {
+        role: true,
+      },
+    });
+
+    if (
+      actorMembership?.role === OrganizationRole.DIRECTOR &&
+      membership.role === OrganizationRole.ADMIN
+    ) {
+      throw new ForbiddenException('Директор не может удалять админа организации');
     }
 
     if (membership.status === MembershipStatus.LEFT) {
@@ -1698,7 +1174,7 @@ export class OrganizationsService {
     });
 
     if (!membership || membership.status !== MembershipStatus.ACTIVE) {
-      throw new NotFoundException('Активное членство не найдено');
+      throw new NotFoundException('РђРєС‚РёРІРЅРѕРµ С‡Р»РµРЅСЃС‚РІРѕ РЅРµ РЅР°Р№РґРµРЅРѕ');
     }
 
     await this.ensureAdminStillExists(
@@ -1763,7 +1239,7 @@ export class OrganizationsService {
     const normalizedEmail = user.email.trim().toLowerCase();
 
     if (normalizedEmail !== invite.email) {
-      throw new ForbiddenException('Email пользователя не совпадает с приглашением');
+      throw new ForbiddenException('Email РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РЅРµ СЃРѕРІРїР°РґР°РµС‚ СЃ РїСЂРёРіР»Р°С€РµРЅРёРµРј');
     }
 
     const now = new Date();
@@ -1856,7 +1332,7 @@ export class OrganizationsService {
     const normalizedToken = inviteToken.trim();
 
     if (normalizedToken.length < 32) {
-      throw new NotFoundException('Приглашение не найдено');
+      throw new NotFoundException('РџСЂРёРіР»Р°С€РµРЅРёРµ РЅРµ РЅР°Р№РґРµРЅРѕ');
     }
 
     const invite = await this.prisma.organizationInvite.findFirst({
@@ -1879,15 +1355,15 @@ export class OrganizationsService {
     });
 
     if (!invite || !invite.organization || invite.organization.deletedAt !== null) {
-      throw new NotFoundException('Приглашение не найдено');
+      throw new NotFoundException('РџСЂРёРіР»Р°С€РµРЅРёРµ РЅРµ РЅР°Р№РґРµРЅРѕ');
     }
 
     if (invite.revokedAt !== null || invite.status === OrganizationInviteStatus.REVOKED) {
-      throw new GoneException('Приглашение было отозвано');
+      throw new GoneException('РџСЂРёРіР»Р°С€РµРЅРёРµ Р±С‹Р»Рѕ РѕС‚РѕР·РІР°РЅРѕ');
     }
 
     if (invite.status === OrganizationInviteStatus.ACCEPTED) {
-      throw new ConflictException('Приглашение уже принято');
+      throw new ConflictException('РџСЂРёРіР»Р°С€РµРЅРёРµ СѓР¶Рµ РїСЂРёРЅСЏС‚Рѕ');
     }
 
     if (invite.expiresAt <= new Date() || invite.status === OrganizationInviteStatus.EXPIRED) {
@@ -1900,7 +1376,7 @@ export class OrganizationsService {
         });
       }
 
-      throw new GoneException('Срок действия приглашения истек');
+      throw new GoneException('РЎСЂРѕРє РґРµР№СЃС‚РІРёСЏ РїСЂРёРіР»Р°С€РµРЅРёСЏ РёСЃС‚РµРє');
     }
 
     return invite;
@@ -1929,15 +1405,15 @@ export class OrganizationsService {
     });
 
     if (!invite || !invite.organization || invite.organization.deletedAt !== null) {
-      throw new NotFoundException('Приглашение не найдено');
+      throw new NotFoundException('РџСЂРёРіР»Р°С€РµРЅРёРµ РЅРµ РЅР°Р№РґРµРЅРѕ');
     }
 
     if (invite.revokedAt !== null || invite.status === OrganizationInviteStatus.REVOKED) {
-      throw new GoneException('Приглашение было отозвано');
+      throw new GoneException('РџСЂРёРіР»Р°С€РµРЅРёРµ Р±С‹Р»Рѕ РѕС‚РѕР·РІР°РЅРѕ');
     }
 
     if (invite.status === OrganizationInviteStatus.ACCEPTED) {
-      throw new ConflictException('Приглашение уже принято');
+      throw new ConflictException('РџСЂРёРіР»Р°С€РµРЅРёРµ СѓР¶Рµ РїСЂРёРЅСЏС‚Рѕ');
     }
 
     if (invite.expiresAt <= new Date() || invite.status === OrganizationInviteStatus.EXPIRED) {
@@ -1950,32 +1426,10 @@ export class OrganizationsService {
         });
       }
 
-      throw new GoneException('Срок действия приглашения истек');
+      throw new GoneException('РЎСЂРѕРє РґРµР№СЃС‚РІРёСЏ РїСЂРёРіР»Р°С€РµРЅРёСЏ РёСЃС‚РµРє');
     }
 
     return invite;
-  }
-
-  private async findJoinableOrganizationByInviteCode(inviteCode: string) {
-    const normalizedCode = this.normalizeInviteCode(inviteCode);
-
-    if (!normalizedCode) {
-      throw new NotFoundException('Организация не найдена');
-    }
-
-    const organization = await this.prisma.organization.findFirst({
-      where: {
-        inviteCode: normalizedCode,
-        deletedAt: null,
-      },
-      select: organizationSelect,
-    });
-
-    if (!organization) {
-      throw new NotFoundException('Организация не найдена');
-    }
-
-    return organization;
   }
 
   private async findActiveUserOrThrow(userId: string) {
@@ -1991,7 +1445,7 @@ export class OrganizationsService {
     });
 
     if (!user || !user.isActive || user.deletedAt !== null) {
-      throw new ForbiddenException('Учетная запись пользователя недоступна');
+      throw new ForbiddenException('РЈС‡РµС‚РЅР°СЏ Р·Р°РїРёСЃСЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РЅРµРґРѕСЃС‚СѓРїРЅР°');
     }
 
     return user;
@@ -2008,7 +1462,6 @@ export class OrganizationsService {
       name: organization.name,
       slug: organization.slug,
       inviteCode: organization.inviteCode,
-      joinLink: this.buildJoinLink(organization.inviteCode),
       description: organization.description,
       timezone: organization.timezone,
       createdAt: organization.createdAt,
@@ -2027,7 +1480,7 @@ export class OrganizationsService {
     });
 
     if (!organization) {
-      throw new NotFoundException('Организация не найдена');
+      throw new NotFoundException('РћСЂРіР°РЅРёР·Р°С†РёСЏ РЅРµ РЅР°Р№РґРµРЅР°');
     }
 
     return organization;
@@ -2073,14 +1526,6 @@ export class OrganizationsService {
         return inviteCode;
       }
     }
-  }
-
-  private normalizeInviteCode(input: string): string {
-    return input
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '')
-      .slice(0, 32);
   }
 
   private normalizeSlug(input: string): string {
@@ -2150,7 +1595,7 @@ export class OrganizationsService {
     });
 
     if (otherActiveAdminsCount === 0) {
-      throw new ConflictException('В организации должен оставаться хотя бы один активный ADMIN');
+      throw new ConflictException('Р’ РѕСЂРіР°РЅРёР·Р°С†РёРё РґРѕР»Р¶РµРЅ РѕСЃС‚Р°РІР°С‚СЊСЃСЏ С…РѕС‚СЏ Р±С‹ РѕРґРёРЅ Р°РєС‚РёРІРЅС‹Р№ ADMIN');
     }
   }
 
@@ -2167,13 +1612,13 @@ export class OrganizationsService {
         targetRole === OrganizationRole.ADMIN ||
         targetRole === OrganizationRole.DIRECTOR
       ) {
-        throw new ForbiddenException('DIRECTOR не может приглашать ADMIN или DIRECTOR');
+        throw new ForbiddenException('DIRECTOR РЅРµ РјРѕР¶РµС‚ РїСЂРёРіР»Р°С€Р°С‚СЊ ADMIN РёР»Рё DIRECTOR');
       }
 
       return targetRole;
     }
 
-    throw new ForbiddenException('У вас нет прав приглашать участников в эту организацию');
+    throw new ForbiddenException('РЈ РІР°СЃ РЅРµС‚ РїСЂР°РІ РїСЂРёРіР»Р°С€Р°С‚СЊ СѓС‡Р°СЃС‚РЅРёРєРѕРІ РІ СЌС‚Сѓ РѕСЂРіР°РЅРёР·Р°С†РёСЋ');
   }
 
   private generateInviteToken(): string {
@@ -2196,17 +1641,14 @@ export class OrganizationsService {
     return new URL(`/invite/${inviteToken}`, this.getAppBaseUrl()).toString();
   }
 
-  private buildJoinLink(inviteCode: string): string {
-    return new URL(`/join/${inviteCode}`, this.getAppBaseUrl()).toString();
-  }
-
   private getAppBaseUrl(): string {
     const config = this.configService.get<AppConfig>('appConfig');
 
     if (!config) {
-      throw new BadRequestException('Конфигурация приложения недоступна');
+      throw new BadRequestException('РљРѕРЅС„РёРіСѓСЂР°С†РёСЏ РїСЂРёР»РѕР¶РµРЅРёСЏ РЅРµРґРѕСЃС‚СѓРїРЅР°');
     }
 
     return config.app.corsOrigins[0] ?? config.app.corsOrigin;
   }
 }
+

@@ -1,5 +1,6 @@
-import { PointsWorkspace } from '@/components/features/points-workspace';
+﻿import { redirect } from 'next/navigation';
 
 export default function PointsPage() {
-  return <PointsWorkspace />;
+  redirect('/calendar');
 }
+

@@ -11,6 +11,7 @@ import {
   EventAttendanceStatus,
   EventStatus,
   EventType,
+  MembershipStatus,
   NotificationType,
   ParticipantInviteStatus,
   Prisma,
@@ -59,6 +60,7 @@ const templateSelect = {
   name: true,
   type: true,
   description: true,
+  location: true,
   durationMinutes: true,
   isActive: true,
   createdAt: true,
@@ -100,14 +102,15 @@ const eventSelect = {
   isAllDay: true,
   createdAt: true,
   updatedAt: true,
-  template: {
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      durationMinutes: true,
-      isActive: true,
-    },
+    template: {
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        location: true,
+        durationMinutes: true,
+        isActive: true,
+      },
   },
   participants: {
     orderBy: [{ createdAt: 'asc' }],
@@ -193,6 +196,8 @@ export class EventsService {
   ) {}
 
   async listParticipants(organizationId: string, query: ListParticipantsQueryDto) {
+    await this.syncParticipantsFromMemberships(organizationId);
+
     const where: Prisma.ParticipantWhereInput = {
       organizationId,
       ...(query.includeDeleted ? {} : { deletedAt: null }),
@@ -537,15 +542,16 @@ export class EventsService {
     );
 
     const template = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.template.create({
-        data: {
-          organizationId,
-          name,
-          type: dto.type ?? EventType.CUSTOM,
-          description: this.trimOrNull(dto.description),
-          durationMinutes: dto.durationMinutes,
-          isActive: dto.isActive ?? true,
-          createdByUserId: actorUserId,
+        const created = await tx.template.create({
+          data: {
+            organizationId,
+            name,
+            type: dto.type ?? EventType.CUSTOM,
+            description: this.trimOrNull(dto.description),
+            location: this.trimOrNull(dto.location),
+            durationMinutes: dto.durationMinutes,
+            isActive: dto.isActive ?? true,
+            createdByUserId: actorUserId,
         },
         select: {
           id: true,
@@ -613,14 +619,15 @@ export class EventsService {
         where: {
           id: existing.id,
         },
-        data: {
-          name,
-          type: dto.type,
-          description:
-            dto.description !== undefined ? this.trimOrNull(dto.description) : undefined,
-          durationMinutes: dto.durationMinutes,
-          isActive: dto.isActive,
-        },
+          data: {
+            name,
+            type: dto.type,
+            description:
+              dto.description !== undefined ? this.trimOrNull(dto.description) : undefined,
+            location: dto.location !== undefined ? this.trimOrNull(dto.location) : undefined,
+            durationMinutes: dto.durationMinutes,
+            isActive: dto.isActive,
+          },
       });
 
       if (normalizedRoles) {
@@ -1786,6 +1793,64 @@ export class EventsService {
     }
 
     return normalized;
+  }
+
+  private async syncParticipantsFromMemberships(organizationId: string) {
+    const activeMemberships = await this.prisma.membership.findMany({
+      where: {
+        organizationId,
+        status: MembershipStatus.ACTIVE,
+        user: {
+          is: {
+            isActive: true,
+            deletedAt: null,
+          },
+        },
+      },
+      select: {
+        organizationId: true,
+        userId: true,
+        user: {
+          select: {
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    for (const membership of activeMemberships) {
+      if (!membership.user) {
+        continue;
+      }
+
+      await this.prisma.participant.upsert({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId: membership.userId,
+          },
+        },
+        update: {
+          firstName: membership.user.firstName?.trim() || membership.user.email,
+          lastName: membership.user.lastName?.trim() || ' ',
+          email: membership.user.email,
+          linkedAt: new Date(),
+          deletedAt: null,
+          invitationStatus: ParticipantInviteStatus.ACCEPTED,
+        },
+        create: {
+          organizationId,
+          userId: membership.userId,
+          firstName: membership.user.firstName?.trim() || membership.user.email,
+          lastName: membership.user.lastName?.trim() || ' ',
+          email: membership.user.email,
+          linkedAt: new Date(),
+          invitationStatus: ParticipantInviteStatus.ACCEPTED,
+        },
+      });
+    }
   }
 
   private generateInviteToken(): { rawToken: string; tokenHash: string } {

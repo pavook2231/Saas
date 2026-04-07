@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -109,7 +109,7 @@ export class AuthService {
       );
 
       if (!canClaimExistingAccount) {
-        throw new ConflictException('Пользователь с таким email уже существует');
+        throw new ConflictException('РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЃ С‚Р°РєРёРј email СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚');
       }
     }
 
@@ -141,7 +141,11 @@ export class AuthService {
 
     this.assertUserEnabled(initialUser);
     await this.claimInviteTokensForUser(initialUser.id, email, dto);
-    await this.claimOrganizationJoinCodeForUser(initialUser.id, dto.organizationJoinCode);
+    if (dto.organizationJoinCode?.trim()) {
+      throw new UnauthorizedException(
+        'РЎРІРѕР±РѕРґРЅС‹Р№ РІС…РѕРґ РІ РѕСЂРіР°РЅРёР·Р°С†РёСЋ РѕС‚РєР»СЋС‡РµРЅ. РСЃРїРѕР»СЊР·СѓР№С‚Рµ РїСЂРёРіР»Р°С€РµРЅРёРµ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°.',
+      );
+    }
 
     const user = await this.prisma.user.findUnique({
       where: {
@@ -151,7 +155,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Учетная запись пользователя недоступна');
+      throw new UnauthorizedException('РЈС‡РµС‚РЅР°СЏ Р·Р°РїРёСЃСЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РЅРµРґРѕСЃС‚СѓРїРЅР°');
     }
 
     if (user.isEmailVerified) {
@@ -177,7 +181,7 @@ export class AuthService {
 
     if (!user || !user.passwordHash) {
       await compare(dto.password, PASSWORD_TIMING_RESISTANCE_HASH);
-      throw new UnauthorizedException('Неверные учетные данные');
+      throw new UnauthorizedException('РќРµРІРµСЂРЅС‹Рµ СѓС‡РµС‚РЅС‹Рµ РґР°РЅРЅС‹Рµ');
     }
 
     this.assertUserEnabled(user);
@@ -185,7 +189,7 @@ export class AuthService {
     const isValidPassword = await compare(dto.password, user.passwordHash);
 
     if (!isValidPassword) {
-      throw new UnauthorizedException('Неверные учетные данные');
+      throw new UnauthorizedException('РќРµРІРµСЂРЅС‹Рµ СѓС‡РµС‚РЅС‹Рµ РґР°РЅРЅС‹Рµ');
     }
 
     const updatedUser = await this.prisma.user.update({
@@ -213,7 +217,7 @@ export class AuthService {
     requestMeta: RequestMeta,
   ): Promise<AuthResponse> {
     if (!dto.refreshToken) {
-      throw new BadRequestException('Требуется refresh-токен');
+      throw new BadRequestException('РўСЂРµР±СѓРµС‚СЃСЏ refresh-С‚РѕРєРµРЅ');
     }
 
     const payload = await this.verifyRefreshToken(dto.refreshToken);
@@ -232,7 +236,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Учетная запись пользователя недоступна');
+      throw new UnauthorizedException('РЈС‡РµС‚РЅР°СЏ Р·Р°РїРёСЃСЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РЅРµРґРѕСЃС‚СѓРїРЅР°');
     }
 
     this.assertUserEnabled(user);
@@ -293,7 +297,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Учетная запись пользователя недоступна');
+      throw new UnauthorizedException('РЈС‡РµС‚РЅР°СЏ Р·Р°РїРёСЃСЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РЅРµРґРѕСЃС‚СѓРїРЅР°');
     }
 
     this.assertUserEnabled(user);
@@ -331,14 +335,14 @@ export class AuthService {
         : '';
 
       throw new UnauthorizedException(
-        `OAuth ${providerNameByEnum[provider]} завершился ошибкой (${query.error})${suffix}`,
+        `OAuth ${providerNameByEnum[provider]} Р·Р°РІРµСЂС€РёР»СЃСЏ РѕС€РёР±РєРѕР№ (${query.error})${suffix}`,
       );
     }
 
     const normalizedCode = this.trimOrNull(query.code);
 
     if (!normalizedCode) {
-      throw new BadRequestException('Требуется код авторизации OAuth');
+      throw new BadRequestException('РўСЂРµР±СѓРµС‚СЃСЏ РєРѕРґ Р°РІС‚РѕСЂРёР·Р°С†РёРё OAuth');
     }
 
     const statePayload = await this.verifyOAuthState(provider, query.state);
@@ -376,13 +380,13 @@ export class AuthService {
 
     if (!profile.providerUserId) {
       throw new UnauthorizedException(
-        `Профиль OAuth ${providerNameByEnum[provider]} некорректен`,
+        `РџСЂРѕС„РёР»СЊ OAuth ${providerNameByEnum[provider]} РЅРµРєРѕСЂСЂРµРєС‚РµРЅ`,
       );
     }
 
     if (statePayload.action === 'link') {
       if (!statePayload.linkUserId) {
-        throw new UnauthorizedException('Состояние привязки OAuth недействительно');
+        throw new UnauthorizedException('РЎРѕСЃС‚РѕСЏРЅРёРµ РїСЂРёРІСЏР·РєРё OAuth РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ');
       }
 
       const linking = await this.linkOAuthAccountToUser(
@@ -473,7 +477,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Учетная запись пользователя недоступна');
+      throw new UnauthorizedException('РЈС‡РµС‚РЅР°СЏ Р·Р°РїРёСЃСЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РЅРµРґРѕСЃС‚СѓРїРЅР°');
     }
 
     this.assertUserEnabled(user);
@@ -493,7 +497,7 @@ export class AuthService {
 
     if (!oauthAccount || oauthAccount.status !== OAuthAccountStatus.ACTIVE) {
       throw new NotFoundException(
-        `Связанный аккаунт ${providerNameByEnum[provider]} не найден`,
+        `РЎРІСЏР·Р°РЅРЅС‹Р№ Р°РєРєР°СѓРЅС‚ ${providerNameByEnum[provider]} РЅРµ РЅР°Р№РґРµРЅ`,
       );
     }
 
@@ -506,7 +510,7 @@ export class AuthService {
 
     if (!user.passwordHash && activeOAuthCount <= 1) {
       throw new ForbiddenException(
-        'Нельзя отвязать последний активный способ входа без пароля',
+        'РќРµР»СЊР·СЏ РѕС‚РІСЏР·Р°С‚СЊ РїРѕСЃР»РµРґРЅРёР№ Р°РєС‚РёРІРЅС‹Р№ СЃРїРѕСЃРѕР± РІС…РѕРґР° Р±РµР· РїР°СЂРѕР»СЏ',
       );
     }
 
@@ -619,7 +623,7 @@ export class AuthService {
     state?: string,
   ): Promise<OAuthStatePayload> {
     if (!state) {
-      throw new BadRequestException('Требуется состояние OAuth');
+      throw new BadRequestException('РўСЂРµР±СѓРµС‚СЃСЏ СЃРѕСЃС‚РѕСЏРЅРёРµ OAuth');
     }
 
     try {
@@ -634,11 +638,11 @@ export class AuthService {
         payload.provider !== provider ||
         (payload.action !== 'login' && payload.action !== 'link')
       ) {
-        throw new UnauthorizedException('Состояние OAuth недействительно');
+        throw new UnauthorizedException('РЎРѕСЃС‚РѕСЏРЅРёРµ OAuth РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ');
       }
 
       if (payload.action === 'link' && !payload.linkUserId) {
-        throw new UnauthorizedException('Состояние привязки OAuth недействительно');
+        throw new UnauthorizedException('РЎРѕСЃС‚РѕСЏРЅРёРµ РїСЂРёРІСЏР·РєРё OAuth РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ');
       }
 
       const consumed = await this.prisma.oauthState.updateMany({
@@ -659,7 +663,7 @@ export class AuthService {
       });
 
       if (consumed.count !== 1) {
-        throw new UnauthorizedException('Состояние OAuth недействительно');
+        throw new UnauthorizedException('РЎРѕСЃС‚РѕСЏРЅРёРµ OAuth РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ');
       }
 
       return payload;
@@ -668,7 +672,7 @@ export class AuthService {
         throw error;
       }
 
-      throw new UnauthorizedException('Состояние OAuth недействительно');
+      throw new UnauthorizedException('РЎРѕСЃС‚РѕСЏРЅРёРµ OAuth РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ');
     }
   }
 
@@ -722,7 +726,7 @@ export class AuthService {
 
       if (existingUser) {
         if (!existingUser.isActive || existingUser.deletedAt !== null) {
-          throw new UnauthorizedException('Учетная запись пользователя отключена');
+          throw new UnauthorizedException('РЈС‡РµС‚РЅР°СЏ Р·Р°РїРёСЃСЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РѕС‚РєР»СЋС‡РµРЅР°');
         }
 
         userId = existingUser.id;
@@ -794,7 +798,7 @@ export class AuthService {
       });
 
       if (!user || !user.isActive || user.deletedAt) {
-        throw new UnauthorizedException('Целевой пользователь недоступен для привязки');
+        throw new UnauthorizedException('Р¦РµР»РµРІРѕР№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµРґРѕСЃС‚СѓРїРµРЅ РґР»СЏ РїСЂРёРІСЏР·РєРё');
       }
 
       const identityAccount = await tx.oauthAccount.findUnique({
@@ -829,7 +833,7 @@ export class AuthService {
       if (identityAccount) {
         if (identityAccount.userId !== userId) {
           throw new ConflictException(
-            `Этот аккаунт ${providerNameByEnum[provider]} уже привязан к другому пользователю`,
+            `Р­С‚РѕС‚ Р°РєРєР°СѓРЅС‚ ${providerNameByEnum[provider]} СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ Рє РґСЂСѓРіРѕРјСѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ`,
           );
         }
 
@@ -877,7 +881,7 @@ export class AuthService {
       if (existingProviderAccount) {
         if (existingProviderAccount.providerUserId !== profile.providerUserId) {
           throw new ConflictException(
-            `У пользователя уже привязан другой аккаунт ${providerNameByEnum[provider]}`,
+            `РЈ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ РґСЂСѓРіРѕР№ Р°РєРєР°СѓРЅС‚ ${providerNameByEnum[provider]}`,
           );
         }
 
@@ -992,14 +996,14 @@ export class AuthService {
         `OAuth token exchange failed for ${providerNameByEnum[provider]}`,
       );
       throw new UnauthorizedException(
-        `Не удалось обменять токен OAuth ${providerNameByEnum[provider]}`,
+        `РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РјРµРЅСЏС‚СЊ С‚РѕРєРµРЅ OAuth ${providerNameByEnum[provider]}`,
       );
     }
 
     const accessToken = this.pickString(payload, ['access_token']);
 
     if (!accessToken) {
-      throw new UnauthorizedException('Отсутствует access token OAuth');
+      throw new UnauthorizedException('РћС‚СЃСѓС‚СЃС‚РІСѓРµС‚ access token OAuth');
     }
 
     const expiresIn = this.pickNumber(payload, ['expires_in']);
@@ -1070,7 +1074,7 @@ export class AuthService {
         `OAuth profile fetch failed for ${providerNameByEnum[provider]}`,
       );
       throw new UnauthorizedException(
-        `Не удалось получить профиль OAuth ${providerNameByEnum[provider]}`,
+        `РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РїСЂРѕС„РёР»СЊ OAuth ${providerNameByEnum[provider]}`,
       );
     }
 
@@ -1088,19 +1092,19 @@ export class AuthService {
     });
 
     if (!tokenRecord) {
-      throw new UnauthorizedException('Refresh-сессия не существует');
+      throw new UnauthorizedException('Refresh-СЃРµСЃСЃРёСЏ РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚');
     }
 
     if (tokenRecord.userId !== payload.sub) {
-      throw new UnauthorizedException('Пользователь refresh-сессии не совпадает');
+      throw new UnauthorizedException('РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ refresh-СЃРµСЃСЃРёРё РЅРµ СЃРѕРІРїР°РґР°РµС‚');
     }
 
     if (tokenRecord.revokedAt) {
-      throw new UnauthorizedException('Refresh-сессия отозвана');
+      throw new UnauthorizedException('Refresh-СЃРµСЃСЃРёСЏ РѕС‚РѕР·РІР°РЅР°');
     }
 
     if (tokenRecord.expiresAt <= new Date()) {
-      throw new UnauthorizedException('Срок действия refresh-сессии истек');
+      throw new UnauthorizedException('РЎСЂРѕРє РґРµР№СЃС‚РІРёСЏ refresh-СЃРµСЃСЃРёРё РёСЃС‚РµРє');
     }
 
     const incomingTokenHash = this.hashToken(refreshToken);
@@ -1116,7 +1120,7 @@ export class AuthService {
         },
       });
 
-      throw new UnauthorizedException('Обнаружено повторное использование refresh-токена');
+      throw new UnauthorizedException('РћР±РЅР°СЂСѓР¶РµРЅРѕ РїРѕРІС‚РѕСЂРЅРѕРµ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ refresh-С‚РѕРєРµРЅР°');
     }
 
     return tokenRecord;
@@ -1138,12 +1142,12 @@ export class AuthService {
         typeof payload.sub !== 'string' ||
         typeof payload.sessionId !== 'string'
       ) {
-        throw new UnauthorizedException('Некорректное содержимое refresh-токена');
+        throw new UnauthorizedException('РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ СЃРѕРґРµСЂР¶РёРјРѕРµ refresh-С‚РѕРєРµРЅР°');
       }
 
       return payload;
     } catch {
-      throw new UnauthorizedException('Недействительный refresh-токен');
+      throw new UnauthorizedException('РќРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅС‹Р№ refresh-С‚РѕРєРµРЅ');
     }
   }
 
@@ -1251,7 +1255,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Учетная запись пользователя недоступна');
+      throw new UnauthorizedException('РЈС‡РµС‚РЅР°СЏ Р·Р°РїРёСЃСЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РЅРµРґРѕСЃС‚СѓРїРЅР°');
     }
 
     this.assertUserEnabled(user);
@@ -1386,7 +1390,7 @@ export class AuthService {
 
   private assertUserEnabled(user: { isActive: boolean; deletedAt: Date | null }): void {
     if (!user.isActive || user.deletedAt !== null) {
-      throw new UnauthorizedException('Пользователь деактивирован');
+      throw new UnauthorizedException('РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РґРµР°РєС‚РёРІРёСЂРѕРІР°РЅ');
     }
   }
 
@@ -1449,96 +1453,6 @@ export class AuthService {
     }
   }
 
-  private async claimOrganizationJoinCodeForUser(
-    userId: string,
-    inviteCode?: string,
-  ): Promise<void> {
-    const normalizedInviteCode = inviteCode?.trim().toLowerCase();
-
-    if (!normalizedInviteCode) {
-      return;
-    }
-
-    const organization = await this.prisma.organization.findFirst({
-      where: {
-        inviteCode: normalizedInviteCode,
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        inviteCode: true,
-        createdByUserId: true,
-      },
-    });
-
-    if (!organization) {
-      throw new UnauthorizedException('Код вступления в организацию недействителен');
-    }
-
-    const now = new Date();
-
-    await this.prisma.$transaction(async (tx) => {
-      const existingMembership = await tx.membership.findUnique({
-        where: {
-          organizationId_userId: {
-            organizationId: organization.id,
-            userId,
-          },
-        },
-        select: {
-          id: true,
-          role: true,
-          status: true,
-        },
-      });
-
-      if (existingMembership?.status === MembershipStatus.ACTIVE) {
-        return;
-      }
-
-      if (existingMembership) {
-        await tx.membership.update({
-          where: { id: existingMembership.id },
-          data: {
-            role: existingMembership.role,
-            status: MembershipStatus.ACTIVE,
-            invitedByUserId: organization.createdByUserId ?? null,
-            invitedAt: now,
-            acceptedAt: now,
-            leftAt: null,
-            suspendedAt: null,
-          },
-        });
-      } else {
-        await tx.membership.create({
-          data: {
-            organizationId: organization.id,
-            userId,
-            role: OrganizationRole.MEMBER,
-            status: MembershipStatus.ACTIVE,
-            invitedByUserId: organization.createdByUserId ?? null,
-            invitedAt: now,
-            acceptedAt: now,
-          },
-        });
-      }
-
-      await tx.auditLog.create({
-        data: {
-          organizationId: organization.id,
-          actorUserId: userId,
-          targetType: AuditTargetType.MEMBERSHIP,
-          targetId: organization.id,
-          action: 'membership.joined_by_code_registration',
-          description: 'Organization joined by invite code during registration',
-          payload: {
-            inviteCode: organization.inviteCode,
-          },
-        },
-      });
-    });
-  }
-
   private async claimOrganizationInviteForUser(
     userId: string,
     email: string,
@@ -1568,7 +1482,7 @@ export class AuthService {
     });
 
     if (!invite) {
-      throw new UnauthorizedException('Токен приглашения в организацию недействителен');
+      throw new UnauthorizedException('РўРѕРєРµРЅ РїСЂРёРіР»Р°С€РµРЅРёСЏ РІ РѕСЂРіР°РЅРёР·Р°С†РёСЋ РЅРµРґРµР№СЃС‚РІРёС‚РµР»РµРЅ');
     }
 
     const now = new Date();
@@ -1671,11 +1585,11 @@ export class AuthService {
     });
 
     if (!invite) {
-      throw new UnauthorizedException('Токен приглашения участника недействителен');
+      throw new UnauthorizedException('РўРѕРєРµРЅ РїСЂРёРіР»Р°С€РµРЅРёСЏ СѓС‡Р°СЃС‚РЅРёРєР° РЅРµРґРµР№СЃС‚РІРёС‚РµР»РµРЅ');
     }
 
     if (invite.participant.userId && invite.participant.userId !== userId) {
-      throw new ConflictException('Участник уже связан с другим пользователем');
+      throw new ConflictException('РЈС‡Р°СЃС‚РЅРёРє СѓР¶Рµ СЃРІСЏР·Р°РЅ СЃ РґСЂСѓРіРёРј РїРѕР»СЊР·РѕРІР°С‚РµР»РµРј');
     }
 
     const now = new Date();
@@ -1718,7 +1632,7 @@ export class AuthService {
 
     if (!/[a-z]/.test(normalized) || !/[A-Z]/.test(normalized) || !/\d/.test(normalized)) {
       throw new BadRequestException(
-        'Пароль должен содержать заглавные и строчные буквы, а также цифры',
+        'РџР°СЂРѕР»СЊ РґРѕР»Р¶РµРЅ СЃРѕРґРµСЂР¶Р°С‚СЊ Р·Р°РіР»Р°РІРЅС‹Рµ Рё СЃС‚СЂРѕС‡РЅС‹Рµ Р±СѓРєРІС‹, Р° С‚Р°РєР¶Рµ С†РёС„СЂС‹',
       );
     }
   }
@@ -1880,7 +1794,7 @@ export class AuthService {
     const config = this.configService.get<AppConfig>('appConfig');
 
     if (!config) {
-      throw new InternalServerErrorException('Конфигурация приложения отсутствует');
+      throw new InternalServerErrorException('РљРѕРЅС„РёРіСѓСЂР°С†РёСЏ РїСЂРёР»РѕР¶РµРЅРёСЏ РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚');
     }
 
     return config;
@@ -1968,3 +1882,4 @@ export class AuthService {
     return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
 }
+

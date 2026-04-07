@@ -1,5 +1,6 @@
-import { ParticipantsWorkspace } from '@/components/features/participants-workspace';
+﻿import { redirect } from 'next/navigation';
 
 export default function ParticipantsPage() {
-  return <ParticipantsWorkspace />;
+  redirect('/control/participants');
 }
+

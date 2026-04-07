@@ -1,5 +1,6 @@
-import { SettingsWorkspace } from '@/components/features/settings-workspace';
+﻿import { redirect } from 'next/navigation';
 
 export default function SettingsPage() {
-  return <SettingsWorkspace />;
+  redirect('/profile');
 }
+

@@ -1,5 +1,6 @@
-import { TemplatesWorkspace } from '@/components/features/templates-workspace';
+﻿import { redirect } from 'next/navigation';
 
 export default function TemplatesPage() {
-  return <TemplatesWorkspace />;
+  redirect('/control/plays');
 }
+

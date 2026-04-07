@@ -1,53 +1,52 @@
 ﻿'use client';
 
 import Link from 'next/link';
+import type { Route } from 'next';
 
 import { CreateOrganizationAction } from '@/components/features/create-organization-action';
 import { PageHeader } from '@/components/features/page-header';
 import { WorkspaceOrgEmpty } from '@/components/features/workspace-org-empty';
 import { useActiveWorkspace } from '@/components/features/use-active-workspace';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { canAccessControlPanel, roleLabels } from '@/lib/organization-access';
 
-const quickActions = [
+const createHomeCards = (showControlPanel: boolean) => [
   {
-    href: '/calendar',
-    badge: '1 клик',
-    title: 'Открыть расписание',
-    description: 'Сразу перейти в календарь и работать с сеткой без промежуточных экранов.',
+    href: '/calendar' as Route,
+    title: 'Календарь',
+    description: 'Просмотр расписания организации.',
   },
+  ...(showControlPanel
+    ? [
+        {
+          href: '/control/schedule' as Route,
+          title: 'Панель управления',
+          description: 'Участники, спектакли, приглашения и составление расписания.',
+        },
+      ]
+    : []),
   {
-    href: '/calendar?compose=1&kind=EVENT',
-    badge: '3 шага',
-    title: 'Создать событие',
-    description: 'Быстрая форма с датой, временем и умными значениями по умолчанию.',
-  },
-  {
-    href: '/templates?quick=1',
-    badge: 'Быстрый старт',
-    title: 'Добавить спектакль',
-    description: 'Создать шаблон постановки и затем сразу поставить его в расписание.',
+    href: '/profile' as Route,
+    title: 'Профиль',
+    description: 'Организации, приглашения и ваши права доступа.',
   },
 ] as const;
 
 export default function DashboardPage() {
   const { organizations, activeOrganization, activeRole } = useActiveWorkspace();
   const hasOrganizations = organizations.length > 0;
-  const canManageSchedule =
-    activeRole === 'ADMIN' || activeRole === 'DIRECTOR' || activeRole === 'ASSISTANT';
-  const visibleQuickActions = canManageSchedule
-    ? quickActions
-    : quickActions.filter((action) => action.href === '/calendar');
+  const showControlPanel = canAccessControlPanel(activeRole);
+  const homeCards = createHomeCards(showControlPanel);
 
   return (
     <section className="app-page">
       <PageHeader
-        eyebrow="Главное"
-        title={activeOrganization ? `Быстрый старт · ${activeOrganization.name}` : 'Начнем с рабочего пространства'}
+        eyebrow="Главная"
+        title={activeOrganization ? activeOrganization.name : 'Театральная служба'}
         description={
           activeOrganization
-            ? 'Главные действия собраны в одном месте: открыть расписание, создать событие или быстро добавить спектакль.'
-            : 'Сначала создадим организацию. После этого календарь, участники и спектакли откроются сразу без лишних шагов.'
+            ? 'Все ключевые действия собраны в трех понятных разделах.'
+            : 'Создайте организацию или примите приглашение, чтобы начать работу.'
         }
         actions={
           hasOrganizations ? (
@@ -65,12 +64,8 @@ export default function DashboardPage() {
       ) : (
         <>
           <div className="dashboard-action-grid">
-            {visibleQuickActions.map((action) => (
+            {homeCards.map((action) => (
               <Link key={action.href} href={action.href} className="shortcut-card dashboard-action-card">
-                <div className="shortcut-card__head">
-                  <Badge variant="primary">{action.badge}</Badge>
-                  <span>Основной сценарий</span>
-                </div>
                 <strong>{action.title}</strong>
                 <p>{action.description}</p>
               </Link>
@@ -80,18 +75,16 @@ export default function DashboardPage() {
           <div className="page-grid page-grid--two">
             <Card className="dashboard-mini-card">
               <CardHeader>
-                <CardTitle>Активная организация</CardTitle>
-                <CardDescription>
-                  Контекст уже выбран. Все действия ниже будут выполнены внутри текущего рабочего пространства.
-                </CardDescription>
+                <CardTitle>Текущая организация</CardTitle>
+                <CardDescription>Рабочий контекст и роль, с которой вы вошли.</CardDescription>
               </CardHeader>
               <CardContent className="resource-card__meta">
                 <div className="resource-inline-info">
                   <strong>{activeOrganization?.name ?? 'Организация не выбрана'}</strong>
                   <span>
                     {activeOrganization
-                      ? `${activeOrganization.slug} · ${activeRole ?? activeOrganization.role}`
-                      : 'Выберите организацию в верхней панели.'}
+                      ? `${roleLabels[(activeRole ?? activeOrganization.role) as keyof typeof roleLabels] ?? activeRole ?? activeOrganization.role} · ${activeOrganization.slug}`
+                      : 'Организацию можно выбрать в верхней панели.'}
                   </span>
                 </div>
               </CardContent>
@@ -99,31 +92,28 @@ export default function DashboardPage() {
 
             <Card className="dashboard-mini-card">
               <CardHeader>
-                <CardTitle>Как пользоваться быстрее</CardTitle>
-                <CardDescription>Оставили только короткий путь без лишних решений.</CardDescription>
+                <CardTitle>Коротко о сервисе</CardTitle>
+                <CardDescription>Минимум сущностей и только нужные действия.</CardDescription>
               </CardHeader>
               <CardContent className="resource-card__list">
                 <div className="resource-inline-info">
-                  <strong>Расписание</strong>
-                  <span>Открывается сразу из меню и с этого экрана.</span>
+                  <strong>Главная</strong>
+                  <span>Короткий вход в рабочее пространство.</span>
                 </div>
-                {canManageSchedule ? (
-                  <>
-                    <div className="resource-inline-info">
-                      <strong>Событие</strong>
-                      <span>Создается в быстром режиме, дополнительные поля скрыты по умолчанию.</span>
-                    </div>
-                    <div className="resource-inline-info">
-                      <strong>Спектакль</strong>
-                      <span>После создания его можно одной кнопкой отправить в расписание.</span>
-                    </div>
-                  </>
-                ) : (
+                <div className="resource-inline-info">
+                  <strong>Календарь</strong>
+                  <span>Просмотр готового расписания для всех ролей.</span>
+                </div>
+                <div className="resource-inline-info">
+                  <strong>Профиль</strong>
+                  <span>Организации и приглашения без лишних экранов.</span>
+                </div>
+                {showControlPanel ? (
                   <div className="resource-inline-info">
-                    <strong>Доступ участника</strong>
-                    <span>Для вас открыт просмотр расписания и уведомления по событиям без редактирования.</span>
+                    <strong>Панель управления</strong>
+                    <span>Доступна только админу, директору и помрежу.</span>
                   </div>
-                )}
+                ) : null}
               </CardContent>
             </Card>
           </div>
@@ -132,3 +122,4 @@ export default function DashboardPage() {
     </section>
   );
 }
+

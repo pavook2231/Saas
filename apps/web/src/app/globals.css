@@ -2960,6 +2960,145 @@ textarea.ui-field {
   min-height: 36px;
 }
 
+.control-shell {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+}
+
+.control-shell__header {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border-bottom: 1px solid rgba(219, 227, 239, 0.9);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 251, 0.9));
+}
+
+.control-shell__header strong {
+  display: block;
+  font-size: 1.05rem;
+}
+
+.control-shell__header span {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 0.86rem;
+}
+
+.control-shell__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.control-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.control-tab:hover {
+  transform: translateY(-1px);
+  color: var(--text);
+  border-color: rgba(37, 99, 235, 0.24);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.control-tab.is-active {
+  color: var(--primary-strong);
+  border-color: rgba(37, 99, 235, 0.28);
+  background: var(--primary-soft);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.06);
+}
+
+.control-shell__body {
+  padding: 24px;
+}
+
+.control-kind-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.play-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid rgba(219, 227, 239, 0.9);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.venue-badge {
+  border: 0;
+  font-weight: 700;
+}
+
+.venue-badge.is-bz {
+  background: rgba(220, 38, 38, 0.14);
+  color: #b91c1c;
+}
+
+.venue-badge.is-mz {
+  background: rgba(22, 163, 74, 0.14);
+  color: #15803d;
+}
+
+.venue-badge.is-rehearsal-room {
+  background: rgba(234, 88, 12, 0.14);
+  color: #c2410c;
+}
+
+.venue-badge.is-foyer {
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+}
+
+.calendar-simple__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.calendar-simple__header h1 {
+  margin: 6px 0 0;
+  font-size: clamp(1.9rem, 4vw, 2.5rem);
+  line-height: 1.02;
+}
+
+.calendar-simple__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.calendar-simple__filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 @media (max-width: 1240px) {
   .page-grid--four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-action-grid,
@@ -2991,6 +3130,16 @@ textarea.ui-field {
   .settings-invite-link {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .calendar-simple__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .calendar-simple__actions,
+  .control-shell__header {
+    justify-content: flex-start;
   }
 
   .profile-hero-card__meta {
@@ -3097,7 +3246,9 @@ textarea.ui-field {
   }
 
   .auth-form-grid--double,
+  .calendar-simple__filters,
   .composer-kind-switcher,
+  .control-kind-row,
   .resource-form-grid--double,
   .resource-form-grid--triple,
   .quick-form .row,
@@ -3139,5 +3290,14 @@ textarea.ui-field {
   .member-list__badges {
     width: 100%;
     justify-items: start;
+  }
+
+  .control-shell__body,
+  .control-shell__header {
+    padding: 18px;
+  }
+
+  .play-card {
+    flex-direction: column;
   }
 }

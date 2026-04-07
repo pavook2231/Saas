@@ -151,6 +151,11 @@ export type ReviewJoinRequestPayload = {
   status: Extract<OrganizationJoinRequestStatus, 'APPROVED' | 'REJECTED'>;
 };
 
+export type UpdateMembershipPayload = {
+  role?: OrganizationRole;
+  status?: MembershipStatus;
+};
+
 type AuthenticatedRequest = {
   accessToken: string;
 };
@@ -283,6 +288,18 @@ export const organizationsApi = {
     });
   },
 
+  archiveOrganization(
+    params: AuthenticatedRequest & {
+      organizationId: string;
+    },
+  ) {
+    return apiRequest<{ success: true }>({
+      accessToken: params.accessToken,
+      method: 'DELETE',
+      path: `/organizations/${params.organizationId}`,
+    });
+  },
+
   listMemberships(
     params: AuthenticatedRequest & {
       organizationId: string;
@@ -291,6 +308,34 @@ export const organizationsApi = {
     return apiRequest<OrganizationMember[]>({
       accessToken: params.accessToken,
       path: `/organizations/${params.organizationId}/memberships`,
+    });
+  },
+
+  updateMembership(
+    params: AuthenticatedRequest & {
+      organizationId: string;
+      membershipId: string;
+      payload: UpdateMembershipPayload;
+    },
+  ) {
+    return apiRequest<OrganizationMember>({
+      accessToken: params.accessToken,
+      method: 'PATCH',
+      path: `/organizations/${params.organizationId}/memberships/${params.membershipId}`,
+      body: params.payload,
+    });
+  },
+
+  removeMembership(
+    params: AuthenticatedRequest & {
+      organizationId: string;
+      membershipId: string;
+    },
+  ) {
+    return apiRequest<{ success: true }>({
+      accessToken: params.accessToken,
+      method: 'DELETE',
+      path: `/organizations/${params.organizationId}/memberships/${params.membershipId}`,
     });
   },
 

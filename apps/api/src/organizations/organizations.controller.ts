@@ -7,7 +7,6 @@
   Param,
   Patch,
   Post,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import { OrganizationRole } from '@prisma/client';
@@ -19,10 +18,7 @@ import { AccessTokenPayload } from '../auth/auth.types';
 import { RequireOrgRoles } from './decorators/require-org-roles.decorator';
 import { AcceptMembershipInviteDto } from './dto/accept-membership-invite.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
-import { CreateJoinRequestDto } from './dto/create-join-request.dto';
-import { DiscoverOrganizationsQueryDto } from './dto/discover-organizations-query.dto';
 import { InviteMembershipDto } from './dto/invite-membership.dto';
-import { ReviewJoinRequestDto } from './dto/review-join-request.dto';
 import { UpdateMembershipDto } from './dto/update-membership.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationRoleGuard } from './guards/organization-role.guard';
@@ -55,22 +51,9 @@ export class OrganizationsController {
     return this.organizationsService.acceptMyInvitation(invitationId, user.sub);
   }
 
-  @Get('join-requests/me')
-  async myJoinRequests(@CurrentUser() user: AccessTokenPayload) {
-    return this.organizationsService.listMyJoinRequests(user.sub);
-  }
-
   @Get()
   async myOrganizations(@CurrentUser() user: AccessTokenPayload) {
     return this.organizationsService.listMyOrganizations(user.sub);
-  }
-
-  @Get('discover')
-  async discoverOrganizations(
-    @CurrentUser() user: AccessTokenPayload,
-    @Query() query: DiscoverOrganizationsQueryDto,
-  ) {
-    return this.organizationsService.discoverOrganizations(user.sub, query);
   }
 
   @Get(':organizationId')
@@ -120,19 +103,9 @@ export class OrganizationsController {
     return this.organizationsService.listMemberships(organizationId);
   }
 
-  @Get(':organizationId/join-requests')
-  @UseGuards(OrganizationRoleGuard)
-  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
-  async listJoinRequests(
-    @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
-    organizationId: string,
-  ) {
-    return this.organizationsService.listOrganizationJoinRequests(organizationId);
-  }
-
   @Get(':organizationId/invitations')
   @UseGuards(OrganizationRoleGuard)
-  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
+  @RequireOrgRoles(OrganizationRole.ADMIN)
   async listInvitations(
     @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
     organizationId: string,
@@ -143,7 +116,7 @@ export class OrganizationsController {
   @Post(':organizationId/invite')
   @Post(':organizationId/memberships/invite')
   @UseGuards(OrganizationRoleGuard)
-  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
+  @RequireOrgRoles(OrganizationRole.ADMIN)
   async inviteMembership(
     @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
     organizationId: string,
@@ -155,7 +128,7 @@ export class OrganizationsController {
 
   @Post(':organizationId/invitations/:invitationId/revoke')
   @UseGuards(OrganizationRoleGuard)
-  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
+  @RequireOrgRoles(OrganizationRole.ADMIN)
   async revokeInvitation(
     @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
     organizationId: string,
@@ -167,35 +140,6 @@ export class OrganizationsController {
       organizationId,
       invitationId,
       user.sub,
-    );
-  }
-
-  @Post(':organizationId/join-requests')
-  async createJoinRequest(
-    @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
-    organizationId: string,
-    @CurrentUser() user: AccessTokenPayload,
-    @Body() dto: CreateJoinRequestDto,
-  ) {
-    return this.organizationsService.createJoinRequest(organizationId, user.sub, dto);
-  }
-
-  @Patch(':organizationId/join-requests/:requestId')
-  @UseGuards(OrganizationRoleGuard)
-  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
-  async reviewJoinRequest(
-    @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
-    organizationId: string,
-    @Param('requestId', new ParseUUIDPipe({ version: '4' }))
-    requestId: string,
-    @CurrentUser() user: AccessTokenPayload,
-    @Body() dto: ReviewJoinRequestDto,
-  ) {
-    return this.organizationsService.reviewJoinRequest(
-      organizationId,
-      requestId,
-      user.sub,
-      dto,
     );
   }
 
@@ -218,7 +162,7 @@ export class OrganizationsController {
 
   @Patch(':organizationId/memberships/:membershipId')
   @UseGuards(OrganizationRoleGuard)
-  @RequireOrgRoles(OrganizationRole.ADMIN)
+  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
   async updateMembership(
     @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
     organizationId: string,
@@ -237,7 +181,7 @@ export class OrganizationsController {
 
   @Delete(':organizationId/memberships/:membershipId')
   @UseGuards(OrganizationRoleGuard)
-  @RequireOrgRoles(OrganizationRole.ADMIN)
+  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
   async removeMembership(
     @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
     organizationId: string,

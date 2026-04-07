@@ -474,6 +474,7 @@ model Template {
   name            String
   type            EventType @default(CUSTOM)
   description     String?
+  location        String?
   durationMinutes Int
   isActive        Boolean   @default(true)
   createdByUserId String?   @db.Uuid

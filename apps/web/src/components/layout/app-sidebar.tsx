@@ -10,24 +10,21 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/cn';
+import { canAccessControlPanel, roleLabels } from '@/lib/organization-access';
 
 import {
   CalendarIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   DashboardIcon,
-  ParticipantsIcon,
-  PointsIcon,
   ProfileIcon,
   SettingsIcon,
-  TemplateIcon,
 } from './nav-icons';
 
 type NavItem = {
   href: Route;
   label: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  badge?: string;
 };
 
 type AppSidebarProps = {
@@ -47,15 +44,17 @@ type AppSidebarProps = {
   loggingOut: boolean;
 };
 
-const primaryNav: NavItem[] = [
+const baseNav: NavItem[] = [
+  { href: '/dashboard', label: 'Главная', icon: DashboardIcon },
   { href: '/calendar', label: 'Календарь', icon: CalendarIcon },
-  { href: '/dashboard', label: 'Главное', icon: DashboardIcon },
-  { href: '/templates', label: 'Спектакли', icon: TemplateIcon },
-  { href: '/participants', label: 'Участники', icon: ParticipantsIcon },
-  { href: '/points', label: 'Баллы', icon: PointsIcon },
   { href: '/profile', label: 'Профиль', icon: ProfileIcon },
-  { href: '/settings', label: 'Настройки', icon: SettingsIcon },
 ];
+
+const controlNav: NavItem = {
+  href: '/control/schedule',
+  label: 'Панель управления',
+  icon: SettingsIcon,
+};
 
 export function AppSidebar({
   collapsed,
@@ -73,19 +72,20 @@ export function AppSidebar({
   onLogout,
   loggingOut,
 }: AppSidebarProps) {
-  const visibleNav = activeRole === 'MEMBER'
-    ? primaryNav.filter((item) => item.href === '/calendar' || item.href === '/profile')
-    : primaryNav;
+  const visibleNav = [
+    ...baseNav,
+    ...(activeOrganizationId && canAccessControlPanel(activeRole as never) ? [controlNav] : []),
+  ];
 
   return (
     <aside className={cn('app-sidebar', collapsed && 'is-collapsed')}>
       <div className="app-sidebar__header">
         <div className="app-sidebar__brand">
-          <div className="app-sidebar__brand-mark">RL</div>
+          <div className="app-sidebar__brand-mark">Т</div>
           {!collapsed ? (
             <div>
-              <p>RPGLife SaaS</p>
-              <strong>Быстрые действия</strong>
+              <p>Театр</p>
+              <strong>Внутренний сервис</strong>
             </div>
           ) : null}
         </div>
@@ -117,19 +117,21 @@ export function AppSidebar({
               <p>
                 {activeOrganizationId
                   ? `${activeOrganizationSlug ?? activeOrganizationId.slice(0, 8)} · ${organizationCount} орг.`
-                  : 'Выберите активную организацию в верхней панели.'}
+                  : 'Создайте организацию или примите приглашение в профиле.'}
               </p>
             </>
           ) : null}
         </div>
-        {!collapsed && activeRole ? <Badge variant="primary">{activeRole}</Badge> : null}
+        {!collapsed && activeRole ? (
+          <Badge variant="primary">{roleLabels[activeRole as keyof typeof roleLabels] ?? activeRole}</Badge>
+        ) : null}
       </Card>
 
       <nav className="app-sidebar__nav">
         <span className="app-sidebar__eyebrow">Навигация</span>
 
         {visibleNav.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
           const Icon = item.icon;
           const link = (
             <Link
@@ -142,7 +144,6 @@ export function AppSidebar({
                 <Icon width={18} height={18} />
               </span>
               {!collapsed ? <span>{item.label}</span> : null}
-              {!collapsed && item.badge ? <Badge variant="neutral">{item.badge}</Badge> : null}
             </Link>
           );
 
@@ -177,9 +178,10 @@ export function AppSidebar({
           loading={loggingOut}
           aria-label="Выйти из аккаунта"
         >
-          {collapsed ? '↗' : 'Выйти'}
+          Выйти
         </Button>
       </div>
     </aside>
   );
 }
+

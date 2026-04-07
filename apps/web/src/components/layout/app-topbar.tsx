@@ -1,4 +1,4 @@
-import { Avatar } from '@/components/ui/avatar';
+﻿import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
@@ -49,8 +49,8 @@ export function AppTopbar({
         </Button>
 
         <div className="app-topbar__title">
-          <span>Рабочее пространство</span>
-          <strong>Планирование, люди и события</strong>
+          <span>Активная организация</span>
+          <strong>Расписание, состав и постановки в одном потоке</strong>
         </div>
 
         <div className="app-topbar__workspace">
@@ -89,3 +89,4 @@ export function AppTopbar({
     </header>
   );
 }
+

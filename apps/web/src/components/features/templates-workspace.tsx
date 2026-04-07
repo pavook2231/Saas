@@ -411,7 +411,7 @@ export function TemplatesWorkspace() {
                     <div className="resource-card__actions">
                       <Link
                         className="ui-button ui-button--primary ui-button--md"
-                        href={`/events?quick=1&templateId=${template.id}`}
+                        href={`/calendar?compose=1&kind=PERFORMANCE&templateId=${template.id}`}
                       >
                         <span className="ui-button__content">Добавить в расписание</span>
                       </Link>

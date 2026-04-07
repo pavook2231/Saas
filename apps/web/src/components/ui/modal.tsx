@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useEffect, type PropsWithChildren, type ReactNode } from 'react';
@@ -61,17 +61,9 @@ export function Modal({
           />
           <motion.div
             className={cn('ui-modal__panel', `ui-modal__panel--${size}`)}
-            initial={
-              prefersReducedMotion
-                ? { opacity: 0 }
-                : { opacity: 0, y: 18, scale: 0.98 }
-            }
+            initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={
-              prefersReducedMotion
-                ? { opacity: 0 }
-                : { opacity: 0, y: 10, scale: 0.98 }
-            }
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
             <div className="ui-modal__header">
@@ -85,7 +77,7 @@ export function Modal({
                 aria-label="Закрыть"
                 onClick={onClose}
               >
-                ×
+                x
               </button>
             </div>
             <div className="ui-modal__body">{children}</div>
@@ -97,3 +89,4 @@ export function Modal({
     document.body,
   );
 }
+

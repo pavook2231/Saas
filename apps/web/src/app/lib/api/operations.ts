@@ -140,6 +140,18 @@ export type CreateParticipantPayload = {
   sendInvite?: boolean;
 };
 
+export type UpdateParticipantPayload = {
+  firstName?: string;
+  lastName?: string;
+  middleName?: string;
+  displayName?: string;
+  email?: string;
+  phone?: string;
+  notes?: string;
+  userId?: string;
+  unlinkUser?: boolean;
+};
+
 export type CreateTemplatePayload = {
   name: string;
   type?: EventType;
@@ -234,6 +246,20 @@ export const operationsApi = {
       accessToken: params.accessToken,
       method: 'POST',
       path: `/organizations/${params.organizationId}/participants`,
+      body: params.payload,
+    });
+  },
+
+  updateParticipant(
+    params: OrganizationScopedRequest & {
+      participantId: string;
+      payload: UpdateParticipantPayload;
+    },
+  ) {
+    return apiRequest<ParticipantRecord>({
+      accessToken: params.accessToken,
+      method: 'PATCH',
+      path: `/organizations/${params.organizationId}/participants/${params.participantId}`,
       body: params.payload,
     });
   },

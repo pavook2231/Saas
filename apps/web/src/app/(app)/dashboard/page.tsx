@@ -17,7 +17,7 @@ const quickActions = [
     description: 'Сразу перейти в календарь и работать с сеткой без промежуточных экранов.',
   },
   {
-    href: '/events?quick=1',
+    href: '/calendar?compose=1&kind=EVENT',
     badge: '3 шага',
     title: 'Создать событие',
     description: 'Быстрая форма с датой, временем и умными значениями по умолчанию.',

@@ -1,4 +1,4 @@
-export const ru = {
+﻿export const ru = {
   metadata: {
     title: 'Платформа управления организациями',
     description: 'Платформа для управления организациями, расписанием и участниками',
@@ -6,7 +6,7 @@ export const ru = {
   common: {
     unexpectedRequestError: 'Непредвиденная ошибка запроса',
     requestError: (status: number) => `Ошибка запроса (${status})`,
-    organizationIdRequired: 'Нужно указать ID организации',
+    organizationIdRequired: 'Нужно указать организацию',
     accessTokenRequired: 'Нужен access token',
     actionAccessTokenRequired: 'Для этого действия нужен access token',
   },
@@ -15,8 +15,8 @@ export const ru = {
     eventTypeLabels: {
       PERFORMANCE: 'Спектакль',
       REHEARSAL: 'Репетиция',
-      EVENT: 'Событие',
-      CUSTOM: 'Свободный формат',
+      EVENT: 'Мероприятие',
+      CUSTOM: 'Другое',
     },
     statusLabels: {
       DRAFT: 'Черновик',
@@ -26,7 +26,7 @@ export const ru = {
       CANCELLED: 'Отменено',
     },
     liveKicker: 'Живое расписание',
-    title: 'Календарь постановок',
+    title: 'Календарь организации',
     views: {
       week: 'Неделя',
       month: 'Месяц',
@@ -36,46 +36,53 @@ export const ru = {
       today: 'Сегодня',
       next: 'Вперед',
     },
-    quickEvent: '+ Быстрое событие',
+    quickEvent: '+ Добавить в расписание',
     timeColumn: 'Время',
     todayBadge: 'Сегодня',
     minuteShort: 'мин',
     moreEvents: (count: number) => `+${count} еще`,
-    sampleEvents: {
-      rehearsal: 'Сценическая репетиция',
-      performance: 'Премьерный показ',
-      meeting: 'Встреча с продюсером',
-      movement: 'Пластический класс',
-    },
     newEventTitle: 'Новое событие',
     untitledEvent: 'Событие без названия',
     duplicateSuffix: 'копия',
-    quickPanel: {
-      title: 'Быстрые изменения',
-      emptyState: 'Выберите событие, чтобы сразу изменить его параметры.',
+    composer: {
+      title: 'Добавить в расписание',
+      description: 'Только нужные поля: тип, время и состав. Остальное подтягиваем автоматически.',
+      types: {
+        performance: 'Спектакль',
+        rehearsal: 'Репетиция',
+        event: 'Прочее мероприятие',
+      },
       fields: {
+        template: 'Спектакль',
         title: 'Название',
-        type: 'Тип',
-        status: 'Статус',
         date: 'Дата',
         time: 'Время',
-        duration: 'Длительность (мин)',
+        duration: 'Длительность',
+        location: 'Площадка',
         participants: 'Участники',
       },
-      save: 'Сохранить изменения',
-      actions: {
-        moveForward: 'Сдвинуть на +1 день',
-        moveBackward: 'Сдвинуть на -1 день',
-        durationIncrease: 'Длительность +15 мин',
-        durationDecrease: 'Длительность -15 мин',
-        duplicate: 'Дублировать',
-        delete: 'Удалить',
+      helpers: {
+        performance: 'Берем шаблон из вашей организации и сразу подставляем длительность и состав.',
+        rehearsal: 'Быстрая репетиция с названием, временем и участниками.',
+        event: 'Для встреч, сборов и других мероприятий без шаблона.',
+        emptyTemplate: 'Сначала создайте хотя бы один спектакль в разделе «Спектакли».',
+        slotHint: 'Нажмите на день или слот в сетке, чтобы сразу подставить дату и время.',
       },
+      actions: {
+        submit: 'Добавить в расписание',
+        forceSubmit: 'Создать несмотря на конфликты',
+      },
+      defaults: {
+        duration: 'Частая длительность',
+        recentTemplates: 'Недавние спектакли',
+        recentParticipants: 'Недавние участники',
+      },
+      conflictTitle: 'Есть пересечения',
     },
   },
   chat: {
     title: 'Чаты',
-    note: 'Чат организации и события с обновлениями в реальном времени.',
+    note: 'Чат организации и событий с обновлениями в реальном времени.',
     scopes: {
       ORGANIZATION: 'Организация',
       EVENT: 'Событие',
@@ -118,7 +125,7 @@ export const ru = {
   },
   finance: {
     title: 'Баллы и доход',
-    note: 'Настраивайте стоимость балла, считайте доход за период 25-25 и выгружайте отчет.',
+    note: 'Настройте стоимость балла, считайте доход за период 25-25 и выгружайте отчет.',
     fields: {
       organizationId: 'ID организации',
       organizationPlaceholder: 'UUID организации',
@@ -127,12 +134,12 @@ export const ru = {
       referenceDate: 'Дата расчета',
       participant: 'Участник (необязательно)',
       participantPlaceholder: 'UUID участника',
-      pointValue: 'Значение',
+      pointValue: 'Стоимость балла',
       currency: 'Валюта',
       effectiveFrom: 'Действует с',
     },
     actions: {
-      checkFinanceFlag: 'Проверить флаг финансов',
+      checkFinanceFlag: 'Проверить модуль',
       enableFinance: 'Включить финансы',
       disableFinance: 'Отключить финансы',
       loadRate: 'Загрузить ставку',
@@ -167,8 +174,7 @@ export const ru = {
       financeDisabled: 'Финансы отключены',
       financeDisabledText: 'Финансовые функции выключены для этой организации.',
       financeAccess: 'Доступ к финансам',
-      financeAccessText:
-        'Укажите организацию и токен, затем нажмите «Проверить флаг финансов».',
+      financeAccessText: 'Укажите организацию и токен, затем нажмите «Проверить модуль».',
       pointRate: 'Стоимость балла',
       income: 'Доход',
     },
@@ -196,3 +202,4 @@ export const ru = {
     emptyIncome: 'Данные по доходу еще не загружены.',
   },
 } as const;
+

@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
+  organizationsApi,
+  type OrganizationMember,
+} from '@/app/lib/api/organizations';
+import {
   operationsApi,
   participantDisplayName,
   type ParticipantRecord,
@@ -12,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { MetricCard } from './metric-card';
@@ -44,17 +49,31 @@ const initialFormState: ParticipantFormState = {
   sendInvite: false,
 };
 
+const membershipDisplayName = (membership: OrganizationMember): string => {
+  const fullName = [membership.user.firstName, membership.user.lastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return fullName || membership.user.email;
+};
+
 export function ParticipantsWorkspace() {
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
+  const [memberships, setMemberships] = useState<OrganizationMember[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [linkingParticipantId, setLinkingParticipantId] = useState<string | null>(null);
   const [form, setForm] = useState<ParticipantFormState>(initialFormState);
   const canManageParticipants =
     activeRole === 'ADMIN' || activeRole === 'DIRECTOR' || activeRole === 'ASSISTANT';
@@ -75,6 +94,7 @@ export function ParticipantsWorkspace() {
     async (query: string, signal?: AbortSignal) => {
       if (!accessToken || !activeOrganizationId) {
         setParticipants([]);
+        setMemberships([]);
         setLoading(false);
         return;
       }
@@ -82,15 +102,22 @@ export function ParticipantsWorkspace() {
       setLoading(true);
 
       try {
-        const data = await operationsApi.listParticipants({
-          organizationId: activeOrganizationId,
-          accessToken,
-          limit: 200,
-          search: query.trim() || undefined,
-          signal,
-        });
+        const [participantsResponse, membershipsResponse] = await Promise.all([
+          operationsApi.listParticipants({
+            organizationId: activeOrganizationId,
+            accessToken,
+            limit: 200,
+            search: query.trim() || undefined,
+            signal,
+          }),
+          organizationsApi.listMemberships({
+            organizationId: activeOrganizationId,
+            accessToken,
+          }),
+        ]);
 
-        setParticipants(data);
+        setParticipants(participantsResponse);
+        setMemberships(membershipsResponse);
         setErrorText(null);
       } catch (error) {
         if (signal?.aborted) {
@@ -129,15 +156,61 @@ export function ParticipantsWorkspace() {
     [participants],
   );
 
+  const membershipsByUserId = useMemo(
+    () => new Map(memberships.map((membership) => [membership.user.id, membership])),
+    [memberships],
+  );
+
   const participantRows = useMemo(() => {
-    return participants.map((participant) => ({
-      ...participant,
-      displayLabel: participantDisplayName(participant),
-      kindLabel: participant.userId ? 'Аккаунт' : 'Без аккаунта',
-      contact: participant.email || participant.phone || 'Контакт не указан',
-      invitationLabel: invitationLabels[participant.invitationStatus] ?? participant.invitationStatus,
-    }));
-  }, [participants]);
+    return participants.map((participant) => {
+      const linkedMember = participant.userId ? membershipsByUserId.get(participant.userId) ?? null : null;
+
+      return {
+        ...participant,
+        linkedMember,
+        displayLabel: participantDisplayName(participant),
+        kindLabel: participant.userId ? 'Аккаунт' : 'Без аккаунта',
+        contact: participant.email || participant.phone || 'Контакт не указан',
+        invitationLabel: invitationLabels[participant.invitationStatus] ?? participant.invitationStatus,
+      };
+    });
+  }, [membershipsByUserId, participants]);
+
+  const linkingParticipant = useMemo(
+    () => participants.find((participant) => participant.id === linkingParticipantId) ?? null,
+    [linkingParticipantId, participants],
+  );
+
+  const linkableMembers = useMemo(() => {
+    const occupiedUserIds = new Set(
+      participants
+        .filter(
+          (participant) => participant.userId && participant.id !== linkingParticipantId,
+        )
+        .map((participant) => participant.userId as string),
+    );
+
+    return memberships
+      .filter(
+        (membership) =>
+          !occupiedUserIds.has(membership.user.id) || membership.user.id === linkingParticipant?.userId,
+      )
+      .sort((left, right) =>
+        membershipDisplayName(left).localeCompare(membershipDisplayName(right), 'ru'),
+      );
+  }, [linkingParticipant?.userId, linkingParticipantId, memberships, participants]);
+
+  const openLinkModal = (participant: ParticipantRecord) => {
+    setLinkingParticipantId(participant.id);
+    setSelectedUserId(participant.userId ?? '');
+    setLinkModalOpen(true);
+  };
+
+  const closeLinkModal = () => {
+    setLinkModalOpen(false);
+    setLinkingParticipantId(null);
+    setSelectedUserId('');
+  };
 
   const handleCreateParticipant = async () => {
     if (!accessToken || !activeOrganizationId) {
@@ -187,6 +260,69 @@ export function ParticipantsWorkspace() {
     }
   };
 
+  const handleLinkParticipant = async () => {
+    if (!accessToken || !activeOrganizationId || !linkingParticipantId) {
+      return;
+    }
+
+    if (!selectedUserId) {
+      setErrorText('Сначала выберите человека с аккаунтом');
+      return;
+    }
+
+    setLinking(true);
+    setErrorText(null);
+    setNoticeText(null);
+
+    try {
+      await operationsApi.updateParticipant({
+        organizationId: activeOrganizationId,
+        accessToken,
+        participantId: linkingParticipantId,
+        payload: {
+          userId: selectedUserId,
+        },
+      });
+
+      setNoticeText('Участник связан с аккаунтом. При необходимости связь можно заменить позже.');
+      closeLinkModal();
+      await loadParticipants(search);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось связать участника с аккаунтом');
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const handleUnlinkParticipant = async () => {
+    if (!accessToken || !activeOrganizationId || !linkingParticipantId) {
+      return;
+    }
+
+    setLinking(true);
+    setErrorText(null);
+    setNoticeText(null);
+
+    try {
+      await operationsApi.updateParticipant({
+        organizationId: activeOrganizationId,
+        accessToken,
+        participantId: linkingParticipantId,
+        payload: {
+          unlinkUser: true,
+        },
+      });
+
+      setNoticeText('Связь с аккаунтом убрана. Теперь можно выбрать другого человека.');
+      closeLinkModal();
+      await loadParticipants(search);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось убрать связь с аккаунтом');
+    } finally {
+      setLinking(false);
+    }
+  };
+
   if (!activeOrganizationId) {
     return (
       <section className="app-page">
@@ -205,7 +341,7 @@ export function ParticipantsWorkspace() {
       <PageHeader
         eyebrow="Участники"
         title="Состав организации"
-        description="Добавление участника сокращено до базовых полей. Контакты и приглашение раскрываются только при необходимости."
+        description="Если человек сначала был добавлен без аккаунта, теперь его можно в любой момент привязать или заменить на реального пользователя системы."
         actions={
           <div className="feature-page-header__action-row">
             <Input
@@ -257,7 +393,7 @@ export function ParticipantsWorkspace() {
       {errorText ? <p className="finance-error">{errorText}</p> : null}
       {!canManageParticipants ? (
         <p className="empty-state">
-          Создавать и приглашать участников могут только ADMIN, DIRECTOR и ASSISTANT.
+          Создавать, приглашать и связывать участников могут только ADMIN, DIRECTOR и ASSISTANT.
         </p>
       ) : null}
 
@@ -265,7 +401,7 @@ export function ParticipantsWorkspace() {
         <CardHeader>
           <CardTitle>Список участников</CardTitle>
           <CardDescription>
-            В таблице оставили только информацию, которая помогает быстро найти человека и понять его статус.
+            Здесь видно, кто уже связан с аккаунтом, а кого еще нужно заменить или привязать к реальному пользователю.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -278,7 +414,7 @@ export function ParticipantsWorkspace() {
           ) : participantRows.length === 0 ? (
             <div className="resource-empty-inline">
               <strong>Пока нет участников</strong>
-              <p>Создайте первого участника, чтобы использовать его в спектаклях и событиях.</p>
+              <p>Создайте первого участника, чтобы использовать его в спектаклях и в расписании.</p>
             </div>
           ) : (
             <div className="data-table-wrap">
@@ -288,7 +424,9 @@ export function ParticipantsWorkspace() {
                     <th>Участник</th>
                     <th>Тип</th>
                     <th>Контакт</th>
+                    <th>Аккаунт</th>
                     <th>Приглашение</th>
+                    <th>Действие</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -307,6 +445,16 @@ export function ParticipantsWorkspace() {
                       </td>
                       <td>{participant.contact}</td>
                       <td>
+                        {participant.linkedMember ? (
+                          <div className="table-user-cell__copy">
+                            <strong>{membershipDisplayName(participant.linkedMember)}</strong>
+                            <span>{participant.linkedMember.user.email}</span>
+                          </div>
+                        ) : (
+                          <span className="table-muted-copy">Пока не привязан</span>
+                        )}
+                      </td>
+                      <td>
                         <Badge
                           variant={
                             participant.invitationStatus === 'PENDING'
@@ -318,6 +466,20 @@ export function ParticipantsWorkspace() {
                         >
                           {participant.invitationLabel}
                         </Badge>
+                      </td>
+                      <td>
+                        {canManageParticipants ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openLinkModal(participant)}
+                          >
+                            {participant.userId ? 'Заменить аккаунт' : 'Привязать аккаунт'}
+                          </Button>
+                        ) : (
+                          <span className="table-muted-copy">Только просмотр</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -406,6 +568,56 @@ export function ParticipantsWorkspace() {
           ) : null}
         </div>
       </Modal>
+
+      <Modal
+        open={linkModalOpen}
+        onClose={closeLinkModal}
+        title={linkingParticipant?.userId ? 'Заменить аккаунт участника' : 'Привязать аккаунт'}
+        description={
+          linkingParticipant
+            ? `Участник: ${participantDisplayName(linkingParticipant)}. Выберите человека с аккаунтом из этой организации.`
+            : 'Выберите человека с аккаунтом.'
+        }
+        footer={
+          <>
+            {linkingParticipant?.userId ? (
+              <Button type="button" variant="danger" onClick={() => void handleUnlinkParticipant()} loading={linking}>
+                Убрать связь
+              </Button>
+            ) : null}
+            <Button type="button" variant="ghost" onClick={closeLinkModal}>
+              Отмена
+            </Button>
+            <Button type="button" onClick={() => void handleLinkParticipant()} loading={linking}>
+              Сохранить связь
+            </Button>
+          </>
+        }
+      >
+        <div className="resource-form-grid">
+          <Select
+            label="Человек с аккаунтом"
+            value={selectedUserId}
+            onChange={(event) => setSelectedUserId(event.target.value)}
+            hint="Показываем только свободные аккаунты этой организации и текущую связь, если она уже была."
+          >
+            <option value="">Выберите пользователя</option>
+            {linkableMembers.map((membership) => (
+              <option key={membership.user.id} value={membership.user.id}>
+                {membershipDisplayName(membership)} · {membership.role}
+              </option>
+            ))}
+          </Select>
+
+          {linkableMembers.length === 0 ? (
+            <div className="resource-empty-inline">
+              <strong>Нет доступных аккаунтов</strong>
+              <p>Сначала добавьте человека в организацию с реальным аккаунтом, затем вернитесь сюда.</p>
+            </div>
+          ) : null}
+        </div>
+      </Modal>
     </section>
   );
 }
+

@@ -141,6 +141,7 @@ export class AuthService {
 
     this.assertUserEnabled(initialUser);
     await this.claimInviteTokensForUser(initialUser.id, email, dto);
+    await this.claimOrganizationJoinCodeForUser(initialUser.id, dto.organizationJoinCode);
 
     const user = await this.prisma.user.findUnique({
       where: {
@@ -400,6 +401,7 @@ export class AuthService {
         user: this.toPublicUser(user, memberships),
         linked: linking.linked,
         alreadyLinked: linking.alreadyLinked,
+        clientState: statePayload.clientState ?? null,
       };
     }
 
@@ -426,6 +428,7 @@ export class AuthService {
       provider,
       user: this.toPublicUser(user, memberships),
       tokens,
+      clientState: statePayload.clientState ?? null,
     };
   }
 
@@ -1444,6 +1447,96 @@ export class AuthService {
     if (dto.participantInviteToken) {
       await this.claimParticipantInviteForUser(userId, email, dto.participantInviteToken);
     }
+  }
+
+  private async claimOrganizationJoinCodeForUser(
+    userId: string,
+    inviteCode?: string,
+  ): Promise<void> {
+    const normalizedInviteCode = inviteCode?.trim().toLowerCase();
+
+    if (!normalizedInviteCode) {
+      return;
+    }
+
+    const organization = await this.prisma.organization.findFirst({
+      where: {
+        inviteCode: normalizedInviteCode,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        inviteCode: true,
+        createdByUserId: true,
+      },
+    });
+
+    if (!organization) {
+      throw new UnauthorizedException('Код вступления в организацию недействителен');
+    }
+
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      const existingMembership = await tx.membership.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId: organization.id,
+            userId,
+          },
+        },
+        select: {
+          id: true,
+          role: true,
+          status: true,
+        },
+      });
+
+      if (existingMembership?.status === MembershipStatus.ACTIVE) {
+        return;
+      }
+
+      if (existingMembership) {
+        await tx.membership.update({
+          where: { id: existingMembership.id },
+          data: {
+            role: existingMembership.role,
+            status: MembershipStatus.ACTIVE,
+            invitedByUserId: organization.createdByUserId ?? null,
+            invitedAt: now,
+            acceptedAt: now,
+            leftAt: null,
+            suspendedAt: null,
+          },
+        });
+      } else {
+        await tx.membership.create({
+          data: {
+            organizationId: organization.id,
+            userId,
+            role: OrganizationRole.MEMBER,
+            status: MembershipStatus.ACTIVE,
+            invitedByUserId: organization.createdByUserId ?? null,
+            invitedAt: now,
+            acceptedAt: now,
+          },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: organization.id,
+          actorUserId: userId,
+          targetType: AuditTargetType.MEMBERSHIP,
+          targetId: organization.id,
+          action: 'membership.joined_by_code_registration',
+          description: 'Organization joined by invite code during registration',
+          payload: {
+            inviteCode: organization.inviteCode,
+          },
+        },
+      });
+    });
   }
 
   private async claimOrganizationInviteForUser(

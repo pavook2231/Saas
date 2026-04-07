@@ -2,9 +2,11 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  GoneException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   AuditTargetType,
   MembershipStatus,
@@ -14,6 +16,7 @@ import {
 } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 
+import { AppConfig } from '../config/app.config';
 import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateOrganizationDto } from './dto/create-organization.dto';
@@ -25,9 +28,11 @@ const organizationSelect = {
   id: true,
   name: true,
   slug: true,
+  inviteCode: true,
   description: true,
   timezone: true,
   settings: true,
+  createdByUserId: true,
   createdAt: true,
   updatedAt: true,
   deletedAt: true,
@@ -35,7 +40,10 @@ const organizationSelect = {
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService<{ appConfig: AppConfig }>,
+  ) {}
 
   async createOrganization(userId: string, dto: CreateOrganizationDto) {
     const normalizedName = dto.name.trim();
@@ -51,12 +59,14 @@ export class OrganizationsService {
     }
 
     const uniqueSlug = await this.ensureUniqueSlug(slugBase);
+    const inviteCode = await this.ensureUniqueInviteCode();
 
     const organization = await this.prisma.$transaction(async (tx) => {
       const createdOrganization = await tx.organization.create({
         data: {
           name: normalizedName,
           slug: uniqueSlug,
+          inviteCode,
           description: this.trimOrNull(dto.description),
           timezone: this.trimOrNull(dto.timezone) ?? 'UTC',
           settings: this.toAuditPayload({
@@ -100,6 +110,7 @@ export class OrganizationsService {
       id: organization.id,
       name: organization.name,
       slug: organization.slug,
+      inviteCode: organization.inviteCode,
       description: organization.description,
       timezone: organization.timezone,
       createdAt: organization.createdAt,
@@ -137,6 +148,7 @@ export class OrganizationsService {
       id: membership.organization.id,
       name: membership.organization.name,
       slug: membership.organization.slug,
+      inviteCode: membership.organization.inviteCode,
       description: membership.organization.description,
       timezone: membership.organization.timezone,
       createdAt: membership.organization.createdAt,
@@ -204,6 +216,7 @@ export class OrganizationsService {
         id: invite.organization.id,
         name: invite.organization.name,
         slug: invite.organization.slug,
+        inviteCode: invite.organization.inviteCode,
         description: invite.organization.description,
         timezone: invite.organization.timezone,
         createdAt: invite.organization.createdAt,
@@ -252,6 +265,7 @@ export class OrganizationsService {
       id: organization.id,
       name: organization.name,
       slug: organization.slug,
+      inviteCode: organization.inviteCode,
       description: organization.description,
       timezone: organization.timezone,
       createdAt: organization.createdAt,
@@ -324,6 +338,7 @@ export class OrganizationsService {
       id: updatedOrganization.id,
       name: updatedOrganization.name,
       slug: updatedOrganization.slug,
+      inviteCode: updatedOrganization.inviteCode,
       description: updatedOrganization.description,
       timezone: updatedOrganization.timezone,
       createdAt: updatedOrganization.createdAt,
@@ -547,6 +562,7 @@ export class OrganizationsService {
       invitedAt: invite.createdAt,
       expiresAt: invite.expiresAt,
       inviteToken: rawInviteToken,
+      inviteLink: this.buildInvitationLink(rawInviteToken),
     };
   }
 
@@ -696,6 +712,135 @@ export class OrganizationsService {
     });
 
     return updatedMembership;
+  }
+
+  async getInvitationByToken(inviteToken: string) {
+    const invite = await this.findInvitationByTokenOrThrow(inviteToken);
+
+    return {
+      invitationId: invite.id,
+      email: invite.email,
+      role: invite.role,
+      status: invite.status,
+      expiresAt: invite.expiresAt,
+      organization: this.toOrganizationPreview(invite.organization),
+      acceptPath: `/invite/${inviteToken}/accept`,
+    };
+  }
+
+  async acceptInvitationByToken(inviteToken: string, userId: string) {
+    const invite = await this.findInvitationByTokenOrThrow(inviteToken);
+    return this.acceptResolvedInvitation(invite, userId);
+  }
+
+  async getJoinByInviteCode(inviteCode: string) {
+    const organization = await this.findJoinableOrganizationByInviteCode(inviteCode);
+
+    return {
+      organization: this.toOrganizationPreview(organization),
+      inviteCode: organization.inviteCode,
+      role: OrganizationRole.MEMBER,
+      requiresAuth: true as const,
+      registrationSupported: true as const,
+      acceptPath: `/join/${organization.inviteCode}/accept`,
+    };
+  }
+
+  async acceptJoinByInviteCode(inviteCode: string, userId: string) {
+    const user = await this.findActiveUserOrThrow(userId);
+    const organization = await this.findJoinableOrganizationByInviteCode(inviteCode);
+    const now = new Date();
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const existingMembership = await tx.membership.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId: organization.id,
+            userId,
+          },
+        },
+        select: {
+          id: true,
+          role: true,
+          status: true,
+          acceptedAt: true,
+        },
+      });
+
+      if (existingMembership?.status === MembershipStatus.ACTIVE) {
+        return {
+          alreadyMember: true,
+          membership: existingMembership,
+        };
+      }
+
+      const membership = existingMembership
+        ? await tx.membership.update({
+            where: { id: existingMembership.id },
+            data: {
+              role: existingMembership.role,
+              status: MembershipStatus.ACTIVE,
+              invitedByUserId: organization.createdByUserId ?? null,
+              invitedAt: now,
+              acceptedAt: now,
+              leftAt: null,
+              suspendedAt: null,
+            },
+            select: {
+              id: true,
+              role: true,
+              status: true,
+              acceptedAt: true,
+            },
+          })
+        : await tx.membership.create({
+            data: {
+              organizationId: organization.id,
+              userId,
+              role: OrganizationRole.MEMBER,
+              status: MembershipStatus.ACTIVE,
+              invitedByUserId: organization.createdByUserId ?? null,
+              invitedAt: now,
+              acceptedAt: now,
+            },
+            select: {
+              id: true,
+              role: true,
+              status: true,
+              acceptedAt: true,
+            },
+          });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: organization.id,
+          actorUserId: user.id,
+          targetType: AuditTargetType.MEMBERSHIP,
+          targetId: membership.id,
+          action: 'membership.joined_by_code',
+          description: 'Organization joined by invite code',
+          payload: {
+            inviteCode: organization.inviteCode,
+          },
+        },
+      });
+
+      return {
+        alreadyMember: false,
+        membership,
+      };
+    });
+
+    return {
+      joined: true as const,
+      alreadyMember: result.alreadyMember,
+      organization: this.toOrganizationPreview(organization),
+      membership: result.membership,
+    };
+  }
+
+  async acceptJoinByInviteCodeAfterRegistration(inviteCode: string, userId: string) {
+    await this.acceptJoinByInviteCode(inviteCode, userId);
   }
 
   async updateMembership(
@@ -898,6 +1043,238 @@ export class OrganizationsService {
     };
   }
 
+  private async acceptResolvedInvitation(
+    invite: {
+      id: string;
+      organizationId: string;
+      role: OrganizationRole;
+      email: string;
+      invitedByUserId: string | null;
+      expiresAt: Date;
+      status: OrganizationInviteStatus;
+      organization: {
+        id: string;
+        name: string;
+        slug: string;
+        inviteCode: string;
+        description: string | null;
+        timezone: string;
+        settings: Prisma.JsonValue | null;
+        createdAt: Date;
+        updatedAt: Date;
+        deletedAt: Date | null;
+      };
+    },
+    userId: string,
+  ) {
+    const user = await this.findActiveUserOrThrow(userId);
+    const normalizedEmail = user.email.trim().toLowerCase();
+
+    if (normalizedEmail !== invite.email) {
+      throw new ForbiddenException('Email пользователя не совпадает с приглашением');
+    }
+
+    const now = new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const existingMembership = await tx.membership.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId: invite.organizationId,
+            userId,
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+
+      const membership = existingMembership
+        ? await tx.membership.update({
+            where: { id: existingMembership.id },
+            data: {
+              role: invite.role,
+              status: MembershipStatus.ACTIVE,
+              invitedByUserId: invite.invitedByUserId,
+              invitedAt: now,
+              acceptedAt: now,
+              leftAt: null,
+              suspendedAt: null,
+            },
+            select: {
+              id: true,
+              role: true,
+              status: true,
+              acceptedAt: true,
+            },
+          })
+        : await tx.membership.create({
+            data: {
+              organizationId: invite.organizationId,
+              userId,
+              role: invite.role,
+              status: MembershipStatus.ACTIVE,
+              invitedByUserId: invite.invitedByUserId,
+              invitedAt: now,
+              acceptedAt: now,
+            },
+            select: {
+              id: true,
+              role: true,
+              status: true,
+              acceptedAt: true,
+            },
+          });
+
+      await tx.organizationInvite.update({
+        where: { id: invite.id },
+        data: {
+          status: OrganizationInviteStatus.ACCEPTED,
+          acceptedByUserId: userId,
+          acceptedAt: now,
+        },
+      });
+
+      if (!user.isEmailVerified) {
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            isEmailVerified: true,
+          },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: invite.organizationId,
+          actorUserId: userId,
+          targetType: AuditTargetType.MEMBERSHIP,
+          targetId: membership.id,
+          action: 'membership.accepted',
+          description: 'Organization invitation accepted',
+        },
+      });
+
+      return membership;
+    });
+  }
+
+  private async findInvitationByTokenOrThrow(inviteToken: string) {
+    const normalizedToken = inviteToken.trim();
+
+    if (normalizedToken.length < 32) {
+      throw new NotFoundException('Приглашение не найдено');
+    }
+
+    const invite = await this.prisma.organizationInvite.findFirst({
+      where: {
+        tokenHash: this.hashToken(normalizedToken),
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        email: true,
+        role: true,
+        status: true,
+        invitedByUserId: true,
+        expiresAt: true,
+        revokedAt: true,
+        organization: {
+          select: organizationSelect,
+        },
+      },
+    });
+
+    if (!invite || !invite.organization || invite.organization.deletedAt !== null) {
+      throw new NotFoundException('Приглашение не найдено');
+    }
+
+    if (invite.revokedAt !== null || invite.status === OrganizationInviteStatus.REVOKED) {
+      throw new GoneException('Приглашение было отозвано');
+    }
+
+    if (invite.status === OrganizationInviteStatus.ACCEPTED) {
+      throw new ConflictException('Приглашение уже принято');
+    }
+
+    if (invite.expiresAt <= new Date() || invite.status === OrganizationInviteStatus.EXPIRED) {
+      if (invite.status === OrganizationInviteStatus.PENDING) {
+        await this.prisma.organizationInvite.update({
+          where: { id: invite.id },
+          data: {
+            status: OrganizationInviteStatus.EXPIRED,
+          },
+        });
+      }
+
+      throw new GoneException('Срок действия приглашения истек');
+    }
+
+    return invite;
+  }
+
+  private async findJoinableOrganizationByInviteCode(inviteCode: string) {
+    const normalizedCode = this.normalizeInviteCode(inviteCode);
+
+    if (!normalizedCode) {
+      throw new NotFoundException('Организация не найдена');
+    }
+
+    const organization = await this.prisma.organization.findFirst({
+      where: {
+        inviteCode: normalizedCode,
+        deletedAt: null,
+      },
+      select: organizationSelect,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Организация не найдена');
+    }
+
+    return organization;
+  }
+
+  private async findActiveUserOrThrow(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        isEmailVerified: true,
+        isActive: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!user || !user.isActive || user.deletedAt !== null) {
+      throw new ForbiddenException('Учетная запись пользователя недоступна');
+    }
+
+    return user;
+  }
+
+  private toOrganizationPreview(
+    organization: Pick<
+      Prisma.OrganizationGetPayload<{ select: typeof organizationSelect }>,
+      'id' | 'name' | 'slug' | 'inviteCode' | 'description' | 'timezone' | 'createdAt' | 'updatedAt'
+    > & { settings: Prisma.JsonValue | null | undefined },
+  ) {
+    return {
+      id: organization.id,
+      name: organization.name,
+      slug: organization.slug,
+      inviteCode: organization.inviteCode,
+      joinLink: this.buildJoinLink(organization.inviteCode),
+      description: organization.description,
+      timezone: organization.timezone,
+      createdAt: organization.createdAt,
+      updatedAt: organization.updatedAt,
+      financeEnabled: this.getFinanceEnabled(organization.settings),
+    };
+  }
+
   private async findOrganizationOrThrow(organizationId: string) {
     const organization = await this.prisma.organization.findFirst({
       where: {
@@ -936,6 +1313,32 @@ export class OrganizationsService {
       slug = `${slugBase}-${sequence}`;
       sequence += 1;
     }
+  }
+
+  private async ensureUniqueInviteCode(): Promise<string> {
+    while (true) {
+      const inviteCode = this.generateInviteCode();
+      const existing = await this.prisma.organization.findFirst({
+        where: {
+          inviteCode,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!existing) {
+        return inviteCode;
+      }
+    }
+  }
+
+  private normalizeInviteCode(input: string): string {
+    return input
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '')
+      .slice(0, 32);
   }
 
   private normalizeSlug(input: string): string {
@@ -1035,11 +1438,33 @@ export class OrganizationsService {
     return randomBytes(32).toString('base64url');
   }
 
+  private generateInviteCode(): string {
+    return randomBytes(6).toString('hex');
+  }
+
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
   }
 
   private buildInviteExpiryDate(from: Date): Date {
-    return new Date(from.getTime() + 14 * 24 * 60 * 60 * 1000);
+    return new Date(from.getTime() + 48 * 60 * 60 * 1000);
+  }
+
+  private buildInvitationLink(inviteToken: string): string {
+    return new URL(`/invite/${inviteToken}`, this.getAppBaseUrl()).toString();
+  }
+
+  private buildJoinLink(inviteCode: string): string {
+    return new URL(`/join/${inviteCode}`, this.getAppBaseUrl()).toString();
+  }
+
+  private getAppBaseUrl(): string {
+    const config = this.configService.get<AppConfig>('appConfig');
+
+    if (!config) {
+      throw new BadRequestException('Конфигурация приложения недоступна');
+    }
+
+    return config.app.corsOrigins[0] ?? config.app.corsOrigin;
   }
 }

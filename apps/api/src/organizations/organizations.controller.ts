@@ -94,6 +94,7 @@ export class OrganizationsController {
     return this.organizationsService.listMemberships(organizationId);
   }
 
+  @Post(':organizationId/invite')
   @Post(':organizationId/memberships/invite')
   @UseGuards(OrganizationRoleGuard)
   @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)

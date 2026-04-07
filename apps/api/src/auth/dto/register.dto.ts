@@ -41,4 +41,10 @@ export class RegisterDto {
   @MinLength(32)
   @MaxLength(256)
   organizationInviteToken?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  @MaxLength(64)
+  organizationJoinCode?: string;
 }

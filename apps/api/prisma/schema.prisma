@@ -296,6 +296,7 @@ model Organization {
   id              String    @id @default(uuid()) @db.Uuid
   name            String
   slug            String    @unique
+  inviteCode      String    @unique
   legalName       String?
   description     String?
   timezone        String    @default("UTC")

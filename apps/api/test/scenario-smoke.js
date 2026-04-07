@@ -127,7 +127,7 @@ class InMemoryPrisma {
     const defs = {
       user: { ...base, email: '', passwordHash: null, isEmailVerified: false, firstName: null, lastName: null, avatarUrl: null, phone: null, isActive: true, lastLoginAt: null, createdAt: now, updatedAt: now, deletedAt: null },
       refreshToken: { ...base, userId: null, tokenHash: null, sessionId: null, userAgent: null, ipAddress: null, expiresAt: now, revokedAt: null, createdAt: now, updatedAt: now },
-      organization: { ...base, name: '', slug: '', description: null, timezone: 'UTC', settings: null, createdByUserId: null, createdAt: now, updatedAt: now, deletedAt: null },
+      organization: { ...base, name: '', slug: '', inviteCode: `join${String(base.id).replace(/-/g, '').slice(0, 8)}`, description: null, timezone: 'UTC', settings: null, createdByUserId: null, createdAt: now, updatedAt: now, deletedAt: null },
       organizationInvite: { ...base, organizationId: null, email: null, role: OrganizationRole.MEMBER, status: 'PENDING', tokenHash: randomUUID(), invitedByUserId: null, acceptedByUserId: null, expiresAt: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000), acceptedAt: null, revokedAt: null, createdAt: now, updatedAt: now },
       membership: { ...base, organizationId: null, userId: null, role: OrganizationRole.MEMBER, status: MembershipStatus.INVITED, invitedByUserId: null, invitedAt: now, acceptedAt: null, leftAt: null, suspendedAt: null, createdAt: now, updatedAt: now },
       participant: { ...base, organizationId: null, userId: null, firstName: '', lastName: '', middleName: null, displayName: null, email: null, phone: null, notes: null, invitationStatus: ParticipantInviteStatus.NOT_SENT, invitedAt: null, linkedAt: null, createdByUserId: null, createdAt: now, updatedAt: now, deletedAt: null },
@@ -238,7 +238,7 @@ class InMemoryPrisma {
     dataEncryptionService,
   );
   const authService = new AuthService(prisma, jwtService, configService);
-  const organizationsService = new OrganizationsService(prisma);
+  const organizationsService = new OrganizationsService(prisma, configService);
   const eventsService = new EventsService(prisma, notificationsService);
   const pointsService = new PointsService(prisma);
   const jwtStrategy = new JwtStrategy(configService, prisma);
@@ -275,10 +275,27 @@ class InMemoryPrisma {
 
   const directorInvite = await organizationsService.inviteMembership(organization.id, adminAuth.user.id, { email: 'director@example.com', role: OrganizationRole.DIRECTOR });
   assert.equal(typeof directorInvite.inviteToken, 'string');
+  assert.equal(typeof directorInvite.inviteLink, 'string');
+  const directorInvitePreview = await organizationsService.getInvitationByToken(directorInvite.inviteToken);
+  assert.equal(directorInvitePreview.organization.id, organization.id);
+  assert.equal(directorInvitePreview.role, OrganizationRole.DIRECTOR);
   const directorAuth = await authService.register({ email: 'director@example.com', password: 'StrongPass123', firstName: 'Dir', lastName: 'Lead', organizationInviteToken: directorInvite.inviteToken }, requestMeta);
   assert.equal(prisma.state.memberships.some((m) => m.organizationId === organization.id && m.userId === directorAuth.user.id && m.role === OrganizationRole.DIRECTOR && m.status === MembershipStatus.ACTIVE), true);
   await assert.rejects(() => organizationsService.inviteMembership(organization.id, directorAuth.user.id, { email: 'newadmin@example.com', role: OrganizationRole.ADMIN }), ForbiddenException);
   results.push('security smoke: organization invite tokens are required and DIRECTOR cannot invite ADMIN');
+
+  const assistantAuth = await authService.register({ email: 'assistant@example.com', password: 'StrongPass123', firstName: 'Assist', lastName: 'User' }, requestMeta);
+  const assistantInvite = await organizationsService.inviteMembership(organization.id, adminAuth.user.id, { email: 'assistant@example.com', role: OrganizationRole.ASSISTANT });
+  const acceptedMembership = await organizationsService.acceptInvitationByToken(assistantInvite.inviteToken, assistantAuth.user.id);
+  assert.equal(acceptedMembership.role, OrganizationRole.ASSISTANT);
+  assert.equal(acceptedMembership.status, MembershipStatus.ACTIVE);
+  results.push('3. existing user accepts organization invite by raw token');
+
+  const joinPreview = await organizationsService.getJoinByInviteCode(organization.inviteCode);
+  assert.equal(joinPreview.organization.id, organization.id);
+  const joinAuth = await authService.register({ email: 'joiner@example.com', password: 'StrongPass123', firstName: 'Join', lastName: 'Code', organizationJoinCode: organization.inviteCode }, requestMeta);
+  assert.equal(prisma.state.memberships.some((m) => m.organizationId === organization.id && m.userId === joinAuth.user.id && m.status === MembershipStatus.ACTIVE), true);
+  results.push('4. join code preview works and registration auto-joins organization');
 
   const previousPeriodEvent = await eventsService.createEvent(organization.id, adminAuth.user.id, { title: 'April 24 Performance', type: EventType.PERFORMANCE, startsAt: '2026-04-24T10:00:00.000Z', endsAt: '2026-04-24T11:00:00.000Z', participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }] });
   const mainEvent = await eventsService.createEvent(organization.id, adminAuth.user.id, { title: 'April 26 Performance', type: EventType.PERFORMANCE, startsAt: '2026-04-26T18:00:00.000Z', endsAt: '2026-04-26T19:30:00.000Z', participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }] });
@@ -287,10 +304,10 @@ class InMemoryPrisma {
   assert.equal(updatedEvent.title, 'April 26 Performance Updated');
   assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.EVENT_UPDATED && n.eventId === mainEvent.id).length, 1);
   assert.equal(notificationsGateway.emissions.some((item) => item.event === 'notifications:new'), true);
-  results.push('3. create/update event -> notifications');
+  results.push('5. create/update event -> notifications');
 
   await assert.rejects(() => eventsService.createEvent(organization.id, adminAuth.user.id, { title: 'Conflict Event', type: EventType.REHEARSAL, startsAt: '2026-04-26T18:30:00.000Z', endsAt: '2026-04-26T20:00:00.000Z', participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }] }), (error) => error instanceof ConflictException);
-  results.push('4. overlapping event conflict is detected');
+  results.push('6. overlapping event conflict is detected');
 
   const pointsConfig = await pointsService.updatePointsConfig(organization.id, adminAuth.user.id, { enabled: true, periodStartDay: 25, pointValue: '100.00', currency: CurrencyCode.RUB });
   assert.equal(pointsConfig.enabled, true);

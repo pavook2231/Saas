@@ -786,8 +786,8 @@ export function CalendarWorkspace() {
   }
 
   return (
-    <main className="calendar-page">
-      <section className="calendar-shell calendar-shell--premium">
+    <main className="calendar-page calendar-page--compact">
+      <section className="calendar-shell calendar-shell--premium calendar-shell--compact">
         <header className="calendar-header">
           <div>
             <p className="kicker">{ru.calendar.liveKicker}</p>
@@ -847,8 +847,8 @@ export function CalendarWorkspace() {
                       {isToday ? <small>{ru.calendar.todayBadge}</small> : null}
                     </div>
                     <div className="month-events">
-                      {items.slice(0, 3).map((item) => renderEventChip(item))}
-                      {items.length > 3 ? <p className="more-events">{ru.calendar.moreEvents(items.length - 3)}</p> : null}
+                      {items.slice(0, 2).map((item) => renderEventChip(item))}
+                      {items.length > 2 ? <p className="more-events">{ru.calendar.moreEvents(items.length - 2)}</p> : null}
                     </div>
                   </article>
                 );
@@ -901,7 +901,7 @@ export function CalendarWorkspace() {
         ) : null}
       </section>
 
-      <aside className="side-stack">
+      <aside className="side-stack side-stack--calendar">
         <div className="side-tabs side-tabs--premium">
           <button type="button" className={activeSidePanel === 'compose' ? 'is-active' : ''} onClick={() => setActiveSidePanel('compose')}>
             Добавить

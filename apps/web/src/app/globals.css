@@ -2135,6 +2135,174 @@ textarea.ui-field:focus {
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
+.calendar-page--compact {
+  grid-template-columns: minmax(0, 1fr) 332px;
+  gap: 14px;
+  height: calc(100dvh - 148px);
+  min-height: calc(100dvh - 148px);
+  overflow: hidden;
+}
+
+.calendar-shell--compact {
+  gap: 12px;
+  padding: 14px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.side-stack--calendar {
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+
+.side-stack--calendar .quick-panel,
+.side-stack--calendar .finance-panel,
+.side-stack--calendar .chat-panel {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  padding: 14px;
+  gap: 10px;
+}
+
+.calendar-page--compact .calendar-header {
+  gap: 10px;
+}
+
+.calendar-page--compact .kicker {
+  margin-bottom: 2px;
+  font-size: 0.68rem;
+}
+
+.calendar-page--compact .calendar-header h1 {
+  font-size: clamp(1.2rem, 1.6vw, 1.7rem);
+}
+
+.calendar-page--compact .period-label {
+  font-size: 0.84rem;
+}
+
+.calendar-page--compact .toolbar {
+  gap: 6px;
+}
+
+.calendar-page--compact .segmented,
+.calendar-page--compact .nav-controls {
+  padding: 3px;
+  border-radius: 12px;
+}
+
+.calendar-page--compact .segmented button,
+.calendar-page--compact .nav-controls button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.82rem;
+}
+
+.calendar-page--compact .ui-button--md {
+  min-height: 38px;
+}
+
+.calendar-page--compact .month-view {
+  height: 100%;
+  min-height: 0;
+  gap: 8px;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.calendar-page--compact .month-weekday-row,
+.calendar-page--compact .month-grid {
+  gap: 6px;
+}
+
+.calendar-page--compact .month-weekday-row div {
+  font-size: 0.72rem;
+}
+
+.calendar-page--compact .month-grid {
+  height: 100%;
+  min-height: 0;
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+.calendar-page--compact .month-cell {
+  min-height: 0;
+  padding: 6px;
+  gap: 5px;
+  border-radius: 14px;
+}
+
+.calendar-page--compact .month-cell-header span {
+  font-size: 0.9rem;
+}
+
+.calendar-page--compact .month-events {
+  gap: 4px;
+  overflow: hidden;
+}
+
+.calendar-page--compact .more-events {
+  font-size: 0.72rem;
+}
+
+.calendar-page--compact .week-view {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.calendar-page--compact .week-grid-head > div {
+  min-height: 44px;
+  padding: 4px;
+  font-size: 0.76rem;
+}
+
+.calendar-page--compact .time-col-label,
+.calendar-page--compact .hour-label {
+  font-size: 0.68rem;
+}
+
+.calendar-page--compact .week-grid-body {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+
+.calendar-page--compact .hour-row {
+  min-height: 48px;
+}
+
+.calendar-page--compact .hour-label {
+  padding-top: 8px;
+}
+
+.calendar-page--compact .hour-slot {
+  padding: 4px;
+  gap: 4px;
+}
+
+.calendar-page--compact .event-chip {
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+
+.calendar-page--compact .chip-time,
+.calendar-page--compact .chip-meta {
+  font-size: 0.68rem;
+}
+
+.calendar-page--compact .chip-title {
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
 .calendar-header h1 {
   font-size: clamp(1.45rem, 2vw, 2.1rem);
 }

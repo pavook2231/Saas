@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import { ru } from './lib/i18n/ru';
 
 export const metadata: Metadata = {
-  title: 'Платформа управления организациями',
-  description: 'Платформа для управления организациями, расписанием и участниками',
+  title: ru.metadata.title,
+  description: ru.metadata.description,
 };
 
 type LayoutProps = {

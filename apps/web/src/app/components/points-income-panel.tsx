@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { ru } from '../lib/i18n/ru';
 
 type CurrencyCode = 'RUB' | 'USD' | 'EUR' | 'KZT' | 'BYN' | 'UZS';
 type RateSource = 'HISTORY' | 'CONFIG' | 'NONE';
@@ -100,11 +101,11 @@ const getErrorMessage = (error: unknown): string => {
     return error.message;
   }
 
-  return 'Непредвиденная ошибка запроса';
+  return ru.common.unexpectedRequestError;
 };
 
 const parseErrorMessage = async (response: Response): Promise<string> => {
-  const fallback = `Ошибка запроса (${response.status})`;
+  const fallback = ru.common.requestError(response.status);
 
   try {
     const payload = (await response.json()) as {
@@ -204,7 +205,7 @@ export function PointsIncomePanel() {
 
   const requireOrganization = (): string => {
     if (!pointsBaseUrl) {
-      throw new Error('Нужно указать ID организации');
+      throw new Error(ru.common.organizationIdRequired);
     }
 
     return pointsBaseUrl;
@@ -214,7 +215,7 @@ export function PointsIncomePanel() {
     const value = organizationId.trim();
 
     if (!value) {
-      throw new Error('Нужно указать ID организации');
+      throw new Error(ru.common.organizationIdRequired);
     }
 
     return value;
@@ -224,7 +225,7 @@ export function PointsIncomePanel() {
     const token = accessToken.trim();
 
     if (!token) {
-      throw new Error('Для этого действия нужен access token');
+      throw new Error(ru.common.actionAccessTokenRequired);
     }
 
     return {
@@ -290,7 +291,7 @@ export function PointsIncomePanel() {
     const enabled = await syncFinanceStatus();
 
     if (!enabled) {
-      throw new Error('Финансовый модуль отключен для этой организации');
+      throw new Error(ru.finance.errors.financeDisabled);
     }
   };
 
@@ -320,7 +321,7 @@ export function PointsIncomePanel() {
         setPointValue(payload.pointValue);
       }
 
-      setNoticeText('Стоимость балла загружена');
+      setNoticeText(ru.finance.notices.rateLoaded);
     });
   };
 
@@ -360,7 +361,11 @@ export function PointsIncomePanel() {
       setCurrency(payload.currency);
       setPointValue(payload.pointValue);
       setNoticeText(
-        `Стоимость балла сохранена: ${payload.pointValue} ${payload.currency}, действует с ${payload.effectiveFrom.slice(0, 10)}`,
+        ru.finance.notices.rateSaved(
+          payload.pointValue,
+          payload.currency,
+          payload.effectiveFrom,
+        ),
       );
     });
   };
@@ -386,7 +391,7 @@ export function PointsIncomePanel() {
 
       const payload = (await response.json()) as IncomeResponse;
       setIncomeData(payload);
-      setNoticeText('Отчет по доходу рассчитан');
+      setNoticeText(ru.finance.notices.incomeCalculated);
     });
   };
 
@@ -424,14 +429,14 @@ export function PointsIncomePanel() {
         downloadBlob(fileName, jsonContent, 'application/json;charset=utf-8');
       }
 
-      setNoticeText(`Экспорт ${format.toUpperCase()} готов`);
+      setNoticeText(ru.finance.notices.exportReady(format));
     });
   };
 
   const refreshFinanceStatus = async () => {
     await withAction('sync-finance', async () => {
       const enabled = await syncFinanceStatus();
-      setNoticeText(enabled ? 'Финансы включены' : 'Финансы отключены');
+      setNoticeText(enabled ? ru.finance.notices.financeEnabled : ru.finance.notices.financeDisabled);
     });
   };
 
@@ -461,16 +466,18 @@ export function PointsIncomePanel() {
         setRateData(null);
         setIncomeData(null);
       }
-      setNoticeText(next ? 'Финансовый модуль включен' : 'Финансовый модуль отключен');
+      setNoticeText(
+        next
+          ? ru.finance.notices.financeModuleEnabled
+          : ru.finance.notices.financeModuleDisabled,
+      );
     });
   };
 
   return (
     <section className="finance-panel">
-      <h2>Баллы и доход</h2>
-      <p className="finance-note">
-        Настраивайте стоимость балла, считайте доход за период 25-25 и выгружайте отчет.
-      </p>
+      <h2>{ru.finance.title}</h2>
+      <p className="finance-note">{ru.finance.note}</p>
 
       <form
         className="finance-form"
@@ -480,18 +487,18 @@ export function PointsIncomePanel() {
         }}
       >
         <label>
-          ID организации
+          {ru.finance.fields.organizationId}
           <input
-            placeholder="UUID организации"
+            placeholder={ru.finance.fields.organizationPlaceholder}
             value={organizationId}
             onChange={(event) => setOrganizationId(event.target.value)}
           />
         </label>
 
         <label>
-          Токен доступа
+          {ru.finance.fields.accessToken}
           <input
-            placeholder="JWT токен доступа"
+            placeholder={ru.finance.fields.accessTokenPlaceholder}
             type="password"
             value={accessToken}
             onChange={(event) => setAccessToken(event.target.value)}
@@ -500,7 +507,7 @@ export function PointsIncomePanel() {
 
         <div className="row">
           <label>
-            Дата расчета
+            {ru.finance.fields.referenceDate}
             <input
               type="date"
               value={referenceDate}
@@ -509,9 +516,9 @@ export function PointsIncomePanel() {
           </label>
 
           <label>
-            Участник (необязательно)
+            {ru.finance.fields.participant}
             <input
-              placeholder="UUID участника"
+              placeholder={ru.finance.fields.participantPlaceholder}
               value={participantId}
               onChange={(event) => setParticipantId(event.target.value)}
             />
@@ -524,15 +531,17 @@ export function PointsIncomePanel() {
             onClick={() => void refreshFinanceStatus()}
             disabled={busyAction !== null}
           >
-            {busyAction === 'sync-finance' ? 'Проверка...' : 'Проверить флаг финансов'}
+            {busyAction === 'sync-finance'
+              ? ru.finance.progress.checking
+              : ru.finance.actions.checkFinanceFlag}
           </button>
         </div>
       </form>
 
       {financeEnabled === false ? (
         <section className="finance-block">
-          <h3>Финансы отключены</h3>
-          <p className="empty-state">Финансовые функции выключены для этой организации.</p>
+          <h3>{ru.finance.sections.financeDisabled}</h3>
+          <p className="empty-state">{ru.finance.sections.financeDisabledText}</p>
           <div className="action-row">
             <button
               className="accent-button"
@@ -540,7 +549,9 @@ export function PointsIncomePanel() {
               onClick={() => void updateFinanceEnabled(true)}
               disabled={busyAction !== null}
             >
-              {busyAction === 'toggle-finance' ? 'Обновление...' : 'Включить финансы'}
+              {busyAction === 'toggle-finance'
+                ? ru.finance.progress.updating
+                : ru.finance.actions.enableFinance}
             </button>
           </div>
         </section>
@@ -548,21 +559,19 @@ export function PointsIncomePanel() {
 
       {financeEnabled === null ? (
         <section className="finance-block">
-          <h3>Доступ к финансам</h3>
-          <p className="empty-state">
-            Укажите организацию и токен, затем нажмите «Проверить флаг финансов».
-          </p>
+          <h3>{ru.finance.sections.financeAccess}</h3>
+          <p className="empty-state">{ru.finance.sections.financeAccessText}</p>
         </section>
       ) : null}
 
       {financeEnabled ? (
         <>
           <section className="finance-block">
-            <h3>Стоимость балла</h3>
+            <h3>{ru.finance.sections.pointRate}</h3>
 
             <div className="row">
               <label>
-                Значение
+                {ru.finance.fields.pointValue}
                 <input
                   inputMode="decimal"
                   placeholder="3.00"
@@ -572,7 +581,7 @@ export function PointsIncomePanel() {
               </label>
 
               <label>
-                Валюта
+                {ru.finance.fields.currency}
                 <select
                   value={currency}
                   onChange={(event) => setCurrency(event.target.value as CurrencyCode)}
@@ -587,7 +596,7 @@ export function PointsIncomePanel() {
             </div>
 
             <label>
-              Действует с
+              {ru.finance.fields.effectiveFrom}
               <input
                 type="date"
                 value={effectiveFrom}
@@ -601,7 +610,9 @@ export function PointsIncomePanel() {
                 onClick={() => void loadRate()}
                 disabled={busyAction !== null}
               >
-                {busyAction === 'load-rate' ? 'Загрузка...' : 'Загрузить ставку'}
+                {busyAction === 'load-rate'
+                  ? ru.finance.progress.loading
+                  : ru.finance.actions.loadRate}
               </button>
               <button
                 className="accent-button"
@@ -609,30 +620,34 @@ export function PointsIncomePanel() {
                 onClick={() => void saveRate()}
                 disabled={busyAction !== null}
               >
-                {busyAction === 'save-rate' ? 'Сохранение...' : 'Сохранить ставку'}
+                {busyAction === 'save-rate'
+                  ? ru.finance.progress.saving
+                  : ru.finance.actions.saveRate}
               </button>
               <button
                 type="button"
                 onClick={() => void updateFinanceEnabled(false)}
                 disabled={busyAction !== null}
               >
-                {busyAction === 'toggle-finance' ? 'Обновление...' : 'Отключить финансы'}
+                {busyAction === 'toggle-finance'
+                  ? ru.finance.progress.updating
+                  : ru.finance.actions.disableFinance}
               </button>
             </div>
 
             {rateData ? (
               <p className="finance-meta">
-                Текущая ставка: {rateData.pointValue ?? '-'} {rateData.currency}
+                {ru.finance.meta.currentRate}: {rateData.pointValue ?? '-'} {rateData.currency}
                 {' | '}
-                источник {rateData.source}
+                {ru.finance.meta.source} {rateData.source}
                 {' | '}
-                действует {formatIsoDateTime(rateData.effectiveFrom)}
+                {ru.finance.meta.effective} {formatIsoDateTime(rateData.effectiveFrom)}
               </p>
             ) : null}
           </section>
 
           <section className="finance-block">
-            <h3>Доход</h3>
+            <h3>{ru.finance.sections.income}</h3>
 
             <div className="action-row">
               <button
@@ -640,21 +655,27 @@ export function PointsIncomePanel() {
                 onClick={() => void loadIncome()}
                 disabled={busyAction !== null}
               >
-                {busyAction === 'load-income' ? 'Расчет...' : 'Рассчитать'}
+                {busyAction === 'load-income'
+                  ? ru.finance.progress.calculating
+                  : ru.finance.actions.calculate}
               </button>
               <button
                 type="button"
                 onClick={() => void exportReport('csv')}
                 disabled={busyAction !== null}
               >
-                {busyAction === 'export-csv' ? 'Экспорт...' : 'Экспорт CSV'}
+                {busyAction === 'export-csv'
+                  ? ru.finance.progress.exporting
+                  : ru.finance.actions.exportCsv}
               </button>
               <button
                 type="button"
                 onClick={() => void exportReport('json')}
                 disabled={busyAction !== null}
               >
-                {busyAction === 'export-json' ? 'Экспорт...' : 'Экспорт JSON'}
+                {busyAction === 'export-json'
+                  ? ru.finance.progress.exporting
+                  : ru.finance.actions.exportJson}
               </button>
             </div>
 
@@ -662,19 +683,19 @@ export function PointsIncomePanel() {
               <>
                 <div className="income-stats">
                   <article>
-                    <span>Всего баллов</span>
+                    <span>{ru.finance.stats.totalPoints}</span>
                     <strong>{incomeData.totals.totalPoints}</strong>
                   </article>
                   <article>
-                    <span>Автобаллы</span>
+                    <span>{ru.finance.stats.autoPoints}</span>
                     <strong>{incomeData.totals.autoPoints}</strong>
                   </article>
                   <article>
-                    <span>Ручные баллы</span>
+                    <span>{ru.finance.stats.manualPoints}</span>
                     <strong>{incomeData.totals.manualPoints}</strong>
                   </article>
                   <article>
-                    <span>Общий доход</span>
+                    <span>{ru.finance.stats.totalIncome}</span>
                     <strong>
                       {formatAmount(incomeData.totals.totalAmount, incomeData.rate.currency)}
                     </strong>
@@ -682,22 +703,24 @@ export function PointsIncomePanel() {
                 </div>
 
                 <p className="finance-meta">
-                  Период: {incomeData.periodStart.slice(0, 10)} - {incomeData.periodEnd.slice(0, 10)}
+                  {ru.finance.meta.period}: {incomeData.periodStart.slice(0, 10)} -{' '}
+                  {incomeData.periodEnd.slice(0, 10)}
                   {' | '}
-                  записей {incomeData.entriesCount}
+                  {ru.finance.meta.entries} {incomeData.entriesCount}
                   {' | '}
-                  ставка {incomeData.rate.pointValue ?? '-'} {incomeData.rate.currency}
+                  {ru.finance.meta.rate} {incomeData.rate.pointValue ?? '-'}{' '}
+                  {incomeData.rate.currency}
                 </p>
 
                 <div className="income-table-wrap">
                   <table className="income-table">
                     <thead>
                       <tr>
-                        <th>Участник</th>
-                        <th>Авто</th>
-                        <th>Ручные</th>
-                        <th>Итого</th>
-                        <th>Доход</th>
+                        <th>{ru.finance.table.participant}</th>
+                        <th>{ru.finance.table.auto}</th>
+                        <th>{ru.finance.table.manual}</th>
+                        <th>{ru.finance.table.total}</th>
+                        <th>{ru.finance.table.income}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -715,7 +738,7 @@ export function PointsIncomePanel() {
                 </div>
               </>
             ) : (
-              <p className="empty-state">Данные по доходу еще не загружены.</p>
+              <p className="empty-state">{ru.finance.emptyIncome}</p>
             )}
           </section>
         </>

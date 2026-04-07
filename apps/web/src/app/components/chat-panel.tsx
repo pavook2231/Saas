@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { ru } from '../lib/i18n/ru';
 
 type ChatScope = 'ORGANIZATION' | 'EVENT';
 
@@ -40,11 +41,11 @@ const getErrorMessage = (error: unknown): string => {
     return error.message;
   }
 
-  return 'Непредвиденная ошибка запроса';
+  return ru.common.unexpectedRequestError;
 };
 
 const parseErrorMessage = async (response: Response): Promise<string> => {
-  const fallback = `Ошибка запроса (${response.status})`;
+  const fallback = ru.common.requestError(response.status);
 
   try {
     const payload = (await response.json()) as {
@@ -133,11 +134,14 @@ export function ChatPanel() {
     return `${defaultApiBaseUrl}/organizations/${trimmedOrganizationId}/chats`;
   }, [organizationId]);
 
-  const currentScopeTitle = scope === 'ORGANIZATION' ? 'чат организации' : 'чат события';
+  const currentScopeTitle =
+    scope === 'ORGANIZATION'
+      ? ru.chat.currentScopeTitles.ORGANIZATION
+      : ru.chat.currentScopeTitles.EVENT;
 
   const requireApiBase = (): string => {
     if (!apiBase) {
-      throw new Error('Нужно указать ID организации');
+      throw new Error(ru.common.organizationIdRequired);
     }
 
     return apiBase;
@@ -147,7 +151,7 @@ export function ChatPanel() {
     const token = accessToken.trim();
 
     if (!token) {
-      throw new Error('Нужен access token');
+      throw new Error(ru.common.accessTokenRequired);
     }
 
     return token;
@@ -157,7 +161,7 @@ export function ChatPanel() {
     const value = eventId.trim();
 
     if (!value) {
-      throw new Error('В режиме события нужен ID события');
+      throw new Error(ru.chat.errors.eventIdRequired);
     }
 
     return value;
@@ -204,7 +208,7 @@ export function ChatPanel() {
 
       const payload = (await response.json()) as ChatListResponse;
       setMessages(payload.items);
-      setNoticeText(`Загружено сообщений: ${payload.items.length}`);
+      setNoticeText(ru.chat.notices.loadedMessages(payload.items.length));
     } catch (error) {
       setErrorText(getErrorMessage(error));
     } finally {
@@ -222,7 +226,7 @@ export function ChatPanel() {
       const body = messageText.trim();
 
       if (body.length < 1) {
-        throw new Error('Сообщение не может быть пустым');
+        throw new Error(ru.chat.errors.emptyMessage);
       }
 
       const path = resolveMessagesPath();
@@ -245,7 +249,7 @@ export function ChatPanel() {
       const payload = (await response.json()) as ChatMessage;
       setMessages((current) => upsertMessage(current, payload));
       setMessageText('');
-      setNoticeText('Сообщение отправлено');
+      setNoticeText(ru.chat.notices.messageSent);
     } catch (error) {
       setErrorText(getErrorMessage(error));
     } finally {
@@ -285,7 +289,7 @@ export function ChatPanel() {
 
       socket.on('connect', () => {
         setSocketConnected(true);
-        setNoticeText('Realtime подключен');
+        setNoticeText(ru.chat.notices.realtimeConnected);
 
         if (scope === 'EVENT' && currentEventId) {
           socket.emit('chat:subscribe:event', {
@@ -300,7 +304,7 @@ export function ChatPanel() {
       });
 
       socket.on('chat:error', (payload: { message?: string }) => {
-        setErrorText(payload.message ?? 'Ошибка сокета чата');
+        setErrorText(payload.message ?? ru.chat.errors.socketError);
       });
 
       socket.on('chat:message:new', (payload: ChatMessage) => {
@@ -336,23 +340,23 @@ export function ChatPanel() {
 
   return (
     <section className="chat-panel">
-      <h2>Чаты</h2>
-      <p className="chat-note">Чат организации и события с обновлениями в реальном времени.</p>
+      <h2>{ru.chat.title}</h2>
+      <p className="chat-note">{ru.chat.note}</p>
 
       <div className="chat-form">
         <label>
-          ID организации
+          {ru.chat.fields.organizationId}
           <input
-            placeholder="UUID организации"
+            placeholder={ru.chat.fields.organizationPlaceholder}
             value={organizationId}
             onChange={(event) => setOrganizationId(event.target.value)}
           />
         </label>
 
         <label>
-          Токен доступа
+          {ru.chat.fields.accessToken}
           <input
-            placeholder="JWT токен доступа"
+            placeholder={ru.chat.fields.accessTokenPlaceholder}
             type="password"
             value={accessToken}
             onChange={(event) => setAccessToken(event.target.value)}
@@ -365,22 +369,22 @@ export function ChatPanel() {
             className={scope === 'ORGANIZATION' ? 'active' : ''}
             onClick={() => setScope('ORGANIZATION')}
           >
-            Организация
+            {ru.chat.scopes.ORGANIZATION}
           </button>
           <button
             type="button"
             className={scope === 'EVENT' ? 'active' : ''}
             onClick={() => setScope('EVENT')}
           >
-            Событие
+            {ru.chat.scopes.EVENT}
           </button>
         </div>
 
         {scope === 'EVENT' ? (
           <label>
-            ID события
+            {ru.chat.fields.eventId}
             <input
-              placeholder="UUID события"
+              placeholder={ru.chat.fields.eventPlaceholder}
               value={eventId}
               onChange={(event) => setEventId(event.target.value)}
             />
@@ -389,7 +393,9 @@ export function ChatPanel() {
 
         <div className="action-row">
           <button type="button" onClick={() => void loadMessages()} disabled={loading || sending}>
-            {loading ? 'Загрузка...' : `Загрузить ${currentScopeTitle}`}
+            {loading
+              ? ru.chat.actions.loading
+              : ru.chat.actions.loadScope(currentScopeTitle)}
           </button>
           <button
             type="button"
@@ -397,20 +403,20 @@ export function ChatPanel() {
             disabled={connecting || sending}
           >
             {connecting
-              ? 'Подключение...'
+              ? ru.chat.actions.connectingRealtime
               : socketConnected
-                ? 'Переподключить realtime'
-                : 'Подключить realtime'}
+                ? ru.chat.actions.reconnectRealtime
+                : ru.chat.actions.connectRealtime}
           </button>
           <button type="button" onClick={disconnectSocket} disabled={!socketConnected}>
-            Отключить
+            {ru.chat.actions.disconnect}
           </button>
         </div>
       </div>
 
       <div className="chat-compose">
         <textarea
-          placeholder="Введите сообщение..."
+          placeholder={ru.chat.fields.messagePlaceholder}
           value={messageText}
           onChange={(event) => setMessageText(event.target.value)}
           rows={3}
@@ -421,13 +427,13 @@ export function ChatPanel() {
           onClick={() => void sendMessage()}
           disabled={sending}
         >
-          {sending ? 'Отправка...' : 'Отправить'}
+          {sending ? ru.chat.actions.sending : ru.chat.actions.send}
         </button>
       </div>
 
       <div className="chat-messages">
         {messages.length === 0 ? (
-          <p className="empty-state">Сообщения пока не загружены.</p>
+          <p className="empty-state">{ru.chat.emptyState}</p>
         ) : (
           messages.map((message) => (
             <article key={message.id} className="chat-message">
@@ -436,7 +442,11 @@ export function ChatPanel() {
                 <span>{formatTimestamp(message.createdAt)}</span>
               </header>
               <p>{message.body}</p>
-              {message.editedAt ? <small>изменено {formatTimestamp(message.editedAt)}</small> : null}
+              {message.editedAt ? (
+                <small>
+                  {ru.chat.notices.editedPrefix} {formatTimestamp(message.editedAt)}
+                </small>
+              ) : null}
             </article>
           ))
         )}

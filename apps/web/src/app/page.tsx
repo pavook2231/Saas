@@ -3,6 +3,7 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useState } from 'react';
 import { ChatPanel } from './components/chat-panel';
 import { PointsIncomePanel } from './components/points-income-panel';
+import { ru } from './lib/i18n/ru';
 
 type ViewMode = 'week' | 'month';
 type EventType = 'PERFORMANCE' | 'REHEARSAL' | 'EVENT' | 'CUSTOM';
@@ -29,23 +30,12 @@ type EventDraft = {
   participants: number;
 };
 
-const weekDayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const;
+const weekDayLabels = ru.calendar.weekDayLabels;
 const weekHours = Array.from({ length: 14 }, (_, index) => index + 8);
 
-const eventTypeLabels: Record<EventType, string> = {
-  PERFORMANCE: 'Спектакль',
-  REHEARSAL: 'Репетиция',
-  EVENT: 'Событие',
-  CUSTOM: 'Свободный формат',
-};
+const eventTypeLabels: Record<EventType, string> = ru.calendar.eventTypeLabels;
 
-const statusLabels: Record<EventStatus, string> = {
-  DRAFT: 'Черновик',
-  PLANNED: 'Запланировано',
-  CONFIRMED: 'Подтверждено',
-  COMPLETED: 'Завершено',
-  CANCELLED: 'Отменено',
-};
+const statusLabels: Record<EventStatus, string> = ru.calendar.statusLabels;
 
 const monthTitleFormat = new Intl.DateTimeFormat('ru-RU', {
   month: 'long',
@@ -163,7 +153,7 @@ const createInitialEvents = (): CalendarEvent[] => {
   return [
     {
       id: makeEventId(),
-      title: 'Сценическая репетиция',
+      title: ru.calendar.sampleEvents.rehearsal,
       type: 'REHEARSAL',
       status: 'CONFIRMED',
       startsAt: new Date(
@@ -178,7 +168,7 @@ const createInitialEvents = (): CalendarEvent[] => {
     },
     {
       id: makeEventId(),
-      title: 'Премьерный показ',
+      title: ru.calendar.sampleEvents.performance,
       type: 'PERFORMANCE',
       status: 'PLANNED',
       startsAt: new Date(
@@ -193,7 +183,7 @@ const createInitialEvents = (): CalendarEvent[] => {
     },
     {
       id: makeEventId(),
-      title: 'Встреча с продюсером',
+      title: ru.calendar.sampleEvents.meeting,
       type: 'EVENT',
       status: 'DRAFT',
       startsAt: new Date(
@@ -208,7 +198,7 @@ const createInitialEvents = (): CalendarEvent[] => {
     },
     {
       id: makeEventId(),
-      title: 'Пластический класс',
+      title: ru.calendar.sampleEvents.movement,
       type: 'CUSTOM',
       status: 'CONFIRMED',
       startsAt: new Date(
@@ -319,7 +309,7 @@ export default function HomePage() {
 
     const nextEvent: CalendarEvent = {
       id: makeEventId(),
-      title: 'Новое событие',
+      title: ru.calendar.newEventTitle,
       type: 'EVENT',
       status: 'PLANNED',
       startsAt: baseDate,
@@ -384,7 +374,7 @@ export default function HomePage() {
         item.id === draft.id
           ? {
               ...item,
-              title: draft.title.trim() || 'Событие без названия',
+              title: draft.title.trim() || ru.calendar.untitledEvent,
               type: draft.type,
               status: draft.status,
               startsAt,
@@ -432,7 +422,7 @@ export default function HomePage() {
     const clone: CalendarEvent = {
       ...selectedEvent,
       id: makeEventId(),
-      title: `${selectedEvent.title} (копия)`,
+      title: `${selectedEvent.title} (${ru.calendar.duplicateSuffix})`,
       startsAt: new Date(selectedEvent.startsAt.getTime() + 60 * 60_000),
     };
 
@@ -466,7 +456,9 @@ export default function HomePage() {
     >
       <span className="chip-time">{timeFormat.format(event.startsAt)}</span>
       <span className="chip-title">{event.title}</span>
-      <span className="chip-meta">{event.durationMinutes} мин</span>
+      <span className="chip-meta">
+        {event.durationMinutes} {ru.calendar.minuteShort}
+      </span>
     </button>
   );
 
@@ -475,8 +467,8 @@ export default function HomePage() {
       <section className="calendar-shell">
         <header className="calendar-header">
           <div>
-            <p className="kicker">Живое расписание</p>
-            <h1>Календарь постановок</h1>
+            <p className="kicker">{ru.calendar.liveKicker}</p>
+            <h1>{ru.calendar.title}</h1>
             <p className="period-label">{periodLabel}</p>
           </div>
 
@@ -487,31 +479,31 @@ export default function HomePage() {
                 onClick={() => setViewMode('week')}
                 type="button"
               >
-                Неделя
+                {ru.calendar.views.week}
               </button>
               <button
                 className={viewMode === 'month' ? 'active' : ''}
                 onClick={() => setViewMode('month')}
                 type="button"
               >
-                Месяц
+                {ru.calendar.views.month}
               </button>
             </div>
 
             <div className="nav-controls">
               <button onClick={() => navigate(-1)} type="button">
-                Назад
+                {ru.calendar.navigation.previous}
               </button>
               <button onClick={() => setCursorDate(startOfDay(new Date()))} type="button">
-                Сегодня
+                {ru.calendar.navigation.today}
               </button>
               <button onClick={() => navigate(1)} type="button">
-                Вперед
+                {ru.calendar.navigation.next}
               </button>
             </div>
 
             <button className="accent-button" onClick={createQuickEvent} type="button">
-              + Быстрое событие
+              {ru.calendar.quickEvent}
             </button>
           </div>
         </header>
@@ -540,12 +532,12 @@ export default function HomePage() {
                   >
                     <div className="month-cell-header">
                       <span>{day.getDate()}</span>
-                      {isToday ? <small>Сегодня</small> : null}
+                      {isToday ? <small>{ru.calendar.todayBadge}</small> : null}
                     </div>
                     <div className="month-events">
                       {items.slice(0, 3).map((item) => renderEventChip(item))}
                       {items.length > 3 ? (
-                        <p className="more-events">+{items.length - 3} еще</p>
+                        <p className="more-events">{ru.calendar.moreEvents(items.length - 3)}</p>
                       ) : null}
                     </div>
                   </article>
@@ -556,7 +548,7 @@ export default function HomePage() {
         ) : (
           <section className="week-view">
             <div className="week-grid-head">
-              <div className="time-col-label">Время</div>
+              <div className="time-col-label">{ru.calendar.timeColumn}</div>
               {weekDays.map((day) => (
                 <div key={toDayKey(day)} className={isSameDay(day, new Date()) ? 'today' : ''}>
                   <strong>{weekdayLongFormat.format(day)}</strong>
@@ -595,14 +587,14 @@ export default function HomePage() {
 
       <aside className="side-stack">
         <section className="quick-panel">
-          <h2>Быстрые изменения</h2>
+          <h2>{ru.calendar.quickPanel.title}</h2>
           {!selectedEvent || !draft ? (
-            <p className="empty-state">Выберите событие, чтобы сразу изменить его параметры.</p>
+            <p className="empty-state">{ru.calendar.quickPanel.emptyState}</p>
           ) : (
             <>
               <form className="quick-form" onSubmit={saveDraft}>
                 <label>
-                  Название
+                  {ru.calendar.quickPanel.fields.title}
                   <input
                     value={draft.title}
                     onChange={(event) =>
@@ -614,7 +606,7 @@ export default function HomePage() {
                 </label>
 
                 <label>
-                  Тип
+                  {ru.calendar.quickPanel.fields.type}
                   <select
                     value={draft.type}
                     onChange={(event) =>
@@ -634,7 +626,7 @@ export default function HomePage() {
                 </label>
 
                 <label>
-                  Статус
+                  {ru.calendar.quickPanel.fields.status}
                   <select
                     value={draft.status}
                     onChange={(event) =>
@@ -655,7 +647,7 @@ export default function HomePage() {
 
                 <div className="row">
                   <label>
-                    Дата
+                    {ru.calendar.quickPanel.fields.date}
                     <input
                       type="date"
                       value={draft.dateInput}
@@ -668,7 +660,7 @@ export default function HomePage() {
                   </label>
 
                   <label>
-                    Время
+                    {ru.calendar.quickPanel.fields.time}
                     <input
                       type="time"
                       value={draft.timeInput}
@@ -683,7 +675,7 @@ export default function HomePage() {
 
                 <div className="row">
                   <label>
-                    Длительность (мин)
+                    {ru.calendar.quickPanel.fields.duration}
                     <input
                       min={15}
                       step={15}
@@ -703,7 +695,7 @@ export default function HomePage() {
                   </label>
 
                   <label>
-                    Участники
+                    {ru.calendar.quickPanel.fields.participants}
                     <input
                       min={0}
                       step={1}
@@ -721,28 +713,28 @@ export default function HomePage() {
                 </div>
 
                 <button className="accent-button full-width" type="submit">
-                  Сохранить изменения
+                  {ru.calendar.quickPanel.save}
                 </button>
               </form>
 
               <div className="quick-actions">
                 <button onClick={() => applyQuickShift(24 * 60)} type="button">
-                  Сдвинуть на +1 день
+                  {ru.calendar.quickPanel.actions.moveForward}
                 </button>
                 <button onClick={() => applyQuickShift(-24 * 60)} type="button">
-                  Сдвинуть на -1 день
+                  {ru.calendar.quickPanel.actions.moveBackward}
                 </button>
                 <button onClick={() => applyQuickDuration(15)} type="button">
-                  Длительность +15 мин
+                  {ru.calendar.quickPanel.actions.durationIncrease}
                 </button>
                 <button onClick={() => applyQuickDuration(-15)} type="button">
-                  Длительность -15 мин
+                  {ru.calendar.quickPanel.actions.durationDecrease}
                 </button>
                 <button onClick={duplicateSelected} type="button">
-                  Дублировать
+                  {ru.calendar.quickPanel.actions.duplicate}
                 </button>
                 <button className="danger" onClick={deleteSelected} type="button">
-                  Удалить
+                  {ru.calendar.quickPanel.actions.delete}
                 </button>
               </div>
             </>

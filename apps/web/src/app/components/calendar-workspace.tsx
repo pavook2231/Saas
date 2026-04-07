@@ -94,7 +94,6 @@ type ComposerState = {
 
 const weekDayLabels = ru.calendar.weekDayLabels;
 const weekHours = Array.from({ length: 14 }, (_, index) => index + 8);
-const durationPresets = [60, 90, 120, 180];
 const kindLabels: Record<ComposerKind, string> = {
   PERFORMANCE: ru.calendar.composer.types.performance,
   REHEARSAL: ru.calendar.composer.types.rehearsal,
@@ -378,6 +377,17 @@ export function CalendarWorkspace() {
   );
   const selectedTemplate = composer.templateId ? templatesById.get(composer.templateId) ?? null : null;
 
+  useEffect(() => {
+    if (composer.kind !== 'PERFORMANCE' || !composer.templateId) {
+      return;
+    }
+
+    const template = templatesById.get(composer.templateId);
+    if (template && templateSearch !== template.name) {
+      setTemplateSearch(template.name);
+    }
+  }, [composer.kind, composer.templateId, templateSearch, templatesById]);
+
   const sortedEvents = useMemo(
     () => [...events].sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime()),
     [events],
@@ -447,30 +457,13 @@ export function CalendarWorkspace() {
 
   const recentDefaults = useMemo(() => loadWorkspaceDefaults(activeOrganizationId), [activeOrganizationId, events.length]);
 
-  const recentTemplateCards = useMemo(
+  const templateSearchOptions = useMemo(
     () =>
-      (recentDefaults.recentTemplateIds ?? [])
-        .map((templateId) => templatesById.get(templateId) ?? null)
-        .filter((template): template is TemplateRecord => template !== null),
-    [recentDefaults.recentTemplateIds, templatesById],
+      templates
+        .map((template) => template.name)
+        .sort((left, right) => left.localeCompare(right, 'ru-RU')),
+    [templates],
   );
-
-  const searchableTemplates = useMemo(() => {
-    const recentIds = new Set(recentDefaults.recentTemplateIds ?? []);
-    const ordered = [
-      ...recentTemplateCards,
-      ...templates.filter((template) => !recentIds.has(template.id)),
-    ];
-    const query = templateSearch.trim().toLocaleLowerCase('ru-RU');
-
-    if (!query) {
-      return ordered.slice(0, 8);
-    }
-
-    return ordered
-      .filter((template) => template.name.toLocaleLowerCase('ru-RU').includes(query))
-      .slice(0, 8);
-  }, [recentDefaults.recentTemplateIds, recentTemplateCards, templateSearch, templates]);
 
   const recentParticipants = useMemo(() => {
     const byId = new Map(participants.map((participant) => [participant.id, participant]));
@@ -713,10 +706,27 @@ export function CalendarWorkspace() {
     setActiveSidePanel('compose');
   };
 
-  const handleTemplateChange = (templateId: string) => {
-    const template = templatesById.get(templateId) ?? null;
-    setTemplateSearch(template?.name ?? '');
-    setComposer((current) => hydrateComposerFromTemplate(templateId, current));
+  const handleTemplateSearchInput = (value: string) => {
+    setTemplateSearch(value);
+    const normalizedQuery = value.trim().toLocaleLowerCase('ru-RU');
+
+    if (!normalizedQuery) {
+      setComposer((current) => ({ ...current, templateId: '' }));
+      return;
+    }
+
+    const exactTemplate = templates.find(
+      (template) => template.name.trim().toLocaleLowerCase('ru-RU') === normalizedQuery,
+    );
+
+    if (exactTemplate) {
+      setComposer((current) => hydrateComposerFromTemplate(exactTemplate.id, current));
+      return;
+    }
+
+    setComposer((current) =>
+      current.templateId ? { ...current, templateId: '' } : current,
+    );
   };
 
   const submitComposer = async (ignoreConflicts = false) => {
@@ -1043,26 +1053,16 @@ export function CalendarWorkspace() {
                 <Input
                   label={ru.calendar.composer.fields.template}
                   value={templateSearch}
-                  onChange={(event) => setTemplateSearch(event.target.value)}
+                  onChange={(event) => handleTemplateSearchInput(event.target.value)}
                   placeholder="Найдите спектакль по названию"
                   hint={ru.calendar.composer.helpers.performance}
+                  list="calendar-performance-templates"
                 />
-                <div className="template-search-results" role="listbox" aria-label="Спектакли организации">
-                  {searchableTemplates.map((template) => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      className={`template-search-result${composer.templateId === template.id ? ' is-active' : ''}`}
-                      onClick={() => handleTemplateChange(template.id)}
-                    >
-                      <strong>{template.name}</strong>
-                      <span>{template.roles.length} ролей · {templateParticipantIds(template).length} участников</span>
-                    </button>
+                <datalist id="calendar-performance-templates">
+                  {templateSearchOptions.map((templateName) => (
+                    <option key={templateName} value={templateName} />
                   ))}
-                  {searchableTemplates.length === 0 ? (
-                    <p className="template-search-empty empty-state">По этому запросу спектаклей пока нет.</p>
-                  ) : null}
-                </div>
+                </datalist>
               </div>
             ) : (
               <Input
@@ -1104,22 +1104,6 @@ export function CalendarWorkspace() {
 
             {composer.kind !== 'PERFORMANCE' ? (
               <>
-                <div className="modal-form-section">
-                  <span className="quick-choice-label">{ru.calendar.composer.defaults.duration}</span>
-                  <div className="quick-choice-row quick-choice-row--wide">
-                    {durationPresets.map((duration) => (
-                      <button
-                        key={duration}
-                        type="button"
-                        className={`quick-choice-chip${composer.durationMinutes === duration ? ' is-active' : ''}`}
-                        onClick={() => setComposer((current) => ({ ...current, durationMinutes: duration }))}
-                      >
-                        {duration} мин
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 <Input
                   label={ru.calendar.composer.fields.duration}
                   min={15}
@@ -1134,24 +1118,6 @@ export function CalendarWorkspace() {
                   }
                 />
               </>
-            ) : null}
-
-            {recentTemplateCards.length > 0 && composer.kind === 'PERFORMANCE' ? (
-              <div className="composer-chip-group">
-                <span className="quick-choice-label">{ru.calendar.composer.defaults.recentTemplates}</span>
-                <div className="quick-choice-row quick-choice-row--wide">
-                  {recentTemplateCards.map((template) => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      className={`quick-choice-chip${composer.templateId === template.id ? ' is-active' : ''}`}
-                      onClick={() => handleTemplateChange(template.id)}
-                    >
-                      {template.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
             ) : null}
 
             {recentParticipants.length > 0 ? (

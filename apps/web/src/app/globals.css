@@ -2050,18 +2050,22 @@ textarea.ui-field:focus {
 .composer-kind-switcher {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .composer-kind-switcher button {
   display: grid;
-  gap: 6px;
-  min-height: 92px;
-  padding: 14px;
+  grid-template-rows: auto 1fr;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 84px;
+  padding: 12px;
   border: 1px solid rgba(219, 227, 239, 0.86);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.86);
   text-align: left;
+  overflow: hidden;
   cursor: pointer;
   transition:
     transform 180ms ease,
@@ -2083,13 +2087,22 @@ textarea.ui-field:focus {
 }
 
 .composer-kind-switcher strong {
-  font-size: 0.96rem;
+  display: block;
+  min-width: 0;
+  font-size: 0.92rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .composer-kind-switcher span {
+  display: block;
+  min-width: 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
-  line-height: 1.45;
+  font-size: 0.79rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .calendar-selected-note,
@@ -2329,63 +2342,6 @@ textarea.ui-field:focus {
   line-height: 1.2;
 }
 
-.template-search-results {
-  display: grid;
-  gap: 8px;
-  max-height: 240px;
-  overflow: auto;
-}
-
-.template-search-result {
-  display: grid;
-  gap: 4px;
-  padding: 12px 14px;
-  border: 1px solid rgba(219, 227, 239, 0.9);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.88);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    background-color 160ms ease;
-}
-
-.template-search-result:hover {
-  transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.2);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
-}
-
-.template-search-result.is-active {
-  border-color: rgba(37, 99, 235, 0.22);
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(14, 165, 233, 0.06));
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
-}
-
-.template-search-result strong {
-  font-size: 0.92rem;
-}
-
-.template-search-result span {
-  color: var(--text-muted);
-  font-size: 0.8rem;
-}
-
-.template-search-empty {
-  padding: 8px 2px 2px;
-}
-
-.calendar-page--compact .template-search-results {
-  max-height: 188px;
-}
-
-.calendar-page--compact .template-search-result {
-  padding: 10px 12px;
-  border-radius: 12px;
-}
-
 /* Interface spacing polish */
 .app-frame {
   gap: 18px;
@@ -2605,6 +2561,7 @@ textarea.ui-field {
 }
 
 .composer-kind-switcher button {
+  min-width: 0;
   min-height: 84px;
   padding: 12px;
   border-radius: 16px;

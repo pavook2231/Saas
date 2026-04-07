@@ -2303,6 +2303,239 @@ textarea.ui-field:focus {
   line-height: 1.2;
 }
 
+/* Interface spacing polish */
+.app-frame {
+  gap: 18px;
+  padding: 18px;
+  align-items: stretch;
+}
+
+.app-frame.sidebar-collapsed {
+  grid-template-columns: 88px minmax(0, 1fr);
+}
+
+.app-frame__main {
+  gap: 14px;
+}
+
+.app-sidebar {
+  top: 18px;
+  height: calc(100vh - 36px);
+  padding: 14px;
+  gap: 14px;
+  border-radius: 28px;
+}
+
+.app-sidebar__brand {
+  gap: 10px;
+}
+
+.app-sidebar__brand-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.app-sidebar__org-card,
+.app-sidebar__profile {
+  gap: 4px;
+}
+
+.app-sidebar__profile {
+  padding: 10px 12px;
+}
+
+.app-sidebar__nav {
+  gap: 6px;
+}
+
+.app-sidebar__link {
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 14px;
+}
+
+.app-topbar {
+  min-height: 76px;
+  padding: 14px 16px;
+  gap: 14px;
+  border-radius: 22px;
+}
+
+.app-topbar__left,
+.app-topbar__right,
+.app-topbar__profile {
+  gap: 10px;
+}
+
+.app-topbar__profile {
+  padding-left: 10px;
+}
+
+.app-page {
+  gap: 20px;
+}
+
+.feature-page-header {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.feature-page-header__copy {
+  gap: 8px;
+  max-width: 720px;
+}
+
+.feature-page-header h1 {
+  line-height: 1.06;
+}
+
+.feature-page-header__actions,
+.feature-page-header__action-row {
+  gap: 8px;
+}
+
+.page-grid,
+.dashboard-action-grid,
+.card-list-grid,
+.resource-skeleton-grid,
+.showcase-grid {
+  gap: 14px;
+}
+
+.ui-card__header,
+.ui-card__content {
+  gap: 12px;
+  padding: 18px;
+}
+
+.ui-card__title {
+  line-height: 1.24;
+}
+
+.ui-card__description {
+  line-height: 1.55;
+}
+
+.ui-field-group {
+  gap: 6px;
+}
+
+.ui-field,
+textarea.ui-field {
+  min-height: 42px;
+  padding: 0 13px;
+  border-radius: 13px;
+}
+
+textarea.ui-field {
+  min-height: 104px;
+  padding: 12px 13px;
+}
+
+.resource-form-grid {
+  gap: 14px;
+}
+
+.modal-form-section {
+  gap: 8px;
+}
+
+.quick-choice-row,
+.resource-card__actions,
+.workspace-empty-stack,
+.workspace-empty-actions {
+  gap: 8px;
+}
+
+.resource-card__meta,
+.status-card__list {
+  gap: 14px;
+}
+
+.resource-card__list {
+  gap: 10px;
+}
+
+.empty-state-card,
+.shortcut-card {
+  gap: 14px;
+  padding: 18px;
+}
+
+.metric-card {
+  padding: 18px;
+}
+
+.showcase-block {
+  padding: 14px;
+}
+
+.data-table-wrap,
+.income-table-wrap,
+.chat-messages {
+  border-radius: 14px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 12px 14px;
+}
+
+.income-table th,
+.income-table td {
+  padding: 9px 12px;
+}
+
+.side-tabs {
+  gap: 6px;
+}
+
+.side-tabs button,
+.side-tabs--premium button {
+  min-height: 40px;
+}
+
+.quick-panel,
+.finance-panel,
+.chat-panel {
+  padding: 14px;
+  gap: 12px;
+}
+
+.composer-panel {
+  gap: 14px;
+  padding: 16px;
+}
+
+.composer-panel__header {
+  gap: 8px;
+}
+
+.composer-panel__hint {
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+.composer-kind-switcher {
+  gap: 8px;
+}
+
+.composer-kind-switcher button {
+  min-height: 84px;
+  padding: 12px;
+  border-radius: 16px;
+}
+
+.calendar-selected-note,
+.composer-template-preview,
+.composer-conflict-card,
+.finance-block,
+.income-stats article,
+.chat-message {
+  border-radius: 14px;
+}
+
 .calendar-header h1 {
   font-size: clamp(1.45rem, 2vw, 2.1rem);
 }

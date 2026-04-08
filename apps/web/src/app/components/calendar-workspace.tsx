@@ -9,6 +9,7 @@ import { useActiveWorkspace } from '@/components/features/use-active-workspace';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Modal } from '@/components/ui/modal';
 import { canAccessControlPanel } from '@/lib/organization-access';
 import { isVenueName, venueToneClass, type VenueName } from '@/lib/venues';
 
@@ -322,9 +323,6 @@ export function CalendarWorkspace() {
 
   const renderTheatreEvent = (event: EventRecord) => {
     const venue = isVenueName(event.location) ? event.location : null;
-    const busyParticipants = event.participants
-      .map((item) => participantsById.get(item.participantId))
-      .filter((participant): participant is ParticipantRecord => participant !== undefined);
 
     return (
       <button
@@ -342,11 +340,6 @@ export function CalendarWorkspace() {
           <span>{typeLabel[event.type]}</span>
           {event.status === 'CANCELLED' ? <Badge variant="warning">Отменено</Badge> : null}
         </div>
-        <p className="theatre-event__participants">
-          {busyParticipants.length > 0
-            ? `Занятые: ${busyParticipants.map((participant) => participantDisplayName(participant)).join(', ')}`
-            : 'Занятые не указаны'}
-        </p>
       </button>
     );
   };
@@ -412,52 +405,6 @@ export function CalendarWorkspace() {
               onChange={(event) => setParticipantFilter(event.target.value)}
               placeholder="Имя участника"
             />
-          </CardContent>
-        </Card>
-
-        <Card className="calendar-simple__details-card">
-          <CardHeader>
-            <CardTitle>Событие</CardTitle>
-            <CardDescription>Нажмите на запись в плане недели, чтобы увидеть занятый состав.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!selectedEvent ? (
-              <div className="resource-empty-inline">
-                <strong>Событие не выбрано</strong>
-                <p>Нажмите на событие в календаре.</p>
-              </div>
-            ) : (
-              <div className="resource-card__list selected-event-panel">
-                <div className="resource-inline-info">
-                  <strong>{selectedEvent.title}</strong>
-                  <span>{typeLabel[selectedEvent.type]} · {getEventTimeRange(selectedEvent)}</span>
-                </div>
-                <div className="resource-card__actions">
-                  {isVenueName(selectedEvent.location) ? (
-                    <Badge className={`venue-badge ${venueToneClass[selectedEvent.location as VenueName]}`}>
-                      {selectedEvent.location}
-                    </Badge>
-                  ) : null}
-                  <Badge variant={selectedEvent.status === 'CANCELLED' ? 'warning' : 'neutral'}>
-                    {selectedEvent.status === 'CANCELLED' ? 'Отменено' : 'Активно'}
-                  </Badge>
-                </div>
-                <div className="selected-event-panel__participants">
-                  <strong>Занятые</strong>
-                  {selectedParticipants.length > 0 ? (
-                    <div className="selected-event-panel__participant-list">
-                      {selectedParticipants.map((participant) => (
-                        <Badge key={participant.id} variant="neutral">
-                          {participantDisplayName(participant)}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p>Состав не указан.</p>
-                  )}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>
@@ -546,6 +493,44 @@ export function CalendarWorkspace() {
           </div>
         </section>
       ) : null}
+
+      <Modal
+        open={Boolean(selectedEvent)}
+        onClose={() => setSelectedEventId(null)}
+        title={selectedEvent?.title ?? 'Событие'}
+        description={selectedEvent ? `${typeLabel[selectedEvent.type]} · ${getEventTimeRange(selectedEvent)}` : undefined}
+        size="lg"
+      >
+        {selectedEvent ? (
+          <div className="selected-event-modal">
+            <div className="resource-card__actions">
+              {isVenueName(selectedEvent.location) ? (
+                <Badge className={`venue-badge ${venueToneClass[selectedEvent.location as VenueName]}`}>
+                  {selectedEvent.location}
+                </Badge>
+              ) : null}
+              <Badge variant={selectedEvent.status === 'CANCELLED' ? 'warning' : 'neutral'}>
+                {selectedEvent.status === 'CANCELLED' ? 'Отменено' : 'Активно'}
+              </Badge>
+            </div>
+
+            <div className="selected-event-panel__participants">
+              <strong>Занятые</strong>
+              {selectedParticipants.length > 0 ? (
+                <div className="selected-event-panel__participant-list">
+                  {selectedParticipants.map((participant) => (
+                    <Badge key={participant.id} variant="neutral">
+                      {participantDisplayName(participant)}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p>Состав не указан.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </section>
   );
 }

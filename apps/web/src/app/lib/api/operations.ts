@@ -392,6 +392,14 @@ export const operationsApi = {
 };
 
 export const participantDisplayName = (participant: ParticipantRecord): string => {
-  const fullName = [participant.firstName, participant.lastName].filter(Boolean).join(' ').trim();
-  return participant.displayName?.trim() || fullName || participant.email || participant.id;
+  const surnameFirst = [participant.lastName, participant.firstName, participant.middleName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  const fullName = [participant.firstName, participant.lastName, participant.middleName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return surnameFirst || fullName || participant.displayName?.trim() || participant.email || participant.id;
 };

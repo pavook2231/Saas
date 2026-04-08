@@ -53,6 +53,12 @@ const toIso = (date: string, time: string) => {
   return new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
 };
 
+const plusMinutesIso = (iso: string, minutes: number) => {
+  const date = new Date(iso);
+  date.setMinutes(date.getMinutes() + minutes);
+  return date.toISOString();
+};
+
 const formatEventTime = (value: string) =>
   new Intl.DateTimeFormat('ru-RU', {
     day: '2-digit',
@@ -155,6 +161,10 @@ export function ControlScheduleWorkspace() {
   }, [plays, searchParams]);
 
   const playOptions = useMemo(() => plays.map((play) => ({ id: play.id, name: play.name })), [plays]);
+  const selectedPlay = useMemo(
+    () => plays.find((play) => play.id === form.playId) ?? null,
+    [form.playId, plays],
+  );
 
   const handleKindChange = (kind: ScheduleKind) => {
     setForm((current) => ({
@@ -189,7 +199,10 @@ export function ControlScheduleWorkspace() {
 
     try {
       const startsAtIso = toIso(form.date, form.startsAt);
-      const endsAtIso = toIso(form.date, form.endsAt);
+      const endsAtIso =
+        form.kind === 'PERFORMANCE'
+          ? plusMinutesIso(startsAtIso, selectedPlay?.durationMinutes ?? 120)
+          : toIso(form.date, form.endsAt);
 
       if (new Date(endsAtIso) <= new Date(startsAtIso)) {
         throw new Error('Время окончания должно быть позже времени начала.');
@@ -373,12 +386,22 @@ export function ControlScheduleWorkspace() {
                 value={form.startsAt}
                 onChange={(event) => setForm((current) => ({ ...current, startsAt: event.target.value }))}
               />
-              <Input
-                label="Окончание"
-                type="time"
-                value={form.endsAt}
-                onChange={(event) => setForm((current) => ({ ...current, endsAt: event.target.value }))}
-              />
+              {form.kind === 'PERFORMANCE' ? (
+                <div className="control-inline-note">
+                  <strong>Окончание</strong>
+                  <span>
+                    Рассчитаем автоматически
+                    {selectedPlay ? ` по длительности спектакля (${selectedPlay.durationMinutes} мин)` : ''}.
+                  </span>
+                </div>
+              ) : (
+                <Input
+                  label="Окончание"
+                  type="time"
+                  value={form.endsAt}
+                  onChange={(event) => setForm((current) => ({ ...current, endsAt: event.target.value }))}
+                />
+              )}
             </div>
 
             <ParticipantPicker

@@ -3223,19 +3223,27 @@ textarea.ui-field {
 }
 
 .theatre-week-table__day-heading {
-  border-right: 0;
+  border-right: 2px solid rgba(199, 211, 228, 0.98);
 }
 
 .theatre-week-table__row {
-  border-bottom: 1px solid rgba(219, 227, 239, 0.88);
+  border-bottom: 2px solid rgba(211, 221, 235, 0.96);
 }
 
 .theatre-week-table__row:last-child {
   border-bottom: 0;
 }
 
+.theatre-week-table__row:nth-child(odd):not(.is-today) {
+  background: rgba(250, 252, 255, 0.72);
+}
+
+.theatre-week-table__row:nth-child(even):not(.is-today) {
+  background: rgba(245, 248, 252, 0.6);
+}
+
 .theatre-week-table__row.is-today {
-  background: rgba(37, 99, 235, 0.03);
+  background: rgba(37, 99, 235, 0.05);
 }
 
 .theatre-week-table__cell,
@@ -3244,20 +3252,22 @@ textarea.ui-field {
   padding: 8px;
   border-right: 1px solid rgba(219, 227, 239, 0.88);
   min-width: 0;
+  background-clip: padding-box;
 }
 
 .theatre-week-table__day {
-  border-right: 0;
+  border-right: 2px solid rgba(199, 211, 228, 0.98);
   display: grid;
   align-content: center;
   justify-items: start;
   gap: 4px;
   text-align: left;
-  background: rgba(244, 247, 251, 0.72);
+  background: rgba(236, 241, 248, 0.96);
 }
 
 .theatre-week-table__day strong {
-  font-size: 0.84rem;
+  font-size: 0.88rem;
+  font-weight: 800;
   text-transform: capitalize;
   line-height: 1.15;
 }
@@ -3279,7 +3289,7 @@ textarea.ui-field {
   justify-content: center;
   min-height: 44px;
   color: var(--text-soft);
-  font-size: 0.92rem;
+  font-size: 0.82rem;
 }
 
 .theatre-event {

@@ -3295,8 +3295,9 @@ textarea.ui-field {
 .theatre-event {
   display: grid;
   gap: 6px;
-  width: 100%;
+  width: min(100%, 330px);
   min-width: 0;
+  justify-self: start;
   padding: 8px 10px;
   border: 1px solid rgba(219, 227, 239, 0.9);
   border-radius: 14px;
@@ -3343,7 +3344,15 @@ textarea.ui-field {
   line-height: 1.2;
 }
 
-.theatre-event__primary span,
+.theatre-event__time {
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
 .theatre-event__meta span {
   color: var(--text-muted);
   font-size: 0.7rem;

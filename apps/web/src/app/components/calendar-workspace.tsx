@@ -298,7 +298,7 @@ export function CalendarWorkspace() {
       >
         <div className="theatre-event__primary">
           <strong>{event.title}</strong>
-          <span>{getEventTimeRange(event)}</span>
+          <span className="theatre-event__time">{getEventTimeRange(event)}</span>
         </div>
         <div className="theatre-event__meta">
           {venue ? <Badge className={`venue-badge ${venueToneClass[venue]}`}>{venue}</Badge> : null}

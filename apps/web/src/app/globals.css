@@ -3191,6 +3191,10 @@ textarea.ui-field {
   box-shadow: var(--shadow-sm);
 }
 
+.theatre-week-mobile {
+  display: none;
+}
+
 .theatre-week-table {
   min-width: 920px;
 }
@@ -3364,6 +3368,77 @@ textarea.ui-field {
   align-items: center;
 }
 
+.theatre-day-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(219, 227, 239, 0.88);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-sm);
+}
+
+.theatre-day-card.is-today {
+  border-color: rgba(37, 99, 235, 0.24);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.theatre-day-card__header,
+.theatre-day-card__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.theatre-day-card__day {
+  display: grid;
+  gap: 4px;
+}
+
+.theatre-day-card__day strong {
+  font-size: 0.92rem;
+  text-transform: capitalize;
+}
+
+.theatre-day-card__day span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.theatre-day-card__sections,
+.theatre-day-card__events {
+  display: grid;
+  gap: 10px;
+}
+
+.theatre-day-card__section {
+  display: grid;
+  gap: 8px;
+}
+
+.theatre-day-card__section + .theatre-day-card__section {
+  padding-top: 10px;
+  border-top: 1px solid rgba(219, 227, 239, 0.82);
+}
+
+.theatre-day-card__section-head strong {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.theatre-day-card__section-head span {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.theatre-day-card__empty {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
 .theatre-event__participants {
   margin: 0;
   color: var(--text-soft);
@@ -3421,6 +3496,19 @@ textarea.ui-field {
   .auth-hero-grid { grid-template-columns: 1fr; }
   .card-list-grid,
   .resource-skeleton-grid { grid-template-columns: 1fr; }
+
+  .theatre-week-view--desktop {
+    display: none;
+  }
+
+  .theatre-week-mobile {
+    display: grid;
+    gap: 12px;
+  }
+
+  .theatre-event {
+    width: 100%;
+  }
 }
 
 @media (max-width: 1120px) {
@@ -3571,5 +3659,29 @@ textarea.ui-field {
 
   .play-card {
     flex-direction: column;
+  }
+
+  .theatre-day-card {
+    gap: 10px;
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .theatre-day-card__section + .theatre-day-card__section {
+    padding-top: 8px;
+  }
+
+  .theatre-event {
+    padding: 9px;
+    border-radius: 12px;
+  }
+
+  .theatre-event__primary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .theatre-event__time {
+    font-size: 0.8rem;
   }
 }

@@ -394,7 +394,8 @@ export function CalendarWorkspace() {
       ) : null}
 
       {!loading && viewMode === 'week' ? (
-        <section className="theatre-week-view">
+        <>
+        <section className="theatre-week-view theatre-week-view--desktop">
           <div className="theatre-week-table">
             <div className="theatre-week-table__header">
               <div className="theatre-week-table__day-heading">Дни</div>
@@ -441,6 +442,45 @@ export function CalendarWorkspace() {
             </div>
           </div>
         </section>
+        <section className="theatre-week-mobile">
+          {weekDays.map((day) => {
+            const dayKey = toDayKey(day);
+            const laneEvents = theatreWeekMap.get(dayKey);
+            const isToday = isSameDay(day, new Date());
+            const populatedLanes = theatreLaneMeta.filter((lane) => (laneEvents?.[lane.id] ?? []).length > 0);
+
+            return (
+              <article key={`${dayKey}-mobile`} className={`theatre-day-card${isToday ? ' is-today' : ''}`}>
+                <div className="theatre-day-card__header">
+                  <div className="theatre-day-card__day">
+                    <strong>{formatDayName(day)}</strong>
+                    <span>{weekDayNumberFormat.format(day)}</span>
+                  </div>
+                  {isToday ? <Badge variant="primary">Сегодня</Badge> : null}
+                </div>
+
+                {populatedLanes.length > 0 ? (
+                  <div className="theatre-day-card__sections">
+                    {populatedLanes.map((lane) => (
+                      <section key={`${dayKey}-${lane.id}-mobile`} className="theatre-day-card__section">
+                        <div className="theatre-day-card__section-head">
+                          <strong>{lane.label}</strong>
+                          <span>{(laneEvents?.[lane.id] ?? []).length}</span>
+                        </div>
+                        <div className="theatre-day-card__events">
+                          {(laneEvents?.[lane.id] ?? []).map((event) => renderTheatreEvent(event))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="theatre-day-card__empty">На этот день событий нет.</div>
+                )}
+              </article>
+            );
+          })}
+        </section>
+        </>
       ) : null}
 
       <Modal

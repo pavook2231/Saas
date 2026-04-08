@@ -499,12 +499,12 @@ export function CalendarWorkspace() {
         <section className="theatre-week-view">
           <div className="theatre-week-table">
             <div className="theatre-week-table__header">
+              <div className="theatre-week-table__day-heading">Дни</div>
               {theatreLaneMeta.map((lane) => (
                 <div key={lane.id} className="theatre-week-table__heading">
                   {lane.label}
                 </div>
               ))}
-              <div className="theatre-week-table__day-heading">Дни</div>
             </div>
 
             <div className="theatre-week-table__body">
@@ -515,6 +515,12 @@ export function CalendarWorkspace() {
 
                 return (
                   <div key={dayKey} className={`theatre-week-table__row${isToday ? ' is-today' : ''}`}>
+                    <aside className="theatre-week-table__day">
+                      <strong>{weekDayNameFormat.format(day)}</strong>
+                      <span>{weekDayNumberFormat.format(day)}</span>
+                      {isToday ? <Badge variant="primary">Сегодня</Badge> : null}
+                    </aside>
+
                     {theatreLaneMeta.map((lane) => {
                       const items = laneEvents?.[lane.id] ?? [];
 
@@ -533,12 +539,6 @@ export function CalendarWorkspace() {
                         </div>
                       );
                     })}
-
-                    <aside className="theatre-week-table__day">
-                      <strong>{weekDayNameFormat.format(day)}</strong>
-                      <span>{weekDayNumberFormat.format(day)}</span>
-                      {isToday ? <Badge variant="primary">Сегодня</Badge> : null}
-                    </aside>
                   </div>
                 );
               })}

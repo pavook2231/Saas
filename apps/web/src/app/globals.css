@@ -3265,9 +3265,9 @@ textarea.ui-field {
   border-right: 0;
   display: grid;
   align-content: center;
-  justify-items: end;
+  justify-items: start;
   gap: 6px;
-  text-align: right;
+  text-align: left;
   background: rgba(244, 247, 251, 0.72);
 }
 

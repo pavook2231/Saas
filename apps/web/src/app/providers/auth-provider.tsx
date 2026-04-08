@@ -16,10 +16,12 @@ import {
   AuthResponse,
   AuthStatus,
   AuthUser,
+  ChangePasswordPayload,
   LoginPayload,
   OAuthProviderName,
   RegisterPayload,
   StoredSession,
+  UpdateProfilePayload,
 } from '../lib/auth/types';
 
 type AuthContextValue = {
@@ -30,6 +32,9 @@ type AuthContextValue = {
   login: (payload: LoginPayload) => Promise<StoredSession>;
   register: (payload: RegisterPayload) => Promise<StoredSession>;
   logout: () => Promise<void>;
+  logoutAll: () => Promise<void>;
+  updateProfile: (payload: UpdateProfilePayload) => Promise<StoredSession>;
+  changePassword: (payload: ChangePasswordPayload) => Promise<void>;
   startOAuth: (provider: OAuthProviderName, returnTo?: string) => Promise<void>;
   completeOAuthLogin: (csrfTokenOverride?: string) => Promise<StoredSession>;
   refreshSession: () => Promise<StoredSession>;
@@ -127,6 +132,52 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, [clearSession]);
 
+  const logoutAll = useCallback(async () => {
+    try {
+      if (session?.accessToken) {
+        await authApi.logoutAll(session.accessToken);
+      }
+    } finally {
+      clearSession();
+    }
+  }, [clearSession, session?.accessToken]);
+
+  const updateProfile = useCallback(
+    async (payload: UpdateProfilePayload) => {
+      const accessToken = session?.accessToken;
+
+      if (!accessToken) {
+        throw new Error('Сессия не найдена');
+      }
+
+      const response = await authApi.updateProfile(accessToken, payload);
+      const stored = authStorage.load();
+
+      if (!stored) {
+        throw new Error('Сессия не найдена');
+      }
+
+      return applySession({
+        ...stored,
+        user: response.user,
+      });
+    },
+    [applySession, session?.accessToken],
+  );
+
+  const changePassword = useCallback(
+    async (payload: ChangePasswordPayload) => {
+      const accessToken = session?.accessToken;
+
+      if (!accessToken) {
+        throw new Error('Сессия не найдена');
+      }
+
+      await authApi.changePassword(accessToken, payload);
+    },
+    [session?.accessToken],
+  );
+
   const startOAuth = useCallback(
     async (provider: OAuthProviderName, returnTo = '/auth/callback') => {
       const response = await authApi.startOAuth(provider, returnTo, session?.accessToken ?? undefined);
@@ -190,14 +241,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
       login,
       register,
       logout,
+      logoutAll,
+      updateProfile,
+      changePassword,
       startOAuth,
       completeOAuthLogin,
       refreshSession,
     }),
     [
       completeOAuthLogin,
+      changePassword,
       login,
       logout,
+      logoutAll,
       refreshSession,
       register,
       session?.accessToken,
@@ -205,6 +261,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session?.user,
       startOAuth,
       status,
+      updateProfile,
     ],
   );
 

@@ -1,13 +1,25 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { organizationsApi, type OrganizationInvitation } from '@/app/lib/api/organizations';
+import {
+  organizationsApi,
+  type OrganizationInvitation,
+  type OrganizationInvitationHistory,
+} from '@/app/lib/api/organizations';
+import {
+  accountPreferencesStorage,
+  defaultAccountPreferences,
+  type AccountPreferences,
+} from '@/app/lib/profile/account-preferences';
 import { useAuth } from '@/app/providers/auth-provider';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Modal } from '@/components/ui/modal';
+import { Select } from '@/components/ui/select';
 import { CreateOrganizationAction } from './create-organization-action';
 import { PageHeader } from './page-header';
 import { useActiveWorkspace } from './use-active-workspace';
@@ -27,11 +39,45 @@ const formatDateTime = (value: string | null | undefined) => {
   }).format(new Date(value));
 };
 
+const invitationStatusLabel: Record<
+  OrganizationInvitationHistory['status'],
+  string
+> = {
+  ACCEPTED: 'Принято',
+  DECLINED: 'Отклонено',
+  EXPIRED: 'Истекло',
+  REVOKED: 'Отозвано',
+};
+
+const invitationStatusVariant: Record<
+  OrganizationInvitationHistory['status'],
+  'success' | 'warning' | 'error' | 'neutral'
+> = {
+  ACCEPTED: 'success',
+  DECLINED: 'warning',
+  EXPIRED: 'neutral',
+  REVOKED: 'error',
+};
+
+const buildDisplayName = (
+  firstName?: string | null,
+  lastName?: string | null,
+  email?: string | null,
+) => {
+  const parts = [firstName, lastName].filter(Boolean);
+  return parts.join(' ').trim() || email || 'Пользователь';
+};
+
 export function ProfileWorkspace() {
-  const { refreshSession } = useAuth();
+  const {
+    user,
+    logoutAll,
+    changePassword,
+    updateProfile,
+    refreshSession,
+  } = useAuth();
   const {
     accessToken,
-    user,
     organizations,
     activeOrganizationId,
     setActiveOrganizationId,
@@ -41,8 +87,24 @@ export function ProfileWorkspace() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
+  const [invitationHistory, setInvitationHistory] = useState<OrganizationInvitationHistory[]>([]);
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    firstName: '',
+    lastName: '',
+    avatarUrl: '',
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [preferences, setPreferences] = useState<AccountPreferences>(
+    defaultAccountPreferences(),
+  );
 
   useToastFeedback({
     noticeText,
@@ -51,14 +113,31 @@ export function ProfileWorkspace() {
     errorTitle: 'Профиль',
   });
 
-  const displayName = useMemo(() => {
-    const parts = [user?.firstName, user?.lastName].filter(Boolean);
-    return parts.join(' ').trim() || user?.email || 'Пользователь';
-  }, [user?.email, user?.firstName, user?.lastName]);
+  const displayName = useMemo(
+    () => buildDisplayName(user?.firstName, user?.lastName, user?.email),
+    [user?.email, user?.firstName, user?.lastName],
+  );
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    setProfileForm({
+      firstName: user.firstName ?? '',
+      lastName: user.lastName ?? '',
+      avatarUrl: user.avatarUrl ?? '',
+    });
+  }, [user]);
+
+  useEffect(() => {
+    setPreferences(accountPreferencesStorage.load());
+  }, []);
 
   const loadProfileData = useCallback(async () => {
     if (!accessToken) {
       setInvitations([]);
+      setInvitationHistory([]);
       setLoading(false);
       return;
     }
@@ -66,8 +145,12 @@ export function ProfileWorkspace() {
     setLoading(true);
 
     try {
-      const inviteResponse = await organizationsApi.listMyInvitations({ accessToken });
+      const [inviteResponse, historyResponse] = await Promise.all([
+        organizationsApi.listMyInvitations({ accessToken }),
+        organizationsApi.listMyInvitationHistory({ accessToken }),
+      ]);
       setInvitations(inviteResponse);
+      setInvitationHistory(historyResponse);
       setErrorText(null);
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось загрузить профиль.');
@@ -101,6 +184,29 @@ export function ProfileWorkspace() {
       setNoticeText(`Вы вступили в организацию «${invitation.organization.name}».`);
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось принять приглашение.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeclineInvitation = async (invitation: OrganizationInvitation) => {
+    if (!accessToken) {
+      return;
+    }
+
+    setProcessingId(invitation.invitationId);
+    setNoticeText(null);
+    setErrorText(null);
+
+    try {
+      await organizationsApi.declineInvitation({
+        accessToken,
+        invitationId: invitation.invitationId,
+      });
+      await loadProfileData();
+      setNoticeText(`Приглашение в «${invitation.organization.name}» отклонено.`);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось отклонить приглашение.');
     } finally {
       setProcessingId(null);
     }
@@ -158,29 +264,171 @@ export function ProfileWorkspace() {
     }
   };
 
+  const handleSaveProfile = async () => {
+    setProcessingId('profile');
+    setNoticeText(null);
+    setErrorText(null);
+
+    try {
+      await updateProfile({
+        firstName: profileForm.firstName.trim(),
+        lastName: profileForm.lastName.trim(),
+        avatarUrl: profileForm.avatarUrl.trim(),
+      });
+      setProfileModalOpen(false);
+      setNoticeText('Профиль обновлен.');
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось обновить профиль.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (passwordForm.newPassword.trim().length < 8) {
+      setErrorText('Новый пароль должен быть не короче 8 символов.');
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setErrorText('Подтверждение пароля не совпадает.');
+      return;
+    }
+
+    setProcessingId('password');
+    setNoticeText(null);
+    setErrorText(null);
+
+    try {
+      await changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+      setSecurityModalOpen(false);
+      setNoticeText('Пароль обновлен.');
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось изменить пароль.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleLogoutAll = async () => {
+    if (!window.confirm('Выйти со всех устройств? Текущая сессия тоже завершится.')) {
+      return;
+    }
+
+    setProcessingId('logout-all');
+    setNoticeText(null);
+    setErrorText(null);
+
+    try {
+      await logoutAll();
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось завершить все сессии.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handlePreferenceChange = <K extends keyof AccountPreferences>(
+    key: K,
+    value: AccountPreferences[K],
+  ) => {
+    setPreferences((current) => {
+      const next = {
+        ...current,
+        [key]: value,
+      };
+
+      accountPreferencesStorage.save(next);
+      return next;
+    });
+    setNoticeText('Настройки интерфейса сохранены для этого браузера.');
+  };
+
+  const profileModalFooter = (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => setProfileModalOpen(false)}
+      >
+        Отмена
+      </Button>
+      <Button
+        type="button"
+        onClick={() => void handleSaveProfile()}
+        loading={processingId === 'profile'}
+      >
+        Сохранить
+      </Button>
+    </>
+  );
+
+  const passwordModalFooter = (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => setSecurityModalOpen(false)}
+      >
+        Отмена
+      </Button>
+      <Button
+        type="button"
+        onClick={() => void handleChangePassword()}
+        loading={processingId === 'password'}
+      >
+        Обновить пароль
+      </Button>
+    </>
+  );
+
   return (
     <section className="app-page">
       <PageHeader
         eyebrow="Профиль"
         title="Профиль"
-        description="Организации, приглашения и ваш доступ."
-        actions={<CreateOrganizationAction />}
+        description="Личные данные, приглашения и доступ."
+        actions={
+          <div className="account-page__actions">
+            <Button type="button" variant="ghost" onClick={() => void loadProfileData()}>
+              Обновить
+            </Button>
+            <CreateOrganizationAction />
+          </div>
+        }
       />
 
       {noticeText ? <p className="finance-notice">{noticeText}</p> : null}
       {errorText ? <p className="finance-error">{errorText}</p> : null}
 
-      <div className="profile-layout">
-        <div className="profile-column profile-column--main">
+      <div className="account-layout">
+        <div className="account-layout__main">
           <Card>
-            <CardContent className="profile-hero-card">
-              <Avatar name={displayName} src={user?.avatarUrl} size="lg" />
-              <div className="profile-hero-card__copy">
-                <strong>{displayName}</strong>
-                <span>{user?.email ?? '—'}</span>
+            <CardHeader>
+              <CardTitle>Личные данные</CardTitle>
+              <CardDescription>Имя, почта и фотография профиля.</CardDescription>
+            </CardHeader>
+            <CardContent className="account-profile-card">
+              <div className="account-profile-card__identity">
+                <Avatar name={displayName} src={user?.avatarUrl} size="lg" />
+                <div className="account-profile-card__copy">
+                  <strong>{displayName}</strong>
+                  <span>{user?.email ?? '—'}</span>
+                </div>
               </div>
-              <div className="profile-hero-card__meta">
+              <div className="account-profile-card__meta">
                 <Badge variant="neutral">Организаций: {organizations.length}</Badge>
+                <Button type="button" variant="ghost" onClick={() => setProfileModalOpen(true)}>
+                  Редактировать профиль
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -188,106 +436,333 @@ export function ProfileWorkspace() {
           <Card>
             <CardHeader>
               <CardTitle>Приглашения</CardTitle>
-              <CardDescription>Вступление в организацию возможно только по приглашению администратора.</CardDescription>
+              <CardDescription>
+                В организацию приглашает администратор. Если вам прислали ссылку, откройте ее или
+                примите приглашение здесь.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="profile-stack">
               {loading ? (
                 <p className="empty-state">Загружаем приглашения...</p>
               ) : invitations.length === 0 ? (
                 <div className="resource-empty-inline">
-                  <strong>Приглашений нет</strong>
-                  <p>Когда администратор пригласит вас, приглашение появится здесь.</p>
+                  <strong>Новых приглашений нет</strong>
+                  <p>Когда администратор пригласит вас, приглашение появится в этом блоке.</p>
                 </div>
               ) : (
-                <div className="resource-card__list">
-                  {invitations.map((invitation) => (
-                    <div key={invitation.invitationId} className="profile-item-card">
-                      <div className="resource-inline-info">
-                        <strong>{invitation.organization.name}</strong>
-                        <span>Роль: {roleLabels[invitation.role]}</span>
-                        <span>Действует до {formatDateTime(invitation.expiresAt)}</span>
-                      </div>
-                      <div className="resource-card__actions">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => void handleAcceptInvitation(invitation)}
-                          loading={processingId === invitation.invitationId}
-                        >
-                          Принять приглашение
-                        </Button>
-                      </div>
+                invitations.map((invitation) => (
+                  <div key={invitation.invitationId} className="profile-item-card">
+                    <div className="resource-inline-info">
+                      <strong>{invitation.organization.name}</strong>
+                      <span>Роль: {roleLabels[invitation.role]}</span>
+                      <span>Действует до {formatDateTime(invitation.expiresAt)}</span>
                     </div>
-                  ))}
-                </div>
+                    <div className="resource-card__actions">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void handleDeclineInvitation(invitation)}
+                        loading={processingId === invitation.invitationId}
+                      >
+                        Отклонить
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void handleAcceptInvitation(invitation)}
+                        loading={processingId === invitation.invitationId}
+                      >
+                        Принять
+                      </Button>
+                    </div>
+                  </div>
+                ))
               )}
             </CardContent>
           </Card>
         </div>
 
-        <div className="profile-column profile-column--side">
+        <div className="account-layout__side">
           <Card>
             <CardHeader>
-              <CardTitle>Мои организации</CardTitle>
-              <CardDescription>Здесь видно, где вы состоите и с какой ролью работаете.</CardDescription>
+              <CardTitle>Организации и доступ</CardTitle>
+              <CardDescription>Где вы состоите и какая роль сейчас активна.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="profile-stack">
               {organizations.length === 0 ? (
                 <div className="resource-empty-inline">
                   <strong>Организаций пока нет</strong>
-                  <p>Создайте организацию или примите приглашение.</p>
+                  <p>Создайте первую организацию или дождитесь приглашения.</p>
                 </div>
               ) : (
-                <div className="resource-card__list">
-                  {organizations.map((organization) => (
-                    <div key={organization.id} className="profile-item-card">
-                      <div className="resource-inline-info">
-                        <strong>{organization.name}</strong>
-                        <span>{roleLabels[organization.role]} · {organization.slug}</span>
-                      </div>
-                      <div className="resource-card__actions">
-                        {activeOrganizationId === organization.id ? (
-                          <Badge variant="primary">Активная</Badge>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setActiveOrganizationId(organization.id)}
-                          >
-                            Сделать активной
-                          </Button>
-                        )}
+                organizations.map((organization) => (
+                  <div key={organization.id} className="profile-item-card">
+                    <div className="resource-inline-info">
+                      <strong>{organization.name}</strong>
+                      <span>
+                        {roleLabels[organization.role]} · {organization.slug}
+                      </span>
+                    </div>
+                    <div className="resource-card__actions">
+                      {activeOrganizationId === organization.id ? (
+                        <Badge variant="primary">Активная</Badge>
+                      ) : (
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => void handleLeaveOrganization(organization.id, organization.name)}
+                          onClick={() => setActiveOrganizationId(organization.id)}
+                        >
+                          Сделать активной
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void handleLeaveOrganization(organization.id, organization.name)}
+                        loading={processingId === organization.id}
+                      >
+                        Выйти
+                      </Button>
+                      {organization.role === 'ADMIN' ? (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => void handleDeleteOrganization(organization.id, organization.name)}
                           loading={processingId === organization.id}
                         >
-                          Выйти
+                          Удалить
                         </Button>
-                        {organization.role === 'ADMIN' ? (
-                          <Button
-                            type="button"
-                            variant="danger"
-                            size="sm"
-                            onClick={() => void handleDeleteOrganization(organization.id, organization.name)}
-                            loading={processingId === organization.id}
-                          >
-                            Удалить
-                          </Button>
-                        ) : null}
-                      </div>
+                      ) : null}
                     </div>
-                  ))}
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>История приглашений</CardTitle>
+              <CardDescription>Здесь видно, что вы уже приняли, отклонили или пропустили.</CardDescription>
+            </CardHeader>
+            <CardContent className="profile-stack">
+              {loading ? (
+                <p className="empty-state">Загружаем историю...</p>
+              ) : invitationHistory.length === 0 ? (
+                <div className="resource-empty-inline">
+                  <strong>История пока пустая</strong>
+                  <p>Принятые и отклоненные приглашения появятся здесь.</p>
                 </div>
+              ) : (
+                invitationHistory.map((item) => (
+                  <div key={item.invitationId} className="profile-item-card">
+                    <div className="resource-inline-info">
+                      <strong>{item.organization.name}</strong>
+                      <span>Роль: {roleLabels[item.role]}</span>
+                      <span>{formatDateTime(item.resolvedAt)}</span>
+                    </div>
+                    <Badge variant={invitationStatusVariant[item.status]}>
+                      {invitationStatusLabel[item.status]}
+                    </Badge>
+                  </div>
+                ))
               )}
             </CardContent>
           </Card>
         </div>
       </div>
+
+      <div className="account-settings-grid">
+        <Card>
+          <CardHeader>
+            <CardTitle>Настройки интерфейса</CardTitle>
+            <CardDescription>Сохраняются в этом браузере.</CardDescription>
+          </CardHeader>
+          <CardContent className="account-settings-card">
+            <div className="account-form-grid">
+              <Select
+                label="Язык интерфейса"
+                value={preferences.interfaceLanguage}
+                onChange={(event) =>
+                  handlePreferenceChange(
+                    'interfaceLanguage',
+                    event.target.value as AccountPreferences['interfaceLanguage'],
+                  )
+                }
+              >
+                <option value="ru">Русский</option>
+                <option value="en">English</option>
+              </Select>
+
+              <Input
+                label="Часовой пояс"
+                value={preferences.interfaceTimezone}
+                onChange={(event) =>
+                  handlePreferenceChange('interfaceTimezone', event.target.value)
+                }
+                placeholder="Europe/Moscow"
+              />
+            </div>
+
+            <div className="account-toggle-list">
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={preferences.browserNotifications}
+                  onChange={(event) =>
+                    handlePreferenceChange('browserNotifications', event.target.checked)
+                  }
+                />
+                <span>Показывать напоминания и уведомления в браузере</span>
+              </label>
+
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={preferences.emailDigest}
+                  onChange={(event) =>
+                    handlePreferenceChange('emailDigest', event.target.checked)
+                  }
+                />
+                <span>Показывать дневную сводку уведомлений</span>
+              </label>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Безопасность</CardTitle>
+            <CardDescription>Пароль и завершение всех активных сессий.</CardDescription>
+          </CardHeader>
+          <CardContent className="account-security-card">
+            <div className="account-security-card__group">
+              <strong>{user?.email ?? '—'}</strong>
+              <span>Почта используется как логин и сейчас не редактируется.</span>
+            </div>
+            <div className="resource-card__actions">
+              <Button type="button" variant="ghost" onClick={() => setSecurityModalOpen(true)}>
+                Сменить пароль
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => void handleLogoutAll()}
+                loading={processingId === 'logout-all'}
+              >
+                Выйти со всех устройств
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Modal
+        open={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        title="Редактировать профиль"
+        description="Обновите имя и аватар. Почта используется как логин и пока не меняется."
+        footer={profileModalFooter}
+      >
+        <div className="profile-stack">
+          <div className="account-profile-preview">
+            <Avatar
+              name={buildDisplayName(profileForm.firstName, profileForm.lastName, user?.email)}
+              src={profileForm.avatarUrl || null}
+              size="lg"
+            />
+            <div className="resource-inline-info">
+              <strong>{buildDisplayName(profileForm.firstName, profileForm.lastName, user?.email)}</strong>
+              <span>{user?.email ?? '—'}</span>
+            </div>
+          </div>
+
+          <div className="account-form-grid">
+            <Input
+              label="Имя"
+              value={profileForm.firstName}
+              onChange={(event) =>
+                setProfileForm((current) => ({ ...current, firstName: event.target.value }))
+              }
+              placeholder="Имя"
+            />
+            <Input
+              label="Фамилия"
+              value={profileForm.lastName}
+              onChange={(event) =>
+                setProfileForm((current) => ({ ...current, lastName: event.target.value }))
+              }
+              placeholder="Фамилия"
+            />
+          </div>
+
+          <Input
+            label="Ссылка на аватар"
+            value={profileForm.avatarUrl}
+            onChange={(event) =>
+              setProfileForm((current) => ({ ...current, avatarUrl: event.target.value }))
+            }
+            placeholder="https://..."
+            hint="Если оставить пустым, останутся инициалы."
+          />
+
+          <Input
+            label="Почта"
+            value={user?.email ?? ''}
+            disabled
+            hint="Эта почта используется для входа и пока не редактируется."
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        open={securityModalOpen}
+        onClose={() => setSecurityModalOpen(false)}
+        title="Сменить пароль"
+        description="Если вы входили только через OAuth, можно просто задать новый пароль."
+        footer={passwordModalFooter}
+      >
+        <div className="profile-stack">
+          <Input
+            label="Текущий пароль"
+            type="password"
+            value={passwordForm.currentPassword}
+            onChange={(event) =>
+              setPasswordForm((current) => ({
+                ...current,
+                currentPassword: event.target.value,
+              }))
+            }
+            hint="Если пароля раньше не было, поле можно оставить пустым."
+          />
+          <Input
+            label="Новый пароль"
+            type="password"
+            value={passwordForm.newPassword}
+            onChange={(event) =>
+              setPasswordForm((current) => ({
+                ...current,
+                newPassword: event.target.value,
+              }))
+            }
+          />
+          <Input
+            label="Повторите новый пароль"
+            type="password"
+            value={passwordForm.confirmPassword}
+            onChange={(event) =>
+              setPasswordForm((current) => ({
+                ...current,
+                confirmPassword: event.target.value,
+              }))
+            }
+          />
+        </div>
+      </Modal>
     </section>
   );
 }
-

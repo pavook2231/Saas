@@ -31,9 +31,11 @@ import { AppConfig, OAuthProviderRuntimeConfig } from '../config/app.config';
 import { PrismaService } from '../prisma/prisma.service';
 
 import { OAuthCallbackQueryDto } from './dto/oauth-callback-query.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { mapOAuthProfile, OAUTH_PROVIDER_DEFINITIONS } from './oauth.providers';
 import {
   AccessTokenPayload,
@@ -307,6 +309,103 @@ export class AuthService {
     return {
       user: this.toPublicUser(user, memberships),
     };
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto): Promise<MeResponse> {
+    const user = await this.getEnabledUserOrThrow(userId);
+
+    const firstName =
+      dto.firstName !== undefined ? this.trimOrNull(dto.firstName) : undefined;
+    const lastName =
+      dto.lastName !== undefined ? this.trimOrNull(dto.lastName) : undefined;
+    const avatarUrl =
+      dto.avatarUrl !== undefined ? this.trimOrNull(dto.avatarUrl) : undefined;
+
+    if (firstName !== undefined && firstName !== null && firstName.length > 80) {
+      throw new BadRequestException('Имя не должно быть длиннее 80 символов');
+    }
+
+    if (lastName !== undefined && lastName !== null && lastName.length > 80) {
+      throw new BadRequestException('Фамилия не должна быть длиннее 80 символов');
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        firstName,
+        lastName,
+        avatarUrl,
+      },
+      select: publicUserSelect,
+    });
+
+    const memberships = await this.getMembershipClaims(updatedUser.id);
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: updatedUser.id,
+        targetType: AuditTargetType.AUTH,
+        targetId: updatedUser.id,
+        action: 'auth.profile.updated',
+        severity: AuditSeverity.INFO,
+        payload: this.toAuditPayload({
+          firstName: updatedUser.firstName,
+          lastName: updatedUser.lastName,
+          avatarUrl: updatedUser.avatarUrl,
+        }),
+      },
+    });
+
+    return {
+      user: this.toPublicUser(updatedUser, memberships),
+    };
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: userWithPasswordSelect,
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Учетная запись пользователя недоступна');
+    }
+
+    this.assertUserEnabled(user);
+    this.validatePasswordStrength(dto.newPassword);
+
+    if (user.passwordHash) {
+      if (!dto.currentPassword?.trim()) {
+        throw new BadRequestException('Введите текущий пароль');
+      }
+
+      const matches = await compare(dto.currentPassword, user.passwordHash);
+
+      if (!matches) {
+        throw new UnauthorizedException('Текущий пароль указан неверно');
+      }
+    }
+
+    const nextPasswordHash = await hash(dto.newPassword, 12);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: nextPasswordHash,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          targetType: AuditTargetType.AUTH,
+          targetId: user.id,
+          action: 'auth.password.changed',
+          severity: AuditSeverity.INFO,
+        },
+      });
+    });
   }
 
   async getAuthorizationUrlForLogin(

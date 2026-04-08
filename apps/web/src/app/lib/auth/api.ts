@@ -2,11 +2,13 @@ import { apiBaseUrl } from '../api/config';
 
 import {
   AuthResponse,
+  ChangePasswordPayload,
   LoginPayload,
   MeResponse,
   OAuthProviderName,
   OAuthStartResponse,
   RegisterPayload,
+  UpdateProfilePayload,
 } from './types';
 
 const authBaseUrl = `${apiBaseUrl}/auth`;
@@ -119,6 +121,54 @@ export const authApi = {
     });
 
     await assertOk(response);
+  },
+
+  async logoutAll(accessToken: string): Promise<void> {
+    const response = await fetch(`${authBaseUrl}/logout-all`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    await assertOk(response);
+  },
+
+  async updateProfile(accessToken: string, payload: UpdateProfilePayload): Promise<MeResponse> {
+    const response = await fetch(`${authBaseUrl}/account`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as MeResponse;
+  },
+
+  async changePassword(
+    accessToken: string,
+    payload: ChangePasswordPayload,
+  ): Promise<{ success: true }> {
+    const response = await fetch(`${authBaseUrl}/account/password`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as { success: true };
   },
 
   async startOAuth(

@@ -65,6 +65,16 @@ export type OrganizationInvitation = {
   organization: OrganizationSummary;
 };
 
+export type OrganizationInvitationHistory = {
+  invitationId: string;
+  role: OrganizationRole;
+  status: 'ACCEPTED' | 'DECLINED' | 'REVOKED' | 'EXPIRED';
+  invitedAt: string;
+  expiresAt: string;
+  resolvedAt: string;
+  organization: OrganizationSummary;
+};
+
 export type OrganizationOutgoingInvitation = {
   invitationId: string;
   email: string;
@@ -197,6 +207,25 @@ export const organizationsApi = {
       accessToken: params.accessToken,
       method: 'POST',
       path: `/organizations/invitations/${params.invitationId}/accept`,
+    });
+  },
+
+  declineInvitation(
+    params: AuthenticatedRequest & {
+      invitationId: string;
+    },
+  ) {
+    return apiRequest<{ success: true; status: 'DECLINED'; declinedAt: string }>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: `/organizations/invitations/${params.invitationId}/decline`,
+    });
+  },
+
+  listMyInvitationHistory(params: AuthenticatedRequest) {
+    return apiRequest<OrganizationInvitationHistory[]>({
+      accessToken: params.accessToken,
+      path: '/organizations/invitations/me/history',
     });
   },
 

@@ -6,6 +6,7 @@ import { PassportModule } from '@nestjs/passport';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SecurityModule } from '../security/security.module';
 
+import { AccountController } from './account.controller';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -31,7 +32,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, AccountController],
   providers: [AuthService, JwtStrategy],
   exports: [AuthService],
 })

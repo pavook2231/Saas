@@ -428,9 +428,138 @@ export class OrganizationsService {
     }));
   }
 
+  async listMyInvitationHistory(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        email: true,
+        isActive: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!user || !user.isActive || user.deletedAt !== null) {
+      return [];
+    }
+
+    await this.prisma.organizationInvite.updateMany({
+      where: {
+        email: user.email,
+        status: OrganizationInviteStatus.PENDING,
+        expiresAt: {
+          lte: new Date(),
+        },
+      },
+      data: {
+        status: OrganizationInviteStatus.EXPIRED,
+      },
+    });
+
+    const invites = await this.prisma.organizationInvite.findMany({
+      where: {
+        email: user.email,
+        OR: [
+          {
+            status: {
+              not: OrganizationInviteStatus.PENDING,
+            },
+          },
+          {
+            expiresAt: {
+              lte: new Date(),
+            },
+          },
+        ],
+        organization: {
+          deletedAt: null,
+        },
+      },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        expiresAt: true,
+        createdAt: true,
+        updatedAt: true,
+        acceptedAt: true,
+        revokedAt: true,
+        acceptedByUserId: true,
+        organization: {
+          select: organizationSelect,
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+
+    return invites.map((invite) => {
+      const status =
+        invite.status === OrganizationInviteStatus.REVOKED &&
+        invite.acceptedByUserId === user.id
+          ? 'DECLINED'
+          : invite.status;
+
+      return {
+        invitationId: invite.id,
+        role: invite.role,
+        status,
+        invitedAt: invite.createdAt,
+        expiresAt: invite.expiresAt,
+        resolvedAt: invite.acceptedAt ?? invite.revokedAt ?? invite.updatedAt,
+        organization: {
+          id: invite.organization.id,
+          name: invite.organization.name,
+          slug: invite.organization.slug,
+          inviteCode: invite.organization.inviteCode,
+          description: invite.organization.description,
+          timezone: invite.organization.timezone,
+          createdAt: invite.organization.createdAt,
+          updatedAt: invite.organization.updatedAt,
+          deletedAt: invite.organization.deletedAt,
+          financeEnabled: this.getFinanceEnabled(invite.organization.settings),
+        },
+      };
+    });
+  }
+
   async acceptMyInvitation(invitationId: string, userId: string) {
     const invite = await this.findInvitationByIdForUserOrThrow(invitationId, userId);
     return this.acceptResolvedInvitation(invite, userId);
+  }
+
+  async declineMyInvitation(invitationId: string, userId: string) {
+    const invite = await this.findInvitationByIdForUserOrThrow(invitationId, userId);
+    const now = new Date();
+
+    await this.prisma.organizationInvite.update({
+      where: { id: invite.id },
+      data: {
+        status: OrganizationInviteStatus.REVOKED,
+        acceptedByUserId: userId,
+        revokedAt: now,
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: invite.organizationId,
+        actorUserId: userId,
+        targetType: AuditTargetType.MEMBERSHIP,
+        targetId: invite.id,
+        action: 'membership.invitation.declined',
+        description: 'Organization invitation declined',
+      },
+    });
+
+    return {
+      success: true as const,
+      status: 'DECLINED' as const,
+      declinedAt: now.toISOString(),
+    };
   }
 
   async listMyJoinRequests(userId: string) {

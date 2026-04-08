@@ -42,6 +42,11 @@ export class OrganizationsController {
     return this.organizationsService.listMyInvitations(user.sub);
   }
 
+  @Get('invitations/me/history')
+  async myInvitationHistory(@CurrentUser() user: AccessTokenPayload) {
+    return this.organizationsService.listMyInvitationHistory(user.sub);
+  }
+
   @Post('invitations/:invitationId/accept')
   async acceptMyInvitation(
     @Param('invitationId', new ParseUUIDPipe({ version: '4' }))
@@ -49,6 +54,15 @@ export class OrganizationsController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.organizationsService.acceptMyInvitation(invitationId, user.sub);
+  }
+
+  @Post('invitations/:invitationId/decline')
+  async declineMyInvitation(
+    @Param('invitationId', new ParseUUIDPipe({ version: '4' }))
+    invitationId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.organizationsService.declineMyInvitation(invitationId, user.sub);
   }
 
   @Get()

@@ -54,6 +54,17 @@ export type RegisterPayload = {
   lastName?: string;
 };
 
+export type UpdateProfilePayload = {
+  firstName?: string;
+  lastName?: string;
+  avatarUrl?: string;
+};
+
+export type ChangePasswordPayload = {
+  currentPassword?: string;
+  newPassword: string;
+};
+
 export type OAuthStartResponse = {
   provider: string;
   action: 'login' | 'link';

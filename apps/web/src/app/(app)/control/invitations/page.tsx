@@ -1,6 +1,5 @@
-﻿import { ControlInvitationsWorkspace } from '@/components/features/control-invitations-workspace';
+﻿import { redirect } from 'next/navigation';
 
 export default function ControlInvitationsPage() {
-  return <ControlInvitationsWorkspace />;
+  redirect('/control/participants');
 }
-

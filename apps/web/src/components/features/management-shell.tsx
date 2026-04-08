@@ -16,7 +16,6 @@ import { WorkspaceOrgEmpty } from './workspace-org-empty';
 const sections = [
   { href: '/control/participants' as Route, label: 'Участники' },
   { href: '/control/plays' as Route, label: 'Спектакли' },
-  { href: '/control/invitations' as Route, label: 'Пригласить в организацию' },
   { href: '/control/schedule' as Route, label: 'Составить расписание' },
 ];
 
@@ -87,4 +86,5 @@ export function ManagementShell({ title, description, children }: ManagementShel
     </section>
   );
 }
+
 

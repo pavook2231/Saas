@@ -184,6 +184,22 @@ export type CreateTemplatePayload = {
   }>;
 };
 
+export type UpdateTemplatePayload = {
+  name?: string;
+  type?: EventType;
+  description?: string;
+  location?: string;
+  durationMinutes?: number;
+  isActive?: boolean;
+  roles?: Array<{
+    name: string;
+    requiredCount?: number;
+    sortOrder?: number;
+    description?: string;
+    participantIds?: string[];
+  }>;
+};
+
 export type CreateEventPayload = {
   title: string;
   description?: string;
@@ -311,6 +327,32 @@ export const operationsApi = {
       method: 'POST',
       path: `/organizations/${params.organizationId}/templates`,
       body: params.payload,
+    });
+  },
+
+  updateTemplate(
+    params: OrganizationScopedRequest & {
+      templateId: string;
+      payload: UpdateTemplatePayload;
+    },
+  ) {
+    return apiRequest<TemplateRecord>({
+      accessToken: params.accessToken,
+      method: 'PATCH',
+      path: `/organizations/${params.organizationId}/templates/${params.templateId}`,
+      body: params.payload,
+    });
+  },
+
+  archiveTemplate(
+    params: OrganizationScopedRequest & {
+      templateId: string;
+    },
+  ) {
+    return apiRequest<{ success: true; alreadyDeleted?: true }>({
+      accessToken: params.accessToken,
+      method: 'DELETE',
+      path: `/organizations/${params.organizationId}/templates/${params.templateId}`,
     });
   },
 

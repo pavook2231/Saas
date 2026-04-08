@@ -3326,14 +3326,201 @@ textarea.ui-field {
 }
 
 .play-card {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  display: grid;
+  gap: 14px;
   padding: 18px;
   border: 1px solid rgba(219, 227, 239, 0.9);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.86);
+}
+
+.play-card.is-selected {
+  border-color: rgba(37, 99, 235, 0.3);
+  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.08);
+}
+
+.plays-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+  gap: 18px;
+}
+
+.plays-form-grid,
+.plays-duration-grid,
+.plays-filter-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.plays-form-grid {
+  grid-template-columns: minmax(0, 1fr) 180px;
+}
+
+.plays-duration-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.plays-filter-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.plays-preset-row,
+.plays-cast-section,
+.plays-role-list,
+.plays-list-scroll,
+.plays-success-panel,
+.plays-cast-modal__row {
+  display: grid;
+  gap: 12px;
+}
+
+.plays-preset-row__label,
+.plays-cast-section__header span,
+.plays-helper,
+.play-card__stats,
+.play-card__role-row span {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.plays-cast-section {
+  padding: 16px;
+  border: 1px solid rgba(219, 227, 239, 0.88);
+  border-radius: 20px;
+  background: rgba(248, 250, 253, 0.86);
+}
+
+.plays-cast-section__header,
+.play-card__header,
+.play-card__actions,
+.plays-form-footer,
+.plays-form-footer__meta,
+.plays-chip-row,
+.plays-selected-list {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.plays-cast-section__header,
+.play-card__header,
+.plays-form-footer {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.plays-role-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(219, 227, 239, 0.82);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.plays-role-card__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.plays-chip-button,
+.plays-selected-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+}
+
+.plays-chip-button {
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--primary-strong);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.plays-chip-button:hover {
+  border-color: rgba(37, 99, 235, 0.3);
+  background: rgba(239, 246, 255, 0.82);
+}
+
+.plays-selected-chip {
+  background: rgba(241, 245, 249, 0.92);
+  color: var(--text);
+  border: 1px solid rgba(219, 227, 239, 0.9);
+}
+
+.plays-selected-chip--alt {
+  background: rgba(255, 247, 237, 0.92);
+  border-color: rgba(251, 146, 60, 0.24);
+}
+
+.plays-helper--error {
+  color: var(--error);
+}
+
+.plays-success-panel {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 157, 105, 0.18);
+  background: var(--success-soft);
+}
+
+.plays-form-footer__meta {
+  align-items: center;
+}
+
+.plays-form-footer__meta span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.plays-list-scroll {
+  max-height: 920px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.play-card__header {
+  align-items: center;
+}
+
+.play-card__stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.play-card__roles {
+  display: grid;
+  gap: 10px;
+}
+
+.play-card__role-row {
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+.play-card__role-row strong {
+  font-size: 0.9rem;
+}
+
+.play-card__actions {
+  align-items: center;
+}
+
+.plays-cast-modal__row {
+  padding: 14px 16px;
+  border: 1px solid rgba(219, 227, 239, 0.88);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .venue-badge {
@@ -3814,6 +4001,21 @@ textarea.ui-field {
   }
 
   .settings-invite-link {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .plays-layout,
+  .plays-form-grid,
+  .plays-filter-grid,
+  .plays-duration-grid,
+  .plays-role-card__header {
+    grid-template-columns: 1fr;
+  }
+
+  .plays-form-footer,
+  .play-card__header,
+  .play-card__actions {
     flex-direction: column;
     align-items: stretch;
   }

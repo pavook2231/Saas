@@ -3099,33 +3099,12 @@ textarea.ui-field {
   gap: 12px;
 }
 
-.calendar-simple__utility-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-}
-
-.calendar-simple__details-card .ui-card__header,
-.calendar-simple__details-card .ui-card__content {
-  padding-top: 18px;
-  padding-bottom: 18px;
-}
-
 .calendar-page--compact .calendar-simple__header h1 {
   font-size: clamp(1.55rem, 2.4vw, 2rem);
 }
 
 .calendar-page--compact .calendar-simple__actions {
   gap: 8px;
-}
-
-.calendar-page--compact .calendar-simple__filters {
-  gap: 10px;
-}
-
-.calendar-page--compact .calendar-simple__utility-grid {
-  gap: 12px;
 }
 
 .calendar-page--compact .period-label {
@@ -3228,19 +3207,19 @@ textarea.ui-field {
   min-width: 0;
   overflow-x: auto;
   border: 1px solid rgba(219, 227, 239, 0.88);
-  border-radius: 22px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.82);
   box-shadow: var(--shadow-sm);
 }
 
 .theatre-week-table {
-  min-width: 1120px;
+  min-width: 920px;
 }
 
 .theatre-week-table__header,
 .theatre-week-table__row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) 120px;
+  grid-template-columns: 92px repeat(4, minmax(170px, 1fr));
 }
 
 .theatre-week-table__header {
@@ -3250,13 +3229,13 @@ textarea.ui-field {
 
 .theatre-week-table__heading,
 .theatre-week-table__day-heading {
-  min-height: 54px;
-  padding: 14px 12px;
+  min-height: 42px;
+  padding: 10px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 800;
   color: var(--text);
   text-transform: uppercase;
@@ -3282,9 +3261,10 @@ textarea.ui-field {
 
 .theatre-week-table__cell,
 .theatre-week-table__day {
-  min-height: 118px;
-  padding: 12px;
+  min-height: 82px;
+  padding: 8px;
   border-right: 1px solid rgba(219, 227, 239, 0.88);
+  min-width: 0;
 }
 
 .theatre-week-table__day {
@@ -3292,50 +3272,45 @@ textarea.ui-field {
   display: grid;
   align-content: center;
   justify-items: start;
-  gap: 6px;
+  gap: 4px;
   text-align: left;
   background: rgba(244, 247, 251, 0.72);
 }
 
 .theatre-week-table__day strong {
-  font-size: 0.96rem;
+  font-size: 0.84rem;
   text-transform: capitalize;
+  line-height: 1.15;
 }
 
 .theatre-week-table__day span {
   color: var(--text-muted);
-  font-size: 0.84rem;
+  font-size: 0.74rem;
+  line-height: 1.1;
 }
 
 .theatre-week-table__events {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .theatre-week-table__empty {
-  display: grid;
-  gap: 4px;
-}
-
-.theatre-week-table__empty strong {
-  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   color: var(--text-soft);
-}
-
-.theatre-week-table__empty p {
-  margin: 0;
-  color: var(--text-soft);
-  font-size: 0.76rem;
-  line-height: 1.45;
+  font-size: 0.92rem;
 }
 
 .theatre-event {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  padding: 10px 12px;
+  min-width: 0;
+  padding: 8px 10px;
   border: 1px solid rgba(219, 227, 239, 0.9);
-  border-radius: 16px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.96);
   text-align: left;
   cursor: pointer;
@@ -3366,18 +3341,23 @@ textarea.ui-field {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .theatre-event__primary strong {
-  font-size: 0.88rem;
-  line-height: 1.28;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  line-height: 1.2;
 }
 
 .theatre-event__primary span,
 .theatre-event__meta span {
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: 0.7rem;
   white-space: nowrap;
 }
 
@@ -3429,10 +3409,6 @@ textarea.ui-field {
   .calendar-simple__header {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .calendar-simple__utility-grid {
-    grid-template-columns: 1fr;
   }
 
   .calendar-simple__actions,

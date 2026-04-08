@@ -7,7 +7,6 @@ import { operationsApi, participantDisplayName, type EventRecord, type Participa
 import { WorkspaceOrgEmpty } from '@/components/features/workspace-org-empty';
 import { useActiveWorkspace } from '@/components/features/use-active-workspace';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { canAccessControlPanel } from '@/lib/organization-access';
@@ -25,7 +24,7 @@ const weekdayLongFormat = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
 });
 const weekDayNameFormat = new Intl.DateTimeFormat('ru-RU', {
-  weekday: 'long',
+  weekday: 'short',
 });
 const weekDayNumberFormat = new Intl.DateTimeFormat('ru-RU', {
   day: '2-digit',
@@ -85,32 +84,22 @@ const typeLabel: Record<EventRecord['type'], string> = {
 const theatreLaneMeta: Array<{
   id: TheatreLane;
   label: string;
-  emptyTitle: string;
-  emptyDescription: string;
 }> = [
   {
     id: 'PERFORMANCE',
     label: 'Спектакли',
-    emptyTitle: 'Нет спектаклей',
-    emptyDescription: 'На этот день спектакли не назначены.',
   },
   {
     id: 'REHEARSAL',
     label: 'Репетиции',
-    emptyTitle: 'Нет репетиций',
-    emptyDescription: 'Репетиции на этот день не назначены.',
   },
   {
     id: 'TOUR',
     label: 'Гастроли',
-    emptyTitle: 'Нет гастролей',
-    emptyDescription: 'Выездных мероприятий в этот день нет.',
   },
   {
     id: 'OTHER',
     label: 'Прочее',
-    emptyTitle: 'Нет мероприятий',
-    emptyDescription: 'Других событий на этот день нет.',
   },
 ];
 
@@ -142,8 +131,6 @@ export function CalendarWorkspace() {
   const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [playFilter, setPlayFilter] = useState('');
-  const [participantFilter, setParticipantFilter] = useState('');
   const [errorText, setErrorText] = useState<string | null>(null);
 
   const canOpenControlPanel = canAccessControlPanel(activeRole);
@@ -193,31 +180,9 @@ export function CalendarWorkspace() {
     [participants],
   );
 
-  const filteredEvents = useMemo(() => {
-    const normalizedPlay = playFilter.trim().toLowerCase();
-    const normalizedParticipant = participantFilter.trim().toLowerCase();
-
-    return events.filter((event) => {
-      const matchesPlay =
-        !normalizedPlay ||
-        event.title.toLowerCase().includes(normalizedPlay) ||
-        (event.template?.name ?? '').toLowerCase().includes(normalizedPlay);
-      const matchesParticipant =
-        !normalizedParticipant ||
-        event.participants.some((item) => {
-          const participant = participantsById.get(item.participantId);
-          return participant
-            ? participantDisplayName(participant).toLowerCase().includes(normalizedParticipant)
-            : false;
-        });
-
-      return matchesPlay && matchesParticipant;
-    });
-  }, [events, participantFilter, participantsById, playFilter]);
-
   const selectedEvent = useMemo(
-    () => filteredEvents.find((event) => event.id === selectedEventId) ?? null,
-    [filteredEvents, selectedEventId],
+    () => events.find((event) => event.id === selectedEventId) ?? null,
+    [events, selectedEventId],
   );
 
   const selectedParticipants = useMemo(
@@ -243,7 +208,7 @@ export function CalendarWorkspace() {
   const monthEventMap = useMemo(() => {
     const map = new Map<string, EventRecord[]>();
 
-    for (const event of filteredEvents) {
+    for (const event of events) {
       const key = toDayKey(new Date(event.startsAt));
       const list = map.get(key) ?? [];
       list.push(event);
@@ -251,7 +216,7 @@ export function CalendarWorkspace() {
     }
 
     return map;
-  }, [filteredEvents]);
+  }, [events]);
 
   const theatreWeekMap = useMemo(() => {
     const map = new Map<string, Record<TheatreLane, EventRecord[]>>();
@@ -265,7 +230,7 @@ export function CalendarWorkspace() {
       });
     }
 
-    for (const event of filteredEvents) {
+    for (const event of events) {
       const eventDate = new Date(event.startsAt);
       const key = toDayKey(eventDate);
       const currentDay = map.get(key);
@@ -286,7 +251,7 @@ export function CalendarWorkspace() {
     }
 
     return map;
-  }, [filteredEvents, weekDays]);
+  }, [events, weekDays]);
 
   const periodLabel = useMemo(() => {
     if (viewMode === 'month') {
@@ -344,6 +309,11 @@ export function CalendarWorkspace() {
     );
   };
 
+  const formatDayName = (date: Date) => {
+    const label = weekDayNameFormat.format(date).replace('.', '').trim();
+    return label.slice(0, 1).toUpperCase() + label.slice(1);
+  };
+
   if (!activeOrganizationId || !accessToken) {
     return (
       <section className="app-page">
@@ -388,25 +358,6 @@ export function CalendarWorkspace() {
             </Link>
           ) : null}
         </div>
-      </div>
-
-      <div className="calendar-simple__utility-grid">
-        <Card>
-          <CardContent className="calendar-simple__filters">
-            <Input
-              label="Поиск по спектаклю"
-              value={playFilter}
-              onChange={(event) => setPlayFilter(event.target.value)}
-              placeholder="Название спектакля или события"
-            />
-            <Input
-              label="Поиск по участнику"
-              value={participantFilter}
-              onChange={(event) => setParticipantFilter(event.target.value)}
-              placeholder="Имя участника"
-            />
-          </CardContent>
-        </Card>
       </div>
 
       {errorText ? <p className="finance-error">{errorText}</p> : null}
@@ -463,9 +414,8 @@ export function CalendarWorkspace() {
                 return (
                   <div key={dayKey} className={`theatre-week-table__row${isToday ? ' is-today' : ''}`}>
                     <aside className="theatre-week-table__day">
-                      <strong>{weekDayNameFormat.format(day)}</strong>
+                      <strong>{formatDayName(day)}</strong>
                       <span>{weekDayNumberFormat.format(day)}</span>
-                      {isToday ? <Badge variant="primary">Сегодня</Badge> : null}
                     </aside>
 
                     {theatreLaneMeta.map((lane) => {
@@ -479,8 +429,7 @@ export function CalendarWorkspace() {
                             </div>
                           ) : (
                             <div className="theatre-week-table__empty">
-                              <strong>{lane.emptyTitle}</strong>
-                              <p>{lane.emptyDescription}</p>
+                              —
                             </div>
                           )}
                         </div>

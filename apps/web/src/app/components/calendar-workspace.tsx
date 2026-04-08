@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { canAccessControlPanel } from '@/lib/organization-access';
-import { isVenueName, venueToneClass, type VenueName } from '@/lib/venues';
+import { isVenueName, venueLabelMap, venueToneClass, type VenueName } from '@/lib/venues';
 
 type ViewMode = 'week' | 'month';
 type TheatreLane = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'OTHER';
@@ -288,6 +288,7 @@ export function CalendarWorkspace() {
 
   const renderTheatreEvent = (event: EventRecord) => {
     const venue = isVenueName(event.location) ? event.location : null;
+    const timeRange = getEventTimeRange(event);
 
     return (
       <button
@@ -298,11 +299,20 @@ export function CalendarWorkspace() {
       >
         <div className="theatre-event__primary">
           <strong>{event.title}</strong>
-          <span className="theatre-event__time">{getEventTimeRange(event)}</span>
+          <span className="theatre-event__time" aria-label={`Время ${timeRange}`}>
+            {timeRange}
+          </span>
         </div>
         <div className="theatre-event__meta">
-          {venue ? <Badge className={`venue-badge ${venueToneClass[venue]}`}>{venue}</Badge> : null}
-          <span>{typeLabel[event.type]}</span>
+          {venue ? (
+            <Badge
+              className={`venue-badge ${venueToneClass[venue]} theatre-event__venue`}
+              title={venueLabelMap[venue]}
+            >
+              {venue}
+            </Badge>
+          ) : null}
+          <span className="theatre-event__type">{typeLabel[event.type]}</span>
           {event.status === 'CANCELLED' ? <Badge variant="warning">Отменено</Badge> : null}
         </div>
       </button>
@@ -416,7 +426,8 @@ export function CalendarWorkspace() {
                   <div key={dayKey} className={`theatre-week-table__row${isToday ? ' is-today' : ''}`}>
                     <aside className="theatre-week-table__day">
                       <strong>{formatDayName(day)}</strong>
-                      <span>{weekDayNumberFormat.format(day)}</span>
+                      <span className="theatre-week-table__day-meta">{weekDayNumberFormat.format(day)}</span>
+                      {isToday ? <small className="theatre-week-table__today-badge">Сегодня</small> : null}
                     </aside>
 
                     {theatreLaneMeta.map((lane) => {

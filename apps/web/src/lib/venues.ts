@@ -9,6 +9,13 @@ export const venueToneClass: Record<VenueName, string> = {
   'Фойе': 'is-foyer',
 };
 
+export const venueLabelMap: Record<VenueName, string> = {
+  'БЗ': 'Большой зал',
+  'МЗ': 'Малый зал',
+  'Реп зал': 'Репетиционный зал',
+  'Фойе': 'Фойе',
+};
+
 export const isVenueName = (value: string | null | undefined): value is VenueName =>
   Boolean(value && venueOptions.includes(value as VenueName));
 

@@ -379,29 +379,21 @@ export function ControlScheduleWorkspace() {
               </Select>
             </div>
 
-            <div className="resource-form-grid resource-form-grid--double">
+            <div className={`resource-form-grid ${form.kind === 'PERFORMANCE' ? '' : 'resource-form-grid--double'}`}>
               <Input
                 label="Начало"
                 type="time"
                 value={form.startsAt}
                 onChange={(event) => setForm((current) => ({ ...current, startsAt: event.target.value }))}
               />
-              {form.kind === 'PERFORMANCE' ? (
-                <div className="control-inline-note">
-                  <strong>Окончание</strong>
-                  <span>
-                    Рассчитаем автоматически
-                    {selectedPlay ? ` по длительности спектакля (${selectedPlay.durationMinutes} мин)` : ''}.
-                  </span>
-                </div>
-              ) : (
+              {form.kind !== 'PERFORMANCE' ? (
                 <Input
                   label="Окончание"
                   type="time"
                   value={form.endsAt}
                   onChange={(event) => setForm((current) => ({ ...current, endsAt: event.target.value }))}
                 />
-              )}
+              ) : null}
             </div>
 
             <ParticipantPicker

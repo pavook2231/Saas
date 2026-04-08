@@ -3182,27 +3182,6 @@ textarea.ui-field {
   gap: 16px;
 }
 
-.control-inline-note {
-  display: grid;
-  align-content: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: rgba(247, 249, 252, 0.82);
-}
-
-.control-inline-note strong {
-  font-size: 0.84rem;
-}
-
-.control-inline-note span {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
 .theatre-week-view {
   min-width: 0;
   overflow-x: auto;

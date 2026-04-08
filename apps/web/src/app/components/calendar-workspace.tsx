@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import { operationsApi, participantDisplayName, type EventRecord, type ParticipantRecord } from '@/app/lib/api/operations';
 import { WorkspaceOrgEmpty } from '@/components/features/workspace-org-empty';
@@ -124,6 +125,7 @@ const classifyTheatreLane = (event: EventRecord): TheatreLane => {
 };
 
 export function CalendarWorkspace() {
+  const searchParams = useSearchParams();
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [cursorDate, setCursorDate] = useState<Date>(() => startOfDay(new Date()));
@@ -174,6 +176,24 @@ export function CalendarWorkspace() {
   useEffect(() => {
     void loadCalendar();
   }, [loadCalendar]);
+
+  useEffect(() => {
+    const eventId = searchParams.get('eventId');
+
+    if (!eventId || events.length === 0) {
+      return;
+    }
+
+    const focusedEvent = events.find((event) => event.id === eventId);
+
+    if (!focusedEvent) {
+      return;
+    }
+
+    setSelectedEventId(focusedEvent.id);
+    setCursorDate(startOfDay(new Date(focusedEvent.startsAt)));
+    setViewMode('week');
+  }, [events, searchParams]);
 
   const participantsById = useMemo(
     () => new Map(participants.map((participant) => [participant.id, participant])),

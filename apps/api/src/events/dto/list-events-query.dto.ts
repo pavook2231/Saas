@@ -1,6 +1,7 @@
 ﻿import { Type } from 'class-transformer';
 import { EventStatus, EventType } from '@prisma/client';
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -26,6 +27,11 @@ export class ListEventsQueryDto {
   @IsOptional()
   @IsEnum(EventStatus)
   status?: EventStatus;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  includeDrafts?: boolean;
 
   @IsOptional()
   @IsUUID('4')

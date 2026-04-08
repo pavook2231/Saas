@@ -54,13 +54,14 @@ export function ParticipantPicker({
         value: participant.id,
         label: participantDisplayName(participant),
         description: participant.userId
-          ? `Аккаунт · ${participant.email ?? 'без email'}`
+          ? `С аккаунтом · ${participant.email ?? 'контакт скрыт'}`
           : `Без аккаунта · ${participant.email ?? participant.phone ?? 'контакт не указан'}`,
         badge: recentIds.includes(participant.id)
           ? 'Недавно'
           : participant.userId
-            ? 'User'
-            : 'Participant',
+            ? 'Аккаунт'
+            : 'Участник',
+        avatarLabel: participantDisplayName(participant),
       })),
     [participants, recentIds],
   );

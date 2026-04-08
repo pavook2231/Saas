@@ -204,6 +204,21 @@ export class EventsController {
     return this.eventsService.getEvent(organizationId, eventId);
   }
 
+  @Get('events/:eventId/history')
+  @RequireOrgRoles(
+    OrganizationRole.ADMIN,
+    OrganizationRole.DIRECTOR,
+    OrganizationRole.ASSISTANT,
+  )
+  async listEventHistory(
+    @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
+    organizationId: string,
+    @Param('eventId', new ParseUUIDPipe({ version: '4' }))
+    eventId: string,
+  ) {
+    return this.eventsService.listEventHistory(organizationId, eventId);
+  }
+
   @Post('events')
   @RequireOrgRoles(
     OrganizationRole.ADMIN,

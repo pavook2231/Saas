@@ -103,6 +103,20 @@ export type EventRecord = {
   participants: EventParticipantRecord[];
 };
 
+export type EventHistoryRecord = {
+  id: string;
+  action: string;
+  description: string | null;
+  payload: unknown;
+  createdAt: string;
+  actor: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string | null;
+  } | null;
+};
+
 export type ConflictItem = {
   type: 'EVENT' | 'AVAILABILITY';
   relatedId: string;
@@ -303,6 +317,7 @@ export const operationsApi = {
   listEvents(
     params: OrganizationScopedRequest & {
       from?: string;
+      includeDrafts?: boolean;
       limit?: number;
       participantId?: string;
       status?: EventStatus;
@@ -320,6 +335,7 @@ export const operationsApi = {
         to: params.to,
         type: params.type,
         status: params.status,
+        includeDrafts: params.includeDrafts,
         participantId: params.participantId,
         templateId: params.templateId,
         limit: params.limit,
@@ -352,6 +368,17 @@ export const operationsApi = {
       method: 'PATCH',
       path: `/organizations/${params.organizationId}/events/${params.eventId}`,
       body: params.payload,
+    });
+  },
+
+  listEventHistory(
+    params: OrganizationScopedRequest & {
+      eventId: string;
+    },
+  ) {
+    return apiRequest<EventHistoryRecord[]>({
+      accessToken: params.accessToken,
+      path: `/organizations/${params.organizationId}/events/${params.eventId}/history`,
     });
   },
 

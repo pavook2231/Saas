@@ -720,6 +720,7 @@ export class EventsService {
       type: query.type,
       status: query.status,
       templateId: query.templateId,
+      ...(query.status || query.includeDrafts ? {} : { NOT: { status: EventStatus.DRAFT } }),
       ...(query.participantId
         ? {
             participants: {
@@ -765,6 +766,37 @@ export class EventsService {
       select: eventSelect,
       orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
       take: query.limit ?? 300,
+    });
+  }
+
+  async listEventHistory(organizationId: string, eventId: string) {
+    await this.getEvent(organizationId, eventId);
+
+    return this.prisma.auditLog.findMany({
+      where: {
+        organizationId,
+        targetType: AuditTargetType.EVENT,
+        targetId: eventId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: 30,
+      select: {
+        id: true,
+        action: true,
+        description: true,
+        payload: true,
+        createdAt: true,
+        actor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
     });
   }
 

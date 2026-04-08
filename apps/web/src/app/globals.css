@@ -573,6 +573,11 @@ textarea.ui-field:focus {
   font-weight: 600;
 }
 
+.ui-multiselect__tag--count {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--primary-strong);
+}
+
 .ui-multiselect__placeholder,
 .ui-multiselect__chevron {
   color: var(--text-soft);
@@ -608,6 +613,17 @@ textarea.ui-field:focus {
   background: rgba(247, 249, 252, 0.72);
   cursor: pointer;
   transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.ui-multiselect__option-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ui-multiselect__option-copy {
+  min-width: 0;
 }
 
 .ui-multiselect__option:hover,
@@ -3040,6 +3056,174 @@ textarea.ui-field {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.schedule-layout {
+  align-items: start;
+}
+
+.schedule-form-card,
+.schedule-sidebar-stack {
+  min-width: 0;
+}
+
+.schedule-sidebar-stack,
+.schedule-success-card,
+.schedule-participant-block,
+.schedule-selected-participants,
+.schedule-form-actions,
+.schedule-legend-grid,
+.schedule-history-list {
+  display: grid;
+  gap: 12px;
+}
+
+.schedule-inline-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.schedule-participant-block {
+  padding: 16px;
+  border: 1px solid rgba(219, 227, 239, 0.9);
+  border-radius: 18px;
+  background: rgba(247, 250, 255, 0.8);
+}
+
+.schedule-participant-head,
+.schedule-conflict-box__header,
+.schedule-detail-card__head,
+.schedule-event-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.schedule-participant-head p,
+.schedule-success-card p,
+.schedule-detail-card__notes,
+.schedule-legend-item span,
+.schedule-history-item span,
+.schedule-event-card__meta span {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.schedule-quick-groups,
+.schedule-success-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.schedule-selected-participants {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.schedule-selected-person,
+.schedule-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.schedule-selected-person {
+  padding: 10px 12px;
+  border: 1px solid rgba(219, 227, 239, 0.86);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.schedule-selected-person div,
+.schedule-legend-item div,
+.schedule-event-card__main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.schedule-selected-person strong,
+.schedule-event-card__top strong,
+.schedule-detail-card__head strong,
+.schedule-legend-item strong {
+  font-size: 0.92rem;
+}
+
+.schedule-notes-field {
+  min-height: 108px;
+  resize: vertical;
+}
+
+.schedule-form-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.schedule-filter-grid {
+  align-items: end;
+}
+
+.schedule-conflict-box {
+  display: grid;
+  gap: 10px;
+}
+
+.schedule-event-card {
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.schedule-event-card:hover {
+  border-color: rgba(37, 99, 235, 0.26);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.schedule-event-card.is-selected {
+  border-color: rgba(37, 99, 235, 0.3);
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.12);
+}
+
+.schedule-event-card__top span {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.schedule-event-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.schedule-detail-card,
+.schedule-detail-card__section {
+  display: grid;
+  gap: 12px;
+}
+
+.schedule-history-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(219, 227, 239, 0.84);
+  border-radius: 16px;
+  background: rgba(247, 249, 252, 0.72);
+}
+
+.schedule-history-item div {
+  display: grid;
+  gap: 4px;
+}
+
+.schedule-history-item small {
+  color: var(--text-soft);
+  white-space: nowrap;
 }
 
 .play-card {

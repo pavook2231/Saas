@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/cn';
 
 export type MultiSelectOption = {
@@ -9,6 +10,7 @@ export type MultiSelectOption = {
   label: string;
   description?: string;
   badge?: string;
+  avatarLabel?: string;
 };
 
 type MultiSelectProps = {
@@ -85,7 +87,7 @@ export function MultiSelect({
       >
         <div className="ui-multiselect__values">
           {selectedOptions.length > 0 ? (
-            selectedOptions.map((option) => (
+            selectedOptions.slice(0, 4).map((option) => (
               <span key={option.value} className="ui-multiselect__tag">
                 {option.label}
               </span>
@@ -93,6 +95,9 @@ export function MultiSelect({
           ) : (
             <span className="ui-multiselect__placeholder">{placeholder}</span>
           )}
+          {selectedOptions.length > 4 ? (
+            <span className="ui-multiselect__tag ui-multiselect__tag--count">+{selectedOptions.length - 4}</span>
+          ) : null}
         </div>
         <span className="ui-multiselect__chevron">{open ? '▴' : '▾'}</span>
       </button>
@@ -118,9 +123,12 @@ export function MultiSelect({
                     className={cn('ui-multiselect__option', active && 'is-active')}
                     onClick={() => toggleValue(option.value)}
                   >
-                    <div>
-                      <strong>{option.label}</strong>
-                      {option.description ? <span>{option.description}</span> : null}
+                    <div className="ui-multiselect__option-main">
+                      {option.avatarLabel ? <Avatar size="sm" name={option.avatarLabel} /> : null}
+                      <div className="ui-multiselect__option-copy">
+                        <strong>{option.label}</strong>
+                        {option.description ? <span>{option.description}</span> : null}
+                      </div>
                     </div>
                     {option.badge ? <small>{option.badge}</small> : null}
                   </button>

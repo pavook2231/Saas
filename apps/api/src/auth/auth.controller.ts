@@ -26,6 +26,7 @@ import {
   OAuthAuthorizationStartResponse,
   OAuthCallbackResult,
   providerByName,
+  providerNameByEnum,
   RequestMeta,
 } from './auth.types';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -162,18 +163,10 @@ export class AuthController {
     @Param('provider') providerName: string,
     @Query() query: OAuthCallbackQueryDto,
     @Req() req: Request,
-    @Res({ passthrough: true }) response: Response,
-  ): Promise<OAuthCallbackResult> {
+    @Res() response: Response,
+  ): Promise<void> {
     const provider = this.resolveProvider(providerName);
-    this.authCookieService.assertOAuthState(req, query.state);
-    const result = await this.authService.handleOAuthCallback(provider, query, this.extractRequestMeta(req));
-    this.authCookieService.clearOAuthStateCookie(response);
-
-    if (result.mode === 'login') {
-      return this.attachSessionCookies(response, result);
-    }
-
-    return result;
+    await this.completeOAuthCallback(provider, query, req, response);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -291,21 +284,9 @@ export class AuthController {
   async googleCallback(
     @Query() query: OAuthCallbackQueryDto,
     @Req() req: Request,
-    @Res({ passthrough: true }) response: Response,
-  ): Promise<OAuthCallbackResult> {
-    this.authCookieService.assertOAuthState(req, query.state);
-    const result = await this.authService.handleOAuthCallback(
-      OAuthProvider.GOOGLE,
-      query,
-      this.extractRequestMeta(req),
-    );
-    this.authCookieService.clearOAuthStateCookie(response);
-
-    if (result.mode === 'login') {
-      return this.attachSessionCookies(response, result);
-    }
-
-    return result;
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.completeOAuthCallback(OAuthProvider.GOOGLE, query, req, response);
   }
 
   @Get('vk/callback')
@@ -313,21 +294,9 @@ export class AuthController {
   async vkCallback(
     @Query() query: OAuthCallbackQueryDto,
     @Req() req: Request,
-    @Res({ passthrough: true }) response: Response,
-  ): Promise<OAuthCallbackResult> {
-    this.authCookieService.assertOAuthState(req, query.state);
-    const result = await this.authService.handleOAuthCallback(
-      OAuthProvider.VK,
-      query,
-      this.extractRequestMeta(req),
-    );
-    this.authCookieService.clearOAuthStateCookie(response);
-
-    if (result.mode === 'login') {
-      return this.attachSessionCookies(response, result);
-    }
-
-    return result;
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.completeOAuthCallback(OAuthProvider.VK, query, req, response);
   }
 
   @Get('yandex/callback')
@@ -335,21 +304,55 @@ export class AuthController {
   async yandexCallback(
     @Query() query: OAuthCallbackQueryDto,
     @Req() req: Request,
-    @Res({ passthrough: true }) response: Response,
-  ): Promise<OAuthCallbackResult> {
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.completeOAuthCallback(OAuthProvider.YANDEX, query, req, response);
+  }
+
+  private async completeOAuthCallback(
+    provider: OAuthProvider,
+    query: OAuthCallbackQueryDto,
+    req: Request,
+    response: Response,
+  ): Promise<void> {
     this.authCookieService.assertOAuthState(req, query.state);
     const result = await this.authService.handleOAuthCallback(
-      OAuthProvider.YANDEX,
+      provider,
       query,
       this.extractRequestMeta(req),
     );
     this.authCookieService.clearOAuthStateCookie(response);
 
     if (result.mode === 'login') {
-      return this.attachSessionCookies(response, result);
+      const payload = this.attachSessionCookies(response, result);
+      const redirectUrl = this.buildOAuthRedirectUrl(result.clientState, {
+        provider,
+        mode: 'login',
+        csrfToken: payload.csrfToken,
+      });
+
+      if (redirectUrl) {
+        response.redirect(302, redirectUrl);
+        return;
+      }
+
+      response.json(payload);
+      return;
     }
 
-    return result;
+    const redirectUrl = this.buildOAuthRedirectUrl(result.clientState, {
+      provider,
+      mode: 'link',
+      linked: result.linked,
+      alreadyLinked: result.alreadyLinked,
+    });
+
+    if (redirectUrl) {
+      response.redirect(302, redirectUrl);
+      return;
+    }
+
+    response.json(result);
   }
 
   private resolveProvider(providerName: string): OAuthProvider {
@@ -412,5 +415,46 @@ export class AuthController {
     const payload = await pending;
     this.authCookieService.setOAuthStateCookie(response, payload.state);
     return payload;
+  }
+
+  private buildOAuthRedirectUrl(
+    clientState: string | null | undefined,
+    params: {
+      provider: OAuthProvider;
+      mode: 'login' | 'link';
+      csrfToken?: string;
+      linked?: boolean;
+      alreadyLinked?: boolean;
+    },
+  ): string | null {
+    const path = clientState?.trim();
+
+    if (!path || !path.startsWith('/')) {
+      return null;
+    }
+
+    const guardOrigin = 'https://app.local';
+    const redirectUrl = new URL(path, guardOrigin);
+
+    if (redirectUrl.origin !== guardOrigin) {
+      return null;
+    }
+
+    redirectUrl.searchParams.set('provider', providerNameByEnum[params.provider]);
+    redirectUrl.searchParams.set('mode', params.mode);
+
+    if (params.csrfToken) {
+      redirectUrl.searchParams.set('csrfToken', params.csrfToken);
+    }
+
+    if (params.linked !== undefined) {
+      redirectUrl.searchParams.set('linked', String(params.linked));
+    }
+
+    if (params.alreadyLinked !== undefined) {
+      redirectUrl.searchParams.set('alreadyLinked', String(params.alreadyLinked));
+    }
+
+    return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
   }
 }

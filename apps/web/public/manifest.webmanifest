@@ -1,11 +1,11 @@
-{
+﻿{
   "name": "Внутренний сервис театра",
   "short_name": "Театр",
   "description": "Расписание, приглашения и уведомления театральной организации.",
   "start_url": "/calendar",
   "display": "standalone",
   "background_color": "#f4f7fb",
-  "theme_color": "#2d63ea",
+  "theme_color": "#16243d",
   "lang": "ru",
   "icons": [
     {

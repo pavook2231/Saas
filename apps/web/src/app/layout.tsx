@@ -9,6 +9,7 @@ import { WorkspaceProvider } from './providers/workspace-provider';
 export const metadata: Metadata = {
   title: ru.metadata.title,
   description: ru.metadata.description,
+  manifest: '/manifest.webmanifest',
 };
 
 type LayoutProps = {

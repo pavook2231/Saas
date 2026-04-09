@@ -232,6 +232,7 @@ model User {
   notificationsAuthored       Notification[]           @relation("NotificationActor")
   notificationRecipients      NotificationRecipient[]  @relation("NotificationRecipientUser")
   pushDeviceTokens            PushDeviceToken[]        @relation("UserPushDeviceTokens")
+  webPushSubscriptions        WebPushSubscription[]    @relation("UserWebPushSubscriptions")
   chatMessagesSent            ChatMessage[]            @relation("ChatMessageSender")
   payrollGenerated            PayrollPeriod[]          @relation("PayrollGenerator")
   payrollApproved             PayrollPeriod[]          @relation("PayrollApprover")
@@ -820,6 +821,25 @@ model PushDeviceToken {
   updatedAt  DateTime     @updatedAt
 
   user User @relation("UserPushDeviceTokens", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive, updatedAt])
+}
+
+model WebPushSubscription {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  endpoint     String
+  endpointHash String   @unique
+  p256dh       String
+  auth         String
+  userAgent    String?
+  deviceLabel  String?
+  isActive     Boolean  @default(true)
+  lastSeenAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation("UserWebPushSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isActive, updatedAt])
 }

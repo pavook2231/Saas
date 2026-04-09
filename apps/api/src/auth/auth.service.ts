@@ -26,6 +26,7 @@ import {
 } from '@prisma/client';
 import { compare, hash } from 'bcryptjs';
 import { createHash, randomUUID } from 'crypto';
+import type { SignOptions } from 'jsonwebtoken';
 
 import { AppConfig, OAuthProviderRuntimeConfig } from '../config/app.config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -1284,14 +1285,14 @@ export class AuthService {
 
     const accessToken = await this.jwtService.signAsync(accessPayload, {
       secret: config.jwt.accessSecret,
-      expiresIn: config.jwt.accessExpiresIn,
+      expiresIn: config.jwt.accessExpiresIn as SignOptions['expiresIn'],
       issuer: config.app.name,
       audience: 'auth-access',
     });
 
     const refreshToken = await this.jwtService.signAsync(refreshPayload, {
       secret: config.jwt.refreshSecret,
-      expiresIn: config.jwt.refreshExpiresIn,
+      expiresIn: config.jwt.refreshExpiresIn as SignOptions['expiresIn'],
       issuer: config.app.name,
       audience: 'auth-refresh',
     });

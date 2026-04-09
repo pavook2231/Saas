@@ -19,9 +19,12 @@ import { DataEncryptionService } from '../security/services/data-encryption.serv
 
 import { ListMyNotificationsQueryDto } from './dto/list-my-notifications-query.dto';
 import { RegisterPushDeviceDto } from './dto/register-push-device.dto';
+import { RegisterWebPushSubscriptionDto } from './dto/register-web-push-subscription.dto';
 import { UnregisterPushDeviceDto } from './dto/unregister-push-device.dto';
+import { UnregisterWebPushSubscriptionDto } from './dto/unregister-web-push-subscription.dto';
 import { NotificationsGateway } from './notifications.gateway';
 import { FirebasePushService } from './services/firebase-push.service';
+import { WebPushService } from './services/web-push.service';
 
 type NotifyUsersInput = {
   organizationId?: string;
@@ -47,6 +50,7 @@ export class NotificationsService {
     private readonly prisma: PrismaService,
     private readonly gateway: NotificationsGateway,
     private readonly firebasePushService: FirebasePushService,
+    private readonly webPushService: WebPushService,
     private readonly dataEncryptionService: DataEncryptionService,
   ) {}
 
@@ -105,6 +109,110 @@ export class NotificationsService {
       where: {
         userId,
         tokenHash,
+        isActive: true,
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
+    return {
+      success: true as const,
+      disabledCount: updated.count,
+    };
+  }
+
+  async listMyWebPushSubscriptions(userId: string) {
+    const items = await this.prisma.webPushSubscription.findMany({
+      where: {
+        userId,
+      },
+      select: {
+        id: true,
+        endpoint: true,
+        userAgent: true,
+        deviceLabel: true,
+        isActive: true,
+        lastSeenAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+    });
+
+    return items.map((item) => ({
+      id: item.id,
+      endpointFingerprint: this.dataEncryptionService.maskValue(
+        this.dataEncryptionService.decrypt(item.endpoint, `web-push:${userId}`),
+      ),
+      userAgent: item.userAgent,
+      deviceLabel: item.deviceLabel,
+      isActive: item.isActive,
+      lastSeenAt: item.lastSeenAt,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
+  }
+
+  async registerWebPushSubscription(
+    userId: string,
+    dto: RegisterWebPushSubscriptionDto,
+  ) {
+    const endpoint = dto.endpoint.trim();
+    const endpointHash = this.dataEncryptionService.hashDeterministic(endpoint);
+
+    const subscription = await this.prisma.webPushSubscription.upsert({
+      where: {
+        endpointHash,
+      },
+      update: {
+        userId,
+        endpoint: this.dataEncryptionService.encrypt(endpoint, `web-push:${userId}`),
+        p256dh: this.dataEncryptionService.encrypt(dto.keys.p256dh, `web-push:${userId}`),
+        auth: this.dataEncryptionService.encrypt(dto.keys.auth, `web-push:${userId}`),
+        userAgent: this.trimOrNull(dto.userAgent),
+        deviceLabel: this.trimOrNull(dto.deviceLabel),
+        isActive: true,
+        lastSeenAt: new Date(),
+      },
+      create: {
+        userId,
+        endpoint: this.dataEncryptionService.encrypt(endpoint, `web-push:${userId}`),
+        endpointHash,
+        p256dh: this.dataEncryptionService.encrypt(dto.keys.p256dh, `web-push:${userId}`),
+        auth: this.dataEncryptionService.encrypt(dto.keys.auth, `web-push:${userId}`),
+        userAgent: this.trimOrNull(dto.userAgent),
+        deviceLabel: this.trimOrNull(dto.deviceLabel),
+        isActive: true,
+        lastSeenAt: new Date(),
+      },
+      select: {
+        id: true,
+        userAgent: true,
+        deviceLabel: true,
+        isActive: true,
+        lastSeenAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return {
+      ...subscription,
+      endpointFingerprint: this.dataEncryptionService.maskValue(endpoint),
+    };
+  }
+
+  async unregisterWebPushSubscription(
+    userId: string,
+    dto: UnregisterWebPushSubscriptionDto,
+  ) {
+    const endpointHash = this.dataEncryptionService.hashDeterministic(dto.endpoint.trim());
+
+    const updated = await this.prisma.webPushSubscription.updateMany({
+      where: {
+        userId,
+        endpointHash,
         isActive: true,
       },
       data: {
@@ -560,24 +668,6 @@ export class NotificationsService {
       return;
     }
 
-    if (!this.firebasePushService.isEnabled()) {
-      await this.prisma.notificationRecipient.updateMany({
-        where: {
-          notificationId,
-          channel: NotificationChannel.PUSH,
-          userId: {
-            in: userIds,
-          },
-        },
-        data: {
-          status: NotificationDeliveryStatus.FAILED,
-          errorMessage: 'Firebase is not configured',
-        },
-      });
-
-      return;
-    }
-
     const pushTokens = await this.prisma.pushDeviceToken.findMany({
       where: {
         userId: {
@@ -593,7 +683,27 @@ export class NotificationsService {
       },
     });
 
-    if (pushTokens.length === 0) {
+    const webPushSubscriptions = await this.prisma.webPushSubscription.findMany({
+      where: {
+        userId: {
+          in: userIds,
+        },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        userId: true,
+        endpoint: true,
+        endpointHash: true,
+        p256dh: true,
+        auth: true,
+      },
+    });
+
+    if (
+      pushTokens.length === 0 &&
+      webPushSubscriptions.length === 0
+    ) {
       await this.prisma.notificationRecipient.updateMany({
         where: {
           notificationId,
@@ -611,37 +721,92 @@ export class NotificationsService {
       return;
     }
 
-    const decryptedTokens = pushTokens.map((item) => ({
-      ...item,
-      plainToken: this.dataEncryptionService.decrypt(item.token, `push:${item.userId}`),
-    }));
-    const tokenToRecord = new Map(
-      decryptedTokens.map((item) => [item.plainToken, { userId: item.userId, tokenHash: item.tokenHash }]),
-    );
-    const tokenResults = await this.firebasePushService.sendToTokens({
-      tokens: decryptedTokens.map((item) => item.plainToken),
-      title: message.title,
-      body: message.body,
-      data: message.data,
-    });
-
     const successByUser = new Map<string, boolean>();
     const invalidTokens = new Set<string>();
+    const invalidWebPushEndpoints = new Set<string>();
 
-    for (const result of tokenResults) {
-      const tokenRecord = tokenToRecord.get(result.token);
-      const userId = tokenRecord?.userId;
+    if (pushTokens.length > 0 && this.firebasePushService.isEnabled()) {
+      const decryptedTokens = pushTokens.map((item) => ({
+        ...item,
+        plainToken: this.dataEncryptionService.decrypt(item.token, `push:${item.userId}`),
+      }));
+      const tokenToRecord = new Map(
+        decryptedTokens.map((item) => [
+          item.plainToken,
+          { userId: item.userId, tokenHash: item.tokenHash },
+        ]),
+      );
+      const tokenResults = await this.firebasePushService.sendToTokens({
+        tokens: decryptedTokens.map((item) => item.plainToken),
+        title: message.title,
+        body: message.body,
+        data: message.data,
+      });
 
-      if (!userId) {
-        continue;
+      for (const result of tokenResults) {
+        const tokenRecord = tokenToRecord.get(result.token);
+        const userId = tokenRecord?.userId;
+
+        if (!userId) {
+          continue;
+        }
+
+        const hasSuccess = successByUser.get(userId) ?? false;
+        successByUser.set(userId, hasSuccess || result.success);
+
+        if (!result.success && this.isInvalidTokenError(result.errorCode)) {
+          if (tokenRecord?.tokenHash) {
+            invalidTokens.add(tokenRecord.tokenHash);
+          }
+        }
       }
+    }
 
-      const hasSuccess = successByUser.get(userId) ?? false;
-      successByUser.set(userId, hasSuccess || result.success);
+    if (webPushSubscriptions.length > 0 && this.webPushService.isEnabled()) {
+      const decryptedSubscriptions = webPushSubscriptions.map((item) => ({
+        ...item,
+        plainEndpoint: this.dataEncryptionService.decrypt(
+          item.endpoint,
+          `web-push:${item.userId}`,
+        ),
+        plainP256dh: this.dataEncryptionService.decrypt(
+          item.p256dh,
+          `web-push:${item.userId}`,
+        ),
+        plainAuth: this.dataEncryptionService.decrypt(item.auth, `web-push:${item.userId}`),
+      }));
+      const endpointToRecord = new Map(
+        decryptedSubscriptions.map((item) => [
+          item.plainEndpoint,
+          { userId: item.userId, endpointHash: item.endpointHash },
+        ]),
+      );
+      const webPushResults = await this.webPushService.sendToSubscriptions({
+        subscriptions: decryptedSubscriptions.map((item) => ({
+          endpoint: item.plainEndpoint,
+          p256dh: item.plainP256dh,
+          auth: item.plainAuth,
+        })),
+        title: message.title,
+        body: message.body,
+        data: message.data,
+      });
 
-      if (!result.success && this.isInvalidTokenError(result.errorCode)) {
-        if (tokenRecord?.tokenHash) {
-          invalidTokens.add(tokenRecord.tokenHash);
+      for (const result of webPushResults) {
+        const subscriptionRecord = endpointToRecord.get(result.endpoint);
+        const userId = subscriptionRecord?.userId;
+
+        if (!userId) {
+          continue;
+        }
+
+        const hasSuccess = successByUser.get(userId) ?? false;
+        successByUser.set(userId, hasSuccess || result.success);
+
+        if (!result.success && this.isInactiveWebPushError(result.statusCode)) {
+          if (subscriptionRecord?.endpointHash) {
+            invalidWebPushEndpoints.add(subscriptionRecord.endpointHash);
+          }
         }
       }
     }
@@ -659,7 +824,22 @@ export class NotificationsService {
       });
     }
 
+    if (invalidWebPushEndpoints.size > 0) {
+      await this.prisma.webPushSubscription.updateMany({
+        where: {
+          endpointHash: {
+            in: Array.from(invalidWebPushEndpoints),
+          },
+        },
+        data: {
+          isActive: false,
+        },
+      });
+    }
+
     const now = new Date();
+    const pushProviderEnabled =
+      this.firebasePushService.isEnabled() || this.webPushService.isEnabled();
 
     for (const userId of userIds) {
       const success = successByUser.get(userId) ?? false;
@@ -678,7 +858,9 @@ export class NotificationsService {
             }
           : {
               status: NotificationDeliveryStatus.FAILED,
-              errorMessage: 'All push deliveries failed',
+              errorMessage: pushProviderEnabled
+                ? 'All push deliveries failed'
+                : 'No configured push providers',
             },
       });
     }
@@ -693,6 +875,10 @@ export class NotificationsService {
       code === 'messaging/registration-token-not-registered' ||
       code === 'messaging/invalid-registration-token'
     );
+  }
+
+  private isInactiveWebPushError(statusCode?: number): boolean {
+    return statusCode === 404 || statusCode === 410;
   }
 
   private deduplicateIds(values: string[]): string[] {

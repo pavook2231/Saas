@@ -28,6 +28,17 @@ export type NotificationsListResponse = {
   items: NotificationItem[];
 };
 
+export type WebPushSubscriptionItem = {
+  id: string;
+  endpointFingerprint: string;
+  userAgent: string | null;
+  deviceLabel: string | null;
+  isActive: boolean;
+  lastSeenAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export const notificationsApi = {
   listMyNotifications(
     params: AuthenticatedRequest & {
@@ -54,6 +65,61 @@ export const notificationsApi = {
       accessToken: params.accessToken,
       method: 'PATCH',
       path: `/notifications/me/${params.recipientId}/read`,
+    });
+  },
+
+  listWebPushSubscriptions(params: AuthenticatedRequest) {
+    return apiRequest<WebPushSubscriptionItem[]>({
+      accessToken: params.accessToken,
+      path: '/notifications/push/web',
+    });
+  },
+
+  registerWebPushSubscription(
+    params: AuthenticatedRequest & {
+      endpoint: string;
+      userAgent?: string;
+      deviceLabel?: string;
+      keys: {
+        p256dh: string;
+        auth: string;
+      };
+    },
+  ) {
+    return apiRequest<{
+      id: string;
+      endpointFingerprint: string;
+      userAgent: string | null;
+      deviceLabel: string | null;
+      isActive: boolean;
+      lastSeenAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: '/notifications/push/web/subscribe',
+      body: {
+        endpoint: params.endpoint,
+        userAgent: params.userAgent,
+        deviceLabel: params.deviceLabel,
+        keys: params.keys,
+      },
+    });
+  },
+
+  unregisterWebPushSubscription(
+    params: AuthenticatedRequest & {
+      endpoint: string;
+    },
+  ) {
+    return apiRequest<{ success: true; disabledCount: number }>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: '/notifications/push/web/unsubscribe',
+      body: {
+        endpoint: params.endpoint,
+      },
     });
   },
 };

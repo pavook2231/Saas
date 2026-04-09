@@ -20,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Select } from '@/components/ui/select';
+import { BrowserNotificationsSettings } from './browser-notifications-settings';
 import { CreateOrganizationAction } from './create-organization-action';
 import { PageHeader } from './page-header';
 import { useActiveWorkspace } from './use-active-workspace';
@@ -609,16 +610,15 @@ export function ProfileWorkspace() {
             </div>
 
             <div className="account-toggle-list">
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={preferences.browserNotifications}
-                  onChange={(event) =>
-                    handlePreferenceChange('browserNotifications', event.target.checked)
-                  }
-                />
-                <span>Показывать напоминания и уведомления в браузере</span>
-              </label>
+              <BrowserNotificationsSettings
+                accessToken={accessToken}
+                enabled={preferences.browserNotifications}
+                onEnabledChange={(value) =>
+                  handlePreferenceChange('browserNotifications', value)
+                }
+                onNotice={setNoticeText}
+                onError={setErrorText}
+              />
 
               <label className="checkbox-row">
                 <input

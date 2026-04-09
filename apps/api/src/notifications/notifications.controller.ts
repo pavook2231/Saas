@@ -16,7 +16,9 @@ import { AccessTokenPayload } from '../auth/auth.types';
 
 import { ListMyNotificationsQueryDto } from './dto/list-my-notifications-query.dto';
 import { RegisterPushDeviceDto } from './dto/register-push-device.dto';
+import { RegisterWebPushSubscriptionDto } from './dto/register-web-push-subscription.dto';
 import { UnregisterPushDeviceDto } from './dto/unregister-push-device.dto';
+import { UnregisterWebPushSubscriptionDto } from './dto/unregister-web-push-subscription.dto';
 import { NotificationsService } from './notifications.service';
 
 @Controller('notifications')
@@ -55,5 +57,26 @@ export class NotificationsController {
     @Body() dto: UnregisterPushDeviceDto,
   ) {
     return this.notificationsService.unregisterPushDevice(user.sub, dto);
+  }
+
+  @Get('push/web')
+  async myWebPushSubscriptions(@CurrentUser() user: AccessTokenPayload) {
+    return this.notificationsService.listMyWebPushSubscriptions(user.sub);
+  }
+
+  @Post('push/web/subscribe')
+  async registerWebPushSubscription(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: RegisterWebPushSubscriptionDto,
+  ) {
+    return this.notificationsService.registerWebPushSubscription(user.sub, dto);
+  }
+
+  @Post('push/web/unsubscribe')
+  async unregisterWebPushSubscription(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: UnregisterWebPushSubscriptionDto,
+  ) {
+    return this.notificationsService.unregisterWebPushSubscription(user.sub, dto);
   }
 }

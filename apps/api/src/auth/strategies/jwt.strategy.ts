@@ -14,11 +14,16 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   ) {
     const appName =
       configService.get<string>('appConfig.app.name') ?? 'saas-platform-api';
+    const accessSecret = configService.get<string>('appConfig.jwt.accessSecret');
+
+    if (!accessSecret) {
+      throw new UnauthorizedException('JWT access secret is missing');
+    }
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('appConfig.jwt.accessSecret'),
+      secretOrKey: accessSecret,
       issuer: appName,
       audience: 'auth-access',
     });

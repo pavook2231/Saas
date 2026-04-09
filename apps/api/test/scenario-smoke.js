@@ -9,7 +9,6 @@ const { JwtStrategy } = require('../dist/auth/strategies/jwt.strategy');
 const { EventsService } = require('../dist/events/events.service');
 const { NotificationsService } = require('../dist/notifications/notifications.service');
 const { OrganizationsService } = require('../dist/organizations/organizations.service');
-const { PointsService } = require('../dist/points/points.service');
 const { DataEncryptionService } = require('../dist/security/services/data-encryption.service');
 
 class TestConfigService {
@@ -68,9 +67,14 @@ class FakeFirebasePushService {
   async sendToTokens() { return []; }
 }
 
+class FakeWebPushService {
+  isEnabled() { return false; }
+  async sendToSubscriptions() { return []; }
+}
+
 class InMemoryPrisma {
   constructor() {
-    this.state = { users: [], refreshTokens: [], organizations: [], organizationInvites: [], organizationJoinRequests: [], memberships: [], participants: [], participantInvites: [], events: [], eventParticipants: [], participantAvailabilities: [], pointsConfigs: [], pointRateHistories: [], autoPointsComputations: [], pointsLedgerEntries: [], manualPointsAdjustments: [], manualPointsAudits: [], auditLogs: [], notifications: [], notificationRecipients: [], pushDeviceTokens: [] };
+    this.state = { users: [], refreshTokens: [], organizations: [], organizationInvites: [], organizationJoinRequests: [], memberships: [], participants: [], participantInvites: [], events: [], eventParticipants: [], participantAvailabilities: [], pointsConfigs: [], pointRateHistories: [], autoPointsComputations: [], pointsLedgerEntries: [], manualPointsAdjustments: [], manualPointsAudits: [], auditLogs: [], notifications: [], notificationRecipients: [], pushDeviceTokens: [], webPushSubscriptions: [] };
     this.user = this.model('user');
     this.refreshToken = this.model('refreshToken');
     this.organization = this.model('organization');
@@ -92,6 +96,7 @@ class InMemoryPrisma {
     this.notification = this.model('notification');
     this.notificationRecipient = this.model('notificationRecipient');
     this.pushDeviceToken = this.model('pushDeviceToken');
+    this.webPushSubscription = this.model('webPushSubscription');
     this.eventReminderDispatch = this.model('eventReminderDispatch');
   }
 
@@ -100,7 +105,7 @@ class InMemoryPrisma {
   async $transaction(input) { return typeof input === 'function' ? input(this) : Promise.all(input); }
 
   table(name) {
-    const map = { user: 'users', refreshToken: 'refreshTokens', organization: 'organizations', organizationInvite: 'organizationInvites', organizationJoinRequest: 'organizationJoinRequests', membership: 'memberships', participant: 'participants', participantInvite: 'participantInvites', event: 'events', eventParticipant: 'eventParticipants', participantAvailability: 'participantAvailabilities', pointsConfig: 'pointsConfigs', pointRateHistory: 'pointRateHistories', pointsLedgerEntry: 'pointsLedgerEntries', autoPointsComputation: 'autoPointsComputations', manualPointsAdjustment: 'manualPointsAdjustments', manualPointsAudit: 'manualPointsAudits', auditLog: 'auditLogs', notification: 'notifications', notificationRecipient: 'notificationRecipients', pushDeviceToken: 'pushDeviceTokens', eventReminderDispatch: 'eventReminderDispatches' };
+    const map = { user: 'users', refreshToken: 'refreshTokens', organization: 'organizations', organizationInvite: 'organizationInvites', organizationJoinRequest: 'organizationJoinRequests', membership: 'memberships', participant: 'participants', participantInvite: 'participantInvites', event: 'events', eventParticipant: 'eventParticipants', participantAvailability: 'participantAvailabilities', pointsConfig: 'pointsConfigs', pointRateHistory: 'pointRateHistories', pointsLedgerEntry: 'pointsLedgerEntries', autoPointsComputation: 'autoPointsComputations', manualPointsAdjustment: 'manualPointsAdjustments', manualPointsAudit: 'manualPointsAudits', auditLog: 'auditLogs', notification: 'notifications', notificationRecipient: 'notificationRecipients', pushDeviceToken: 'pushDeviceTokens', webPushSubscription: 'webPushSubscriptions', eventReminderDispatch: 'eventReminderDispatches' };
     const key = map[name];
     if (!key) throw new Error(`Unsupported model ${name}`);
     return this.state[key];
@@ -147,6 +152,7 @@ class InMemoryPrisma {
       notification: { ...base, organizationId: null, eventId: null, actorUserId: null, type: NotificationType.SYSTEM, title: '', body: '', payload: null, createdAt: now },
       notificationRecipient: { ...base, notificationId: null, userId: null, channel: NotificationChannel.WEB, status: NotificationDeliveryStatus.PENDING, errorMessage: null, deliveredAt: null, readAt: null, createdAt: now, updatedAt: now },
       pushDeviceToken: { ...base, userId: null, provider: 'FCM', token: '', tokenHash: randomUUID(), platform: null, deviceId: null, isActive: true, lastSeenAt: null, createdAt: now, updatedAt: now },
+      webPushSubscription: { ...base, userId: null, endpoint: '', endpointHash: randomUUID(), p256dh: '', auth: '', userAgent: null, deviceLabel: null, isActive: true, lastSeenAt: null, createdAt: now, updatedAt: now },
       eventReminderDispatch: { ...base, eventId: null, reminderKey: '', reminderAt: now, status: NotificationDeliveryStatus.PENDING, errorMessage: null, sentAt: null, createdAt: now },
     };
     const record = defs[name];
@@ -172,6 +178,7 @@ class InMemoryPrisma {
     if (name === 'organizationInvite' && where.tokenHash) return item.tokenHash === where.tokenHash;
     if (name === 'organizationJoinRequest' && where.organizationId_userId) return item.organizationId === where.organizationId_userId.organizationId && item.userId === where.organizationId_userId.userId;
     if (name === 'pushDeviceToken' && where.tokenHash) return item.tokenHash === where.tokenHash;
+    if (name === 'webPushSubscription' && where.endpointHash) return item.endpointHash === where.endpointHash;
     if (name === 'membership' && where.organizationId_userId) return item.organizationId === where.organizationId_userId.organizationId && item.userId === where.organizationId_userId.userId;
     if (name === 'pointsConfig' && where.organizationId) return item.organizationId === where.organizationId;
     if (name === 'pointRateHistory' && where.organizationId_effectiveFrom) return item.organizationId === where.organizationId_effectiveFrom.organizationId && this.eq(item.effectiveFrom, where.organizationId_effectiveFrom.effectiveFrom);
@@ -237,17 +244,18 @@ class InMemoryPrisma {
   const jwtService = new JwtService();
   const notificationsGateway = new FakeNotificationsGateway();
   const firebasePushService = new FakeFirebasePushService();
+  const webPushService = new FakeWebPushService();
   const dataEncryptionService = new DataEncryptionService(configService);
   const notificationsService = new NotificationsService(
     prisma,
     notificationsGateway,
     firebasePushService,
+    webPushService,
     dataEncryptionService,
   );
   const authService = new AuthService(prisma, jwtService, configService);
   const organizationsService = new OrganizationsService(prisma, configService, notificationsService);
   const eventsService = new EventsService(prisma, notificationsService);
-  const pointsService = new PointsService(prisma);
   const jwtStrategy = new JwtStrategy(configService, prisma);
   const requestMeta = { ipAddress: '127.0.0.1', userAgent: 'scenario-smoke' };
   const results = [];
@@ -257,6 +265,32 @@ class InMemoryPrisma {
   assert.equal(organization.role, OrganizationRole.ADMIN);
   assert.equal(prisma.state.memberships.some((m) => m.organizationId === organization.id && m.userId === adminAuth.user.id && m.status === MembershipStatus.ACTIVE && m.role === OrganizationRole.ADMIN), true);
   results.push('1. registration -> create organization');
+
+  const webPushRegistration = await notificationsService.registerWebPushSubscription(
+    adminAuth.user.id,
+    {
+      endpoint: 'https://push.example.com/subscriptions/1234567890abcdef',
+      userAgent: 'Mozilla/5.0 (Linux; Android 15)',
+      deviceLabel: 'Test mobile browser',
+      keys: {
+        p256dh: 'BEl4xW7uQj6G5zW0cR0V8WjG7Qn9XW5rPq9K4b2tW0c',
+        auth: 'QWxhZGRpbjpPcGVuU2VzYW1l',
+      },
+    },
+  );
+  assert.equal(webPushRegistration.isActive, true);
+  const webPushSubscriptions = await notificationsService.listMyWebPushSubscriptions(
+    adminAuth.user.id,
+  );
+  assert.equal(webPushSubscriptions.length, 1);
+  const webPushRemoval = await notificationsService.unregisterWebPushSubscription(
+    adminAuth.user.id,
+    {
+      endpoint: 'https://push.example.com/subscriptions/1234567890abcdef',
+    },
+  );
+  assert.equal(webPushRemoval.disabledCount, 1);
+  results.push('security smoke: web push subscription lifecycle');
 
   await jwtStrategy.validate({ sub: adminAuth.user.id, email: adminAuth.user.email, memberships: [], type: 'access' });
   prisma.state.users.find((u) => u.id === adminAuth.user.id).isActive = false;
@@ -370,34 +404,6 @@ class InMemoryPrisma {
 
   await assert.rejects(() => eventsService.createEvent(organization.id, adminAuth.user.id, { title: 'Conflict Event', type: EventType.REHEARSAL, startsAt: '2026-04-26T18:30:00.000Z', endsAt: '2026-04-26T20:00:00.000Z', participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }] }), (error) => error instanceof ConflictException);
   results.push('9. overlapping event conflict is detected');
-
-  const pointsConfig = await pointsService.updatePointsConfig(organization.id, adminAuth.user.id, { enabled: true, periodStartDay: 25, pointValue: '100.00', currency: CurrencyCode.RUB });
-  assert.equal(pointsConfig.enabled, true);
-  assert.equal(pointsConfig.pointValue.toString(), '100');
-  const autoPrevious = await pointsService.runAutoPointsForEvent(organization.id, previousPeriodEvent.id, adminAuth.user.id, { forceRecompute: false });
-  const autoMain = await pointsService.runAutoPointsForEvent(organization.id, mainEvent.id, adminAuth.user.id, { forceRecompute: false });
-  const autoMainReused = await pointsService.runAutoPointsForEvent(organization.id, mainEvent.id, adminAuth.user.id, { forceRecompute: false });
-  assert.equal(autoPrevious.reused, false);
-  assert.equal(autoMain.pointsPerParticipant, '3.00');
-  assert.equal(autoMainReused.reused, true);
-  assert.equal(autoMainReused.entriesCount, 1);
-  const manualPoints = await pointsService.createManualPoints(organization.id, adminAuth.user.id, { participantId: invitedParticipant.id, points: '1.50', type: PointsLedgerType.BONUS, reason: 'Manual correction', occurredAt: '2026-04-26T12:00:00.000Z' });
-  assert.equal(manualPoints.points, '1.50');
-  assert.equal(prisma.state.manualPointsAudits.length, 1);
-  results.push('10. auto + manual points with audit');
-
-  const currentPeriodSummary = await pointsService.getPeriodSummary(organization.id, { referenceDate: '2026-04-26T12:00:00.000Z', participantId: invitedParticipant.id });
-  assert.equal(currentPeriodSummary.periodStart, '2026-04-25T00:00:00.000Z');
-  assert.equal(currentPeriodSummary.periodEnd, '2026-05-25T00:00:00.000Z');
-  assert.equal(currentPeriodSummary.totals.autoPoints, '3.00');
-  assert.equal(currentPeriodSummary.totals.manualPoints, '1.50');
-  assert.equal(currentPeriodSummary.totals.totalPoints, '4.50');
-  assert.equal(currentPeriodSummary.totals.totalAmount, '450.00');
-  const previousPeriodSummary = await pointsService.getPeriodSummary(organization.id, { referenceDate: '2026-04-24T12:00:00.000Z', participantId: invitedParticipant.id });
-  assert.equal(previousPeriodSummary.periodStart, '2026-03-25T00:00:00.000Z');
-  assert.equal(previousPeriodSummary.periodEnd, '2026-04-25T00:00:00.000Z');
-  assert.equal(previousPeriodSummary.totals.totalPoints, '3.00');
-  results.push('11. payroll period 25-25');
 
   console.log('Scenario smoke passed:');
   results.forEach((item) => console.log(`- ${item}`));

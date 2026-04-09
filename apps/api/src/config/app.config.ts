@@ -39,6 +39,12 @@ export type AppConfig = {
   };
   notifications: {
     reminderOffsetsMinutes: number[];
+    webPush: {
+      publicKey: string;
+      privateKey: string;
+      subject: string;
+      enabled: boolean;
+    };
   };
   security: {
     requireHttps: boolean;
@@ -182,6 +188,15 @@ export default registerAs(
     },
     notifications: {
       reminderOffsetsMinutes: parseMinuteOffsets(process.env.REMINDER_OFFSETS_MINUTES),
+      webPush: {
+        publicKey: process.env.WEB_PUSH_VAPID_PUBLIC_KEY ?? '',
+        privateKey: process.env.WEB_PUSH_VAPID_PRIVATE_KEY ?? '',
+        subject: process.env.WEB_PUSH_SUBJECT ?? 'mailto:support@rpglife.online',
+        enabled: Boolean(
+          process.env.WEB_PUSH_VAPID_PUBLIC_KEY &&
+            process.env.WEB_PUSH_VAPID_PRIVATE_KEY,
+        ),
+      },
     },
     security: {
       requireHttps: process.env.REQUIRE_HTTPS === 'true',

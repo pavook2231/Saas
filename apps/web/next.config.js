@@ -23,6 +23,7 @@ const nextConfig = {
               "img-src 'self' data: https:",
               "font-src 'self' data: https:",
               "connect-src 'self' https: wss:",
+              "manifest-src 'self'",
               "worker-src 'self' blob:",
               "object-src 'none'",
             ].join('; '),

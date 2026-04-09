@@ -11,6 +11,7 @@ import { NotificationsGateway } from './notifications.gateway';
 import { NotificationsReminderScheduler } from './notifications-reminder.scheduler';
 import { NotificationsService } from './notifications.service';
 import { FirebasePushService } from './services/firebase-push.service';
+import { WebPushService } from './services/web-push.service';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { FirebasePushService } from './services/firebase-push.service';
     NotificationsService,
     NotificationsReminderScheduler,
     FirebasePushService,
+    WebPushService,
   ],
   exports: [NotificationsGateway, NotificationsService],
 })

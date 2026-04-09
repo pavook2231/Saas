@@ -1485,6 +1485,26 @@ textarea.ui-field:focus {
   gap: 10px;
 }
 
+.account-browser-push {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(219, 227, 239, 0.82);
+  border-radius: 16px;
+  background: rgba(247, 249, 252, 0.72);
+}
+
+.account-browser-push__meta {
+  display: grid;
+  gap: 6px;
+}
+
+.account-browser-push__meta span {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
 .account-security-card__group {
   display: grid;
   gap: 4px;

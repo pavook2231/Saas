@@ -39,7 +39,19 @@ export type WebPushSubscriptionItem = {
   updatedAt: string;
 };
 
+export type WebPushClientConfig = {
+  enabled: boolean;
+  publicKey: string | null;
+};
+
 export const notificationsApi = {
+  getWebPushConfig(params: AuthenticatedRequest) {
+    return apiRequest<WebPushClientConfig>({
+      accessToken: params.accessToken,
+      path: '/notifications/push/web/config',
+    });
+  },
+
   listMyNotifications(
     params: AuthenticatedRequest & {
       limit?: number;

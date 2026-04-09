@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   notificationsApi,
+  type WebPushClientConfig,
   type WebPushSubscriptionItem,
 } from '@/app/lib/api/notifications';
 import { browserPush } from '@/app/lib/notifications/browser-push';
@@ -37,9 +38,30 @@ export function BrowserNotificationsSettings({
 }: BrowserNotificationsSettingsProps) {
   const [loading, setLoading] = useState(false);
   const [subscriptions, setSubscriptions] = useState<WebPushSubscriptionItem[]>([]);
+  const [config, setConfig] = useState<WebPushClientConfig | null>(null);
   const [permission, setPermission] = useState(browserPush.getPermission());
 
   const supported = browserPush.isSupported();
+
+  const loadConfig = useCallback(async () => {
+    if (!accessToken) {
+      setConfig(null);
+      return null;
+    }
+
+    try {
+      const nextConfig = await notificationsApi.getWebPushConfig({ accessToken });
+      setConfig(nextConfig);
+      return nextConfig;
+    } catch (error) {
+      onError(
+        error instanceof Error
+          ? error.message
+          : 'Не удалось получить настройки браузерных уведомлений',
+      );
+      return null;
+    }
+  }, [accessToken, onError]);
 
   const loadSubscriptions = useCallback(async () => {
     if (!accessToken) {
@@ -63,6 +85,10 @@ export function BrowserNotificationsSettings({
     void loadSubscriptions();
   }, [loadSubscriptions]);
 
+  useEffect(() => {
+    void loadConfig();
+  }, [loadConfig]);
+
   const handleToggle = async (nextValue: boolean) => {
     if (!accessToken) {
       onError('Нужна активная сессия');
@@ -78,7 +104,16 @@ export function BrowserNotificationsSettings({
 
     try {
       if (nextValue) {
-        const subscription = await browserPush.subscribe(detectDeviceLabel());
+        const runtimeConfig = (await loadConfig()) ?? config;
+
+        if (!runtimeConfig?.enabled || !runtimeConfig.publicKey) {
+          throw new Error('На сервере пока не настроены браузерные push-уведомления');
+        }
+
+        const subscription = await browserPush.subscribe(
+          runtimeConfig.publicKey,
+          detectDeviceLabel(),
+        );
 
         await notificationsApi.registerWebPushSubscription({
           accessToken,
@@ -119,6 +154,10 @@ export function BrowserNotificationsSettings({
       return 'Этот браузер не поддерживает push-уведомления';
     }
 
+    if (config && (!config.enabled || !config.publicKey)) {
+      return 'Push-уведомления еще не настроены на сервере';
+    }
+
     if (permission === 'denied') {
       return 'Разрешение на уведомления заблокировано в браузере';
     }
@@ -128,7 +167,7 @@ export function BrowserNotificationsSettings({
     }
 
     return 'Push-уведомления пока не подключены';
-  }, [permission, subscriptions, supported]);
+  }, [config, permission, subscriptions, supported]);
 
   return (
     <div className="account-browser-push">

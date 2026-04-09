@@ -10,11 +10,6 @@ export type BrowserPushSubscriptionPayload = {
 
 const SERVICE_WORKER_URL = '/sw.js';
 
-const getPublicKey = () => {
-  const value = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY?.trim();
-  return value && value.length > 0 ? value : null;
-};
-
 const urlBase64ToUint8Array = (base64String: string) => {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const normalized = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -62,12 +57,10 @@ export const browserPush = {
     return registration.pushManager.getSubscription();
   },
 
-  async subscribe(deviceLabel?: string | null): Promise<BrowserPushSubscriptionPayload> {
+  async subscribe(publicKey: string, deviceLabel?: string | null): Promise<BrowserPushSubscriptionPayload> {
     if (!this.isSupported()) {
       throw new Error('Браузер не поддерживает push-уведомления');
     }
-
-    const publicKey = getPublicKey();
 
     if (!publicKey) {
       throw new Error('Web push пока не настроен на сервере');
@@ -125,3 +118,4 @@ export const browserPush = {
     return endpoint;
   },
 };
+

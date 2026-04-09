@@ -26,6 +26,11 @@ import { NotificationsService } from './notifications.service';
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
+  @Get('push/web/config')
+  async getWebPushConfig() {
+    return this.notificationsService.getWebPushClientConfig();
+  }
+
   @Get('me')
   async myNotifications(
     @CurrentUser() user: AccessTokenPayload,

@@ -26,9 +26,11 @@ export type WebPushSendResult = {
 export class WebPushService {
   private readonly logger = new Logger(WebPushService.name);
   private readonly enabled: boolean;
+  private readonly publicKey: string;
 
   constructor(private readonly configService: ConfigService<RuntimeConfig>) {
     const config = this.configService.get<AppConfig>('appConfig');
+    this.publicKey = config?.notifications.webPush.publicKey ?? '';
 
     if (!config?.notifications.webPush.enabled) {
       this.enabled = false;
@@ -50,6 +52,10 @@ export class WebPushService {
 
   isEnabled(): boolean {
     return this.enabled;
+  }
+
+  getPublicKey(): string | null {
+    return this.publicKey.trim().length > 0 ? this.publicKey : null;
   }
 
   async sendToSubscriptions(input: {

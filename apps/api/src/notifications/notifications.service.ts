@@ -122,6 +122,13 @@ export class NotificationsService {
     };
   }
 
+  getWebPushClientConfig() {
+    return {
+      enabled: this.webPushService.isEnabled(),
+      publicKey: this.webPushService.getPublicKey(),
+    };
+  }
+
   async listMyWebPushSubscriptions(userId: string) {
     const items = await this.prisma.webPushSubscription.findMany({
       where: {

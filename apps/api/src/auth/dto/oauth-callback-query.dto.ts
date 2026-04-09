@@ -13,6 +13,36 @@ export class OAuthCallbackQueryDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2048)
+  iss?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1024)
+  scope?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  authuser?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  prompt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  cid?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  device_id?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(200)
   error?: string;
 

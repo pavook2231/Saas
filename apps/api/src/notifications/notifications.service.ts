@@ -477,6 +477,8 @@ export class NotificationsService {
       notification,
     });
 
+    const pushUrl = this.resolvePushUrl(input);
+
     await this.deliverPushForNotification(notification.id, uniqueUserIds, {
       title: notification.title,
       body: notification.body,
@@ -485,6 +487,7 @@ export class NotificationsService {
         type: notification.type,
         organizationId: notification.organizationId ?? '',
         eventId: notification.eventId ?? '',
+        url: pushUrl,
       },
     });
 
@@ -883,6 +886,23 @@ export class NotificationsService {
 
   private deduplicateIds(values: string[]): string[] {
     return Array.from(new Set(values));
+  }
+
+  private resolvePushUrl(input: NotifyUsersInput): string {
+    const payloadUrl =
+      input.payload && typeof input.payload.url === 'string'
+        ? input.payload.url.trim()
+        : '';
+
+    if (payloadUrl.startsWith('/')) {
+      return payloadUrl;
+    }
+
+    if (input.eventId) {
+      return `/calendar?eventId=${input.eventId}`;
+    }
+
+    return '/calendar';
   }
 
   private trimOrNull(value?: string | null): string | null {

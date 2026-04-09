@@ -138,6 +138,21 @@ const eventSelect = {
   },
 } satisfies Prisma.EventSelect;
 
+const eventTypeLabelMap: Record<EventType, string> = {
+  PERFORMANCE: 'Спектакль',
+  REHEARSAL: 'Репетиция',
+  EVENT: 'Событие',
+  CUSTOM: 'Событие',
+};
+
+const eventNotificationDateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'short',
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 type NormalizedTemplateRoleInput = {
   name: string;
   requiredCount: number;
@@ -184,6 +199,15 @@ type ConflictCheckResult = {
     recommendedStartsAt: string;
     recommendedEndsAt: string;
   } | null;
+};
+
+type EventNotificationSnapshot = {
+  id: string;
+  title: string;
+  startsAt: Date;
+  type: EventType;
+  status: EventStatus;
+  location: string | null;
 };
 
 @Injectable()
@@ -907,20 +931,15 @@ export class EventsService {
 
     const createdEvent = await this.getEvent(organizationId, created);
 
-    await this.notifyEventParticipantsSafe({
-      organizationId,
-      eventId: createdEvent.id,
-      actorUserId,
-      type: NotificationType.EVENT_ASSIGNED,
-      title: `You were added to "${createdEvent.title}"`,
-      body: `Event starts at ${createdEvent.startsAt.toISOString()}`,
-      payload: {
-        eventId: createdEvent.id,
-        eventTitle: createdEvent.title,
-        startsAt: createdEvent.startsAt.toISOString(),
-        type: createdEvent.type,
-      },
-    });
+    if (createdEvent.status !== EventStatus.DRAFT) {
+      await this.notifyScheduleChangeSafe({
+        organizationId,
+        actorUserId,
+        event: createdEvent,
+        userIds: this.extractLinkedUserIds(createdEvent.participants),
+        variant: 'assigned',
+      });
+    }
 
     return createdEvent;
   }
@@ -939,12 +958,21 @@ export class EventsService {
       },
       select: {
         id: true,
+        title: true,
         templateId: true,
+        type: true,
+        status: true,
         startsAt: true,
         endsAt: true,
+        location: true,
         participants: {
           select: {
             participantId: true,
+            participant: {
+              select: {
+                userId: true,
+              },
+            },
           },
         },
       },
@@ -1069,21 +1097,44 @@ export class EventsService {
     });
 
     const updatedEvent = await this.getEvent(organizationId, existing.id);
+    const affectedUserIds = this.mergeUserIds(
+      this.extractLinkedUserIds(existing.participants),
+      this.extractLinkedUserIds(updatedEvent.participants),
+    );
 
-    await this.notifyEventParticipantsSafe({
-      organizationId,
-      eventId: updatedEvent.id,
-      actorUserId,
-      type: NotificationType.EVENT_UPDATED,
-      title: `Event "${updatedEvent.title}" was updated`,
-      body: `Updated start: ${updatedEvent.startsAt.toISOString()}`,
-      payload: {
-        eventId: updatedEvent.id,
-        eventTitle: updatedEvent.title,
-        startsAt: updatedEvent.startsAt.toISOString(),
-        type: updatedEvent.type,
-      },
-    });
+    if (updatedEvent.status === EventStatus.DRAFT) {
+      await this.notifyScheduleChangeSafe({
+        organizationId,
+        actorUserId,
+        event: updatedEvent,
+        userIds: affectedUserIds,
+        variant: 'draft',
+      });
+    } else if (updatedEvent.status === EventStatus.CANCELLED && existing.status !== EventStatus.CANCELLED) {
+      await this.notifyScheduleChangeSafe({
+        organizationId,
+        actorUserId,
+        event: updatedEvent,
+        userIds: affectedUserIds,
+        variant: 'cancelled',
+      });
+    } else if (existing.status === EventStatus.DRAFT) {
+      await this.notifyScheduleChangeSafe({
+        organizationId,
+        actorUserId,
+        event: updatedEvent,
+        userIds: affectedUserIds,
+        variant: 'assigned',
+      });
+    } else {
+      await this.notifyScheduleChangeSafe({
+        organizationId,
+        actorUserId,
+        event: updatedEvent,
+        userIds: affectedUserIds,
+        variant: 'updated',
+      });
+    }
 
     return updatedEvent;
   }
@@ -1102,9 +1153,22 @@ export class EventsService {
       },
       select: {
         id: true,
+        title: true,
         templateId: true,
+        type: true,
+        status: true,
         startsAt: true,
         endsAt: true,
+        location: true,
+        participants: {
+          select: {
+            participant: {
+              select: {
+                userId: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -1181,21 +1245,18 @@ export class EventsService {
     });
 
     const updatedEvent = await this.getEvent(organizationId, event.id);
-
-    await this.notifyEventParticipantsSafe({
-      organizationId,
-      eventId: updatedEvent.id,
-      actorUserId,
-      type: NotificationType.EVENT_ASSIGNED,
-      title: `Participants updated for "${updatedEvent.title}"`,
-      body: `Event starts at ${updatedEvent.startsAt.toISOString()}`,
-      payload: {
-        eventId: updatedEvent.id,
-        eventTitle: updatedEvent.title,
-        startsAt: updatedEvent.startsAt.toISOString(),
-        participantsCount: updatedEvent.participants.length,
-      },
-    });
+    if (updatedEvent.status !== EventStatus.DRAFT) {
+      await this.notifyScheduleChangeSafe({
+        organizationId,
+        actorUserId,
+        event: updatedEvent,
+        userIds: this.mergeUserIds(
+          this.extractLinkedUserIds(event.participants),
+          this.extractLinkedUserIds(updatedEvent.participants),
+        ),
+        variant: 'participants',
+      });
+    }
 
     return updatedEvent;
   }
@@ -1208,7 +1269,21 @@ export class EventsService {
       },
       select: {
         id: true,
+        title: true,
+        type: true,
+        status: true,
+        startsAt: true,
+        location: true,
         deletedAt: true,
+        participants: {
+          select: {
+            participant: {
+              select: {
+                userId: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -1246,6 +1321,14 @@ export class EventsService {
           description: 'Event archived',
         },
       });
+    });
+
+    await this.notifyScheduleChangeSafe({
+      organizationId,
+      actorUserId,
+      event,
+      userIds: this.extractLinkedUserIds(event.participants),
+      variant: 'removed',
     });
 
     return {
@@ -1766,28 +1849,112 @@ export class EventsService {
     }
   }
 
-  private async notifyEventParticipantsSafe(input: {
+  private extractLinkedUserIds(
+    participants: Array<{
+      participant?: {
+        userId: string | null;
+      } | null;
+    }>,
+  ): string[] {
+    return this.mergeUserIds(
+      participants
+        .map((item) => item.participant?.userId ?? null)
+        .filter((userId): userId is string => typeof userId === 'string' && userId.length > 0),
+    );
+  }
+
+  private mergeUserIds(...groups: string[][]): string[] {
+    return Array.from(
+      new Set(
+        groups.flatMap((items) => items).filter((userId) => userId.length > 0),
+      ),
+    );
+  }
+
+  private getEventNotificationSummary(event: EventNotificationSnapshot): string {
+    const parts = [
+      `${eventTypeLabelMap[event.type]} «${event.title}»`,
+      eventNotificationDateTimeFormat.format(event.startsAt),
+    ];
+
+    if (event.location) {
+      parts.push(event.location);
+    }
+
+    return parts.join(' • ');
+  }
+
+  private buildEventNotificationPayload(
+    event: EventNotificationSnapshot,
+    url = `/calendar?eventId=${event.id}`,
+  ): Record<string, unknown> {
+    return {
+      eventId: event.id,
+      eventTitle: event.title,
+      startsAt: event.startsAt.toISOString(),
+      type: event.type,
+      status: event.status,
+      location: event.location,
+      url,
+    };
+  }
+
+  private async notifyScheduleChangeSafe(input: {
     organizationId: string;
-    eventId: string;
     actorUserId: string;
-    type: NotificationType;
-    title: string;
-    body: string;
-    payload?: Record<string, unknown>;
+    event: EventNotificationSnapshot;
+    userIds: string[];
+    variant: 'assigned' | 'updated' | 'participants' | 'cancelled' | 'removed' | 'draft';
   }) {
+    if (input.userIds.length === 0) {
+      return;
+    }
+
+    const summary = this.getEventNotificationSummary(input.event);
+    let title = 'Изменение в расписании';
+    let body = summary;
+    let type: NotificationType = NotificationType.EVENT_UPDATED;
+    let url = `/calendar?eventId=${input.event.id}`;
+
+    if (input.variant === 'assigned') {
+      title = 'Новое событие в расписании';
+      type = NotificationType.EVENT_ASSIGNED;
+    }
+
+    if (input.variant === 'participants') {
+      title = 'Изменен состав события';
+    }
+
+    if (input.variant === 'cancelled') {
+      title = 'Событие отменено';
+    }
+
+    if (input.variant === 'removed') {
+      title = 'Событие удалено из расписания';
+      body = `«${input.event.title}» удалено из календаря`;
+      url = '/calendar';
+    }
+
+    if (input.variant === 'draft') {
+      title = 'Событие снято с расписания';
+      body = `«${input.event.title}» переведено в черновик`;
+      url = '/calendar';
+    }
+
     try {
-      await this.notificationsService.notifyEventParticipants({
+      await this.notificationsService.notifyUsers({
         organizationId: input.organizationId,
-        eventId: input.eventId,
+        eventId: input.event.id,
         actorUserId: input.actorUserId,
-        type: input.type,
-        title: input.title,
-        body: input.body,
-        payload: input.payload,
+        type,
+        title,
+        body,
+        payload: this.buildEventNotificationPayload(input.event, url),
+        userIds: input.userIds,
       });
     } catch (error) {
       this.logger.warn(
-        `Failed to send event notification for event=${input.eventId}: ${(error as Error).message}`,
+        `Failed to send schedule change notification for event=${input.event.id}: ${(error as Error).message}`,
       );
     }
   }

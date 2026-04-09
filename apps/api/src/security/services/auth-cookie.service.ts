@@ -69,11 +69,15 @@ export class AuthCookieService {
     );
   }
 
-  assertOAuthState(request: Request, state?: string): void {
-    const cookieState = this.getCookie(
+  getOAuthState(request: Request): string | null {
+    return this.getCookie(
       request,
       this.getConfig().security.cookies.oauthStateName,
     );
+  }
+
+  assertOAuthState(request: Request, state?: string): void {
+    const cookieState = this.getOAuthState(request);
 
     if (!state || !cookieState || cookieState !== state) {
       throw new UnauthorizedException('Проверка cookie-состояния OAuth не пройдена');

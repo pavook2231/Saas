@@ -950,8 +950,11 @@ export class AuthService {
       response_type: 'code',
       client_id: providerConfig.clientId,
       redirect_uri: providerConfig.callbackUrl,
-      state: signedState,
     });
+
+    if (provider !== OAuthProvider.VK) {
+      queryParams.set('state', signedState);
+    }
 
     if (definition.defaultScope.length > 0) {
       queryParams.set('scope', definition.defaultScope.join(' '));

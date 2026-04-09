@@ -18,10 +18,9 @@ export const OAUTH_PROVIDER_DEFINITIONS: Record<OAuthProvider, OAuthProviderDefi
     authorizeUrl: 'https://oauth.vk.com/authorize',
     tokenUrl: 'https://oauth.vk.com/access_token',
     userInfoUrl: 'https://api.vk.com/method/users.get',
-    defaultScope: ['email'],
+    defaultScope: [],
     version: '5.131',
     authorizeParams: {
-      display: 'page',
       v: '5.131',
     },
   },

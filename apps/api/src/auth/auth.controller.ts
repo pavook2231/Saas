@@ -315,10 +315,18 @@ export class AuthController {
     req: Request,
     response: Response,
   ): Promise<void> {
-    this.authCookieService.assertOAuthState(req, query.state);
+    const resolvedState =
+      provider === OAuthProvider.VK
+        ? query.state ?? this.authCookieService.getOAuthState(req) ?? undefined
+        : query.state;
+
+    this.authCookieService.assertOAuthState(req, resolvedState);
     const result = await this.authService.handleOAuthCallback(
       provider,
-      query,
+      {
+        ...query,
+        state: resolvedState,
+      },
       this.extractRequestMeta(req),
     );
     this.authCookieService.clearOAuthStateCookie(response);

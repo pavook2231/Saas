@@ -1,18 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" rx="116" fill="#16243D"/>
-  <rect x="96" y="66" width="320" height="380" rx="44" fill="#FFF8EC" stroke="rgba(243,211,138,0.28)" stroke-width="8"/>
-  <rect x="96" y="66" width="320" height="88" rx="44" fill="#B33A4A"/>
-  <circle cx="166" cy="108" r="14" fill="#F3D38A"/>
-  <circle cx="346" cy="108" r="14" fill="#F3D38A"/>
-  <g>
-    <rect x="136" y="194" width="68" height="68" rx="16" fill="#FFF"/>
-    <rect x="222" y="194" width="68" height="68" rx="16" fill="#FFF"/>
-    <rect x="308" y="194" width="68" height="68" rx="16" fill="#FFF"/>
-    <rect x="136" y="280" width="68" height="68" rx="16" fill="#FFF"/>
-    <rect x="222" y="280" width="68" height="68" rx="16" fill="#DCE6FF" stroke="#2D63EA" stroke-width="4"/>
-    <rect x="308" y="280" width="68" height="68" rx="16" fill="#FFF"/>
-    <rect x="136" y="366" width="68" height="40" rx="14" fill="#FFF"/>
-    <rect x="222" y="366" width="68" height="40" rx="14" fill="#FFF"/>
-    <rect x="308" y="366" width="68" height="40" rx="14" fill="#FFF"/>
-  </g>
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="44" y1="32" x2="148" y2="164" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#44B6FF"/>
+      <stop offset="1" stop-color="#294DFF"/>
+    </linearGradient>
+    <linearGradient id="rearMask" x1="106" y1="50" x2="153" y2="122" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#78C6FF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#5A79FF" stop-opacity="0.58"/>
+    </linearGradient>
+    <linearGradient id="frontMask" x1="60" y1="54" x2="111" y2="126" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F1F5FF"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="44" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="191" height="191" rx="43.5" stroke="white" stroke-opacity="0.16"/>
+  <circle cx="80" cy="46" r="46" fill="#78C6FF" fill-opacity="0.22"/>
+  <path d="M106 51C123 48 141 50 153 55C158 57 160 61 160 66L155 108C154 117 149 125 142 130C134 135 124 137 112 135C100 133 91 128 86 121C81 115 79 107 80 98L85 60C86 56 89 53 93 52C97 51 101 50 106 51Z" fill="url(#rearMask)"/>
+  <path d="M123 74C128 69 136 70 142 75C144 77 147 77 149 76C151 75 153 77 151 79C145 86 136 88 128 84C124 81 121 77 123 74Z" fill="#3159F4" fill-opacity="0.88"/>
+  <path d="M115 99C122 94 136 94 144 99C147 101 146 104 143 105C135 107 126 107 117 105C114 104 113 101 115 99Z" fill="#3159F4" fill-opacity="0.58"/>
+  <path d="M58 57C75 61 92 58 105 50C110 47 116 50 118 55L128 97C130 105 128 114 123 121C116 129 107 134 95 136C83 138 72 136 63 130C56 124 51 116 49 108L40 71C39 66 42 62 46 60C49 59 53 58 58 57Z" fill="url(#frontMask)"/>
+  <path d="M67 86C72 80 80 78 87 81C90 82 91 86 89 88C88 90 85 89 83 89C78 87 73 89 69 92C66 94 63 90 67 86Z" fill="#3159F4"/>
+  <path d="M97 82C102 77 110 76 117 79C120 80 121 84 119 86C117 88 114 87 112 86C107 84 102 85 98 88C95 90 93 87 97 82Z" fill="#3159F4"/>
+  <path d="M71 106C81 100 96 100 106 106C110 108 109 113 105 115C94 121 81 121 71 115C67 113 67 108 71 106Z" fill="#3159F4"/>
 </svg>

@@ -43,6 +43,21 @@ retry_compose_up_remove_orphans() {
   done
 }
 
+print_backend_debug_info() {
+  echo "Deployment failed. Collecting backend diagnostics..." >&2
+
+  docker compose --env-file .env.production ps || true
+  docker compose --env-file .env.production logs --tail=200 backend || true
+
+  local backend_container_id=""
+  backend_container_id="$(docker compose --env-file .env.production ps -q backend 2>/dev/null || true)"
+
+  if [ -n "${backend_container_id}" ]; then
+    echo "Backend health state:" >&2
+    docker inspect --format='{{json .State.Health}}' "${backend_container_id}" || true
+  fi
+}
+
 mkdir -p backups/postgres
 
 docker compose --env-file .env.production up -d --wait postgres redis
@@ -51,6 +66,10 @@ docker compose --env-file .env.production up -d --wait postgres redis
 
 docker compose --env-file .env.production --profile ops build --pull backend frontend migrator
 docker compose --env-file .env.production --profile ops run --rm migrator
-retry_compose_up_remove_orphans
+
+if ! retry_compose_up_remove_orphans; then
+  print_backend_debug_info
+  exit 1
+fi
 
 docker compose --env-file .env.production ps

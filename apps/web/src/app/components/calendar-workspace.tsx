@@ -363,7 +363,7 @@ export function CalendarWorkspace() {
   return (
     <section className="app-page calendar-page--compact">
       <div className="calendar-simple__header">
-        <div>
+        <div className="calendar-simple__intro">
           <p className="kicker">Календарь</p>
           <h1>Расписание</h1>
           <p className="period-label">{periodLabel}</p>
@@ -479,22 +479,32 @@ export function CalendarWorkspace() {
             const laneEvents = theatreWeekMap.get(dayKey);
             const isToday = isSameDay(day, new Date());
             const populatedLanes = theatreLaneMeta.filter((lane) => (laneEvents?.[lane.id] ?? []).length > 0);
+            const totalDayEvents = populatedLanes.reduce((sum, lane) => sum + (laneEvents?.[lane.id] ?? []).length, 0);
 
             return (
-              <article key={`${dayKey}-mobile`} className={`theatre-day-card${isToday ? ' is-today' : ''}`}>
+              <article
+                key={`${dayKey}-mobile`}
+                className={`theatre-day-card${isToday ? ' is-today' : ''}${totalDayEvents > 0 ? ' has-events' : ' is-empty'}`}
+              >
                 <div className="theatre-day-card__header">
                   <div className="theatre-day-card__day">
                     <strong>{formatDayName(day)}</strong>
                     <span>{weekDayNumberFormat.format(day)}</span>
                   </div>
-                  {isToday ? <Badge variant="primary">Сегодня</Badge> : null}
+                  <div className="theatre-day-card__header-meta">
+                    {totalDayEvents > 0 ? <span className="theatre-day-card__count">{totalDayEvents}</span> : null}
+                    {isToday ? <Badge variant="primary">Сегодня</Badge> : null}
+                  </div>
                 </div>
 
                 {populatedLanes.length > 0 ? (
                   <div className="theatre-day-card__sections">
                     {populatedLanes.map((lane) => (
-                      <section key={`${dayKey}-${lane.id}-mobile`} className="theatre-day-card__section">
-                        <div className="theatre-day-card__section-head">
+                      <section
+                        key={`${dayKey}-${lane.id}-mobile`}
+                        className={`theatre-day-card__section theatre-day-card__section--${lane.id.toLowerCase()}`}
+                      >
+                        <div className={`theatre-day-card__section-head theatre-day-card__section-head--${lane.id.toLowerCase()}`}>
                           <strong>{lane.label}</strong>
                           <span>{(laneEvents?.[lane.id] ?? []).length}</span>
                         </div>
@@ -505,7 +515,7 @@ export function CalendarWorkspace() {
                     ))}
                   </div>
                 ) : (
-                  <div className="theatre-day-card__empty">На этот день событий нет.</div>
+                  <div className="theatre-day-card__empty">Нет событий</div>
                 )}
               </article>
             );

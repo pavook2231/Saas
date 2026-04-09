@@ -15,14 +15,10 @@ export const OAUTH_PROVIDER_DEFINITIONS: Record<OAuthProvider, OAuthProviderDefi
     },
   },
   VK: {
-    authorizeUrl: 'https://oauth.vk.com/authorize',
-    tokenUrl: 'https://oauth.vk.com/access_token',
-    userInfoUrl: 'https://api.vk.com/method/users.get',
-    defaultScope: [],
-    version: '5.131',
-    authorizeParams: {
-      v: '5.131',
-    },
+    authorizeUrl: 'https://id.vk.ru/authorize',
+    tokenUrl: 'https://id.vk.ru/oauth2/auth',
+    userInfoUrl: 'https://id.vk.ru/oauth2/user_info',
+    defaultScope: ['email'],
   },
   YANDEX: {
     authorizeUrl: 'https://oauth.yandex.ru/authorize',
@@ -60,24 +56,30 @@ const mapGoogleProfile = (raw: Record<string, unknown>): NormalizedOAuthProfile 
 };
 
 const mapVkProfile = (raw: Record<string, unknown>): NormalizedOAuthProfile => {
+  const user =
+    typeof raw.user === 'object' && raw.user !== null
+      ? (raw.user as Record<string, unknown>)
+      : undefined;
   const nestedResponse =
     Array.isArray(raw.response) && raw.response.length > 0
       ? (raw.response[0] as Record<string, unknown>)
       : undefined;
 
-  const source = nestedResponse ?? raw;
+  const source = user ?? nestedResponse ?? raw;
 
   return {
     providerUserId:
+      toOptionalString(source.user_id) ??
       toOptionalString(source.id) ??
       toOptionalString(source.user_id) ??
       toOptionalString(raw.user_id) ??
       '',
-    email: toOptionalString(raw.email) ?? toOptionalString(source.email),
-    emailVerified: Boolean(toOptionalString(raw.email) ?? toOptionalString(source.email)),
+    email: toOptionalString(source.email) ?? toOptionalString(raw.email),
+    emailVerified: Boolean(toOptionalString(source.email) ?? toOptionalString(raw.email)),
     firstName: toOptionalString(source.first_name),
     lastName: toOptionalString(source.last_name),
     avatarUrl:
+      toOptionalString(source.avatar) ??
       toOptionalString(source.photo_200) ??
       toOptionalString(source.photo_max_orig) ??
       toOptionalString(source.avatar),

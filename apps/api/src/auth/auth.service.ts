@@ -26,7 +26,7 @@ import {
   RefreshToken,
 } from '@prisma/client';
 import { compare, hash } from 'bcryptjs';
-import { createHash, randomInt, randomUUID } from 'crypto';
+import { createHash, randomBytes, randomInt, randomUUID } from 'crypto';
 import type { SignOptions } from 'jsonwebtoken';
 
 import { AppConfig, OAuthProviderRuntimeConfig } from '../config/app.config';
@@ -702,7 +702,10 @@ export class AuthService {
 
     const providerConfig = this.getOAuthProviderConfig(provider);
 
-    if (!providerConfig.clientId || !providerConfig.clientSecret) {
+    if (
+      !providerConfig.clientId ||
+      (provider !== OAuthProvider.VK && !providerConfig.clientSecret)
+    ) {
       throw new ServiceUnavailableException(
         `OAuth ${providerNameByEnum[provider]} credentials are missing`,
       );
@@ -712,6 +715,11 @@ export class AuthService {
       provider,
       normalizedCode,
       providerConfig,
+      {
+        state: query.state,
+        deviceId: query.device_id,
+        codeVerifier: statePayload.codeVerifier,
+      },
     );
 
     const profile = await this.fetchOAuthProfile(
@@ -924,6 +932,8 @@ export class AuthService {
       action,
       clientState: normalizedClientState,
       linkUserId: action === 'link' ? linkUserId : undefined,
+      codeVerifier:
+        provider === OAuthProvider.VK ? this.generatePkceCodeVerifier() : undefined,
       nonce: randomUUID(),
     };
 
@@ -938,13 +948,13 @@ export class AuthService {
       },
     });
 
-      const signedState = this.jwtService.sign(statePayload, {
-        secret: this.getConfig().jwt.accessSecret,
-        expiresIn: OAUTH_STATE_EXPIRES_IN,
-        issuer: this.getConfig().app.name,
-        audience: 'oauth-state',
-        ...(action === 'link' && linkUserId ? { subject: linkUserId } : {}),
-      });
+    const signedState = this.jwtService.sign(statePayload, {
+      secret: this.getConfig().jwt.accessSecret,
+      expiresIn: OAUTH_STATE_EXPIRES_IN,
+      issuer: this.getConfig().app.name,
+      audience: 'oauth-state',
+      ...(action === 'link' && linkUserId ? { subject: linkUserId } : {}),
+    });
 
     const queryParams = new URLSearchParams({
       response_type: 'code',
@@ -952,8 +962,18 @@ export class AuthService {
       redirect_uri: providerConfig.callbackUrl,
     });
 
-    if (provider !== OAuthProvider.VK) {
-      queryParams.set('state', signedState);
+    queryParams.set('state', signedState);
+
+    if (provider === OAuthProvider.VK) {
+      if (!statePayload.codeVerifier) {
+        throw new ServiceUnavailableException('OAuth vk code verifier is missing');
+      }
+
+      queryParams.set(
+        'code_challenge',
+        this.generatePkceCodeChallenge(statePayload.codeVerifier),
+      );
+      queryParams.set('code_challenge_method', 's256');
     }
 
     if (definition.defaultScope.length > 0) {
@@ -1310,22 +1330,37 @@ export class AuthService {
     provider: OAuthProvider,
     code: string,
     providerConfig: OAuthProviderRuntimeConfig,
+    options?: {
+      state?: string;
+      deviceId?: string;
+      codeVerifier?: string;
+    },
   ): Promise<OAuthTokenExchangeResult> {
     const definition = OAUTH_PROVIDER_DEFINITIONS[provider];
 
     let response: Response;
 
     if (provider === OAuthProvider.VK) {
+      if (!options?.state || !options.deviceId || !options.codeVerifier) {
+        throw new UnauthorizedException('OAuth vk callback is incomplete');
+      }
+
       const url = new URL(definition.tokenUrl);
       url.searchParams.set('grant_type', 'authorization_code');
-      url.searchParams.set('code', code);
-      url.searchParams.set('client_id', providerConfig.clientId);
-      url.searchParams.set('client_secret', providerConfig.clientSecret);
       url.searchParams.set('redirect_uri', providerConfig.callbackUrl);
-      url.searchParams.set('v', definition.version ?? '5.131');
+      url.searchParams.set('client_id', providerConfig.clientId);
+      url.searchParams.set('code_verifier', options.codeVerifier);
+      url.searchParams.set('state', options.state);
+      url.searchParams.set('device_id', options.deviceId);
 
       response = await this.safeFetch(url, {
-        method: 'GET',
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          code,
+        }),
       });
     } else {
       const body = new URLSearchParams({
@@ -1397,12 +1432,16 @@ export class AuthService {
 
     if (provider === OAuthProvider.VK) {
       const url = new URL(definition.userInfoUrl);
-      url.searchParams.set('access_token', accessToken);
-      url.searchParams.set('fields', 'photo_200,photo_max_orig');
-      url.searchParams.set('v', definition.version ?? '5.131');
+      url.searchParams.set('client_id', _providerConfig.clientId);
 
       response = await this.safeFetch(url, {
-        method: 'GET',
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          access_token: accessToken,
+        }),
       });
     } else if (provider === OAuthProvider.YANDEX) {
       const url = new URL(definition.userInfoUrl);
@@ -2147,6 +2186,19 @@ export class AuthService {
     return randomInt(0, 10 ** EMAIL_AUTH_CODE_LENGTH)
       .toString()
       .padStart(EMAIL_AUTH_CODE_LENGTH, '0');
+  }
+
+  private generatePkceCodeVerifier(): string {
+    return randomBytes(48).toString('base64url');
+  }
+
+  private generatePkceCodeChallenge(codeVerifier: string): string {
+    return createHash('sha256')
+      .update(codeVerifier)
+      .digest('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '');
   }
 
   private toEmailCodeRequestResponse(email: string): EmailCodeRequestResponse {

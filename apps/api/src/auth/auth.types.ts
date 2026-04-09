@@ -91,6 +91,7 @@ export type OAuthStatePayload = {
   action: OAuthAction;
   clientState?: string;
   linkUserId?: string;
+  codeVerifier?: string;
   nonce: string;
 };
 

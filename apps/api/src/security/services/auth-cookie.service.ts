@@ -155,7 +155,7 @@ export class AuthCookieService {
       httpOnly: false,
       secure: config.security.cookies.secure,
       sameSite: config.security.cookies.sameSite,
-      path: '/api/auth',
+      path: '/',
       expires,
     } as const;
 

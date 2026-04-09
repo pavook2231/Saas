@@ -10,9 +10,8 @@ import { Reflector } from '@nestjs/core';
 import { MembershipStatus, OrganizationRole } from '@prisma/client';
 import { Request } from 'express';
 
-import { PrismaService } from '../../prisma/prisma.service';
 import { AccessTokenPayload } from '../../auth/auth.types';
-
+import { PrismaService } from '../../prisma/prisma.service';
 import { ALL_ORG_ROLES, ORG_ROLE_METADATA_KEY } from '../organizations.constants';
 
 type RequestWithAuth = Request & {

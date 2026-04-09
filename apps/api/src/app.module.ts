@@ -3,7 +3,6 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { AuthModule } from './auth/auth.module';
-import { ChatsModule } from './chats/chats.module';
 import appConfig from './config/app.config';
 import { EventsModule } from './events/events.module';
 import { HealthModule } from './health/health.module';
@@ -25,7 +24,6 @@ import { SecurityModule } from './security/security.module';
     PrismaModule,
     SecurityModule,
     AuthModule,
-    ChatsModule,
     OrganizationsModule,
     EventsModule,
     NotificationsModule,

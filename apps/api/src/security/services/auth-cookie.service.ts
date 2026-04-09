@@ -65,7 +65,7 @@ export class AuthCookieService {
     );
 
     if (!state || !cookieState || cookieState !== state) {
-      throw new UnauthorizedException('Проверка cookie состояния OAuth не пройдена');
+      throw new UnauthorizedException('Проверка cookie-состояния OAuth не пройдена');
     }
   }
 

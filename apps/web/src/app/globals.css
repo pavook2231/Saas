@@ -1671,6 +1671,69 @@ textarea.ui-field:focus {
 
 .oauth-grid { display: grid; gap: 10px; }
 .oauth-button { justify-content: flex-start; width: 100%; }
+.oauth-button--vkid {
+  padding: 0;
+  border-radius: 20px;
+  border-color: rgba(186, 197, 214, 0.92);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.98));
+  box-shadow:
+    0 12px 30px rgba(20, 32, 76, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.oauth-button--vkid .ui-button__content {
+  width: 100%;
+}
+
+.oauth-button__vkid-shell {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 10px 14px 10px 12px;
+}
+
+.oauth-button__vkid-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(0 10px 22px rgba(17, 81, 255, 0.18));
+}
+
+.oauth-button__vkid-mark svg {
+  display: block;
+  width: 44px;
+  height: 44px;
+}
+
+.oauth-button__vkid-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.oauth-button__vkid-title {
+  color: #122447;
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.oauth-button__vkid-caption {
+  color: rgba(77, 94, 121, 0.86);
+  font-size: 0.77rem;
+  line-height: 1.25;
+}
+
+.oauth-button--vkid:disabled {
+  opacity: 0.72;
+  box-shadow: none;
+}
 
 .auth-divider {
   display: grid;

@@ -43,6 +43,24 @@ const valueHighlights = [
   },
 ];
 
+function VkIdMark() {
+  return (
+    <svg viewBox="0 0 28 28" aria-hidden="true" focusable="false">
+      <rect x="0.75" y="0.75" width="26.5" height="26.5" rx="9.25" fill="url(#vkid-bg)" />
+      <path
+        d="M8.35 10.15c.12 5.37 2.8 8.6 7.5 8.6h.27v-3.07c1.73.17 3.04 1.44 3.56 3.07h2.45c-.67-2.42-2.44-3.76-3.55-4.28 1.11-.64 2.65-2.2 3.02-4.32h-2.22c-.48 1.72-1.9 3.28-3.26 3.43v-3.43h-2.22v6.02c-1.38-.35-3.12-2.04-3.2-6.02H8.35Z"
+        fill="white"
+      />
+      <defs>
+        <linearGradient id="vkid-bg" x1="4" y1="3.5" x2="24.5" y2="25">
+          <stop stopColor="#3da3ff" />
+          <stop offset="1" stopColor="#1151ff" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
 export default function AuthPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -226,11 +244,23 @@ export default function AuthPageClient() {
             <Button
               type="button"
               variant="ghost"
-              className="oauth-button"
+              className="oauth-button oauth-button--vkid"
               onClick={() => void handleOAuth('vk')}
               disabled={oauthLoading !== null || submitting}
             >
-              {oauthLoading === 'vk' ? 'Подключаем VK...' : 'Войти через VK'}
+              <span className="oauth-button__vkid-shell">
+                <span className="oauth-button__vkid-mark">
+                  <VkIdMark />
+                </span>
+                <span className="oauth-button__vkid-copy">
+                  <span className="oauth-button__vkid-title">
+                    {oauthLoading === 'vk' ? 'Подключаем VK ID...' : 'Войти через VK ID'}
+                  </span>
+                  <span className="oauth-button__vkid-caption">
+                    Официальный вход через аккаунт VK
+                  </span>
+                </span>
+              </span>
             </Button>
             <Button
               type="button"

@@ -26,15 +26,22 @@ export class AuthCookieService {
     refreshTokenExpiresAt: string,
   ): string {
     const csrfToken = this.issueCsrfToken();
+    const expiresAt = new Date(refreshTokenExpiresAt);
+
     response.cookie(
       this.getConfig().security.cookies.refreshTokenName,
       refreshToken,
-      this.getRefreshCookieOptions(new Date(refreshTokenExpiresAt)),
+      this.getRefreshCookieOptions(expiresAt),
     );
     response.cookie(
       this.getConfig().security.cookies.csrfTokenName,
       csrfToken,
-      this.getCsrfCookieOptions(new Date(refreshTokenExpiresAt)),
+      this.getCsrfCookieOptions(expiresAt, '/'),
+    );
+    response.cookie(
+      this.getConfig().security.cookies.csrfTokenName,
+      csrfToken,
+      this.getCsrfCookieOptions(expiresAt, '/api/auth'),
     );
     return csrfToken;
   }
@@ -46,7 +53,11 @@ export class AuthCookieService {
     );
     response.clearCookie(
       this.getConfig().security.cookies.csrfTokenName,
-      this.getCsrfCookieOptions(undefined),
+      this.getCsrfCookieOptions(undefined, '/'),
+    );
+    response.clearCookie(
+      this.getConfig().security.cookies.csrfTokenName,
+      this.getCsrfCookieOptions(undefined, '/api/auth'),
     );
   }
 
@@ -149,13 +160,13 @@ export class AuthCookieService {
       : base;
   }
 
-  private getCsrfCookieOptions(expires?: Date) {
+  private getCsrfCookieOptions(expires?: Date, path = '/') {
     const config = this.getConfig();
     const base = {
       httpOnly: false,
       secure: config.security.cookies.secure,
       sameSite: config.security.cookies.sameSite,
-      path: '/',
+      path,
       expires,
     } as const;
 

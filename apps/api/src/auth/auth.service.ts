@@ -697,13 +697,13 @@ export class AuthService {
       },
     });
 
-    const signedState = this.jwtService.sign(statePayload, {
-      secret: this.getConfig().jwt.accessSecret,
-      expiresIn: OAUTH_STATE_EXPIRES_IN,
-      issuer: this.getConfig().app.name,
-      subject: action === 'link' ? linkUserId : undefined,
-      audience: 'oauth-state',
-    });
+      const signedState = this.jwtService.sign(statePayload, {
+        secret: this.getConfig().jwt.accessSecret,
+        expiresIn: OAUTH_STATE_EXPIRES_IN,
+        issuer: this.getConfig().app.name,
+        audience: 'oauth-state',
+        ...(action === 'link' && linkUserId ? { subject: linkUserId } : {}),
+      });
 
     const queryParams = new URLSearchParams({
       response_type: 'code',

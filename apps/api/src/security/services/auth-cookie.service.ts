@@ -14,7 +14,7 @@ type RuntimeConfig = {
   appConfig: AppConfig;
 };
 
-type RefreshTokenSource = 'body' | 'cookie';
+type RefreshTokenSource = 'cookie';
 
 @Injectable()
 export class AuthCookieService {
@@ -80,13 +80,10 @@ export class AuthCookieService {
     request: Request,
     bodyToken?: string | null,
   ): { token: string; source: RefreshTokenSource } {
-    const normalizedBodyToken = this.normalizeToken(bodyToken);
-
-    if (normalizedBodyToken) {
-      return {
-        token: normalizedBodyToken,
-        source: 'body',
-      };
+    if (this.normalizeToken(bodyToken)) {
+      throw new BadRequestException(
+        'Передача refresh-токена в теле запроса отключена. Используйте cookie-сессию.',
+      );
     }
 
     const cookieToken = this.getCookie(

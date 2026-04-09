@@ -44,7 +44,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const toStoredSession = (payload: AuthResponse): StoredSession => {
   if (!payload.csrfToken) {
-    throw new Error('Сервер не вернул CSRF токен для сессии');
+    throw new Error('Сервер не вернул CSRF-токен для сессии');
   }
 
   return {
@@ -97,22 +97,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   const refreshSession = useCallback(async () => {
-    const stored = authStorage.load();
+    const csrfToken = session?.csrfToken ?? authStorage.getCsrfToken();
 
-    if (!stored?.csrfToken) {
+    if (!csrfToken) {
       throw new Error('Сессия для обновления не найдена');
     }
 
-    return refreshFromToken(stored.csrfToken);
-  }, [refreshFromToken]);
+    return refreshFromToken(csrfToken);
+  }, [refreshFromToken, session?.csrfToken]);
 
   const completeOAuthLogin = useCallback(
     async (csrfTokenOverride?: string) => {
-      const fallback = authStorage.load()?.csrfToken;
-      const csrfToken = csrfTokenOverride ?? fallback;
+      const csrfToken = csrfTokenOverride ?? authStorage.getCsrfToken();
 
       if (!csrfToken) {
-        throw new Error('Не удалось завершить OAuth вход');
+        throw new Error('Не удалось завершить OAuth-вход');
       }
 
       return refreshFromToken(csrfToken);
@@ -121,16 +120,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   const logout = useCallback(async () => {
-    const stored = authStorage.load();
+    const csrfToken = session?.csrfToken ?? authStorage.getCsrfToken();
 
     try {
-      if (stored?.csrfToken) {
-        await authApi.logout(stored.csrfToken);
+      if (csrfToken) {
+        await authApi.logout(csrfToken);
       }
     } finally {
       clearSession();
     }
-  }, [clearSession]);
+  }, [clearSession, session?.csrfToken]);
 
   const logoutAll = useCallback(async () => {
     try {
@@ -145,24 +144,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const updateProfile = useCallback(
     async (payload: UpdateProfilePayload) => {
       const accessToken = session?.accessToken;
+      const csrfToken = session?.csrfToken ?? authStorage.getCsrfToken();
 
-      if (!accessToken) {
+      if (!accessToken || !csrfToken || !session) {
         throw new Error('Сессия не найдена');
       }
 
       const response = await authApi.updateProfile(accessToken, payload);
-      const stored = authStorage.load();
-
-      if (!stored) {
-        throw new Error('Сессия не найдена');
-      }
 
       return applySession({
-        ...stored,
+        ...session,
+        csrfToken,
         user: response.user,
       });
     },
-    [applySession, session?.accessToken],
+    [applySession, session],
   );
 
   const changePassword = useCallback(
@@ -190,9 +186,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let cancelled = false;
 
     const bootstrap = async () => {
-      const stored = authStorage.load();
+      authStorage.load();
+      const csrfToken = authStorage.getCsrfToken();
 
-      if (!stored) {
+      if (!csrfToken) {
         if (!cancelled) {
           setStatus('unauthenticated');
         }
@@ -200,27 +197,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
 
       try {
-        const me = await authApi.me(stored.accessToken);
+        const refreshed = await refreshFromToken(csrfToken);
 
         if (!cancelled) {
-          applySession({
-            ...stored,
-            user: me.user,
-          });
+          applySession(refreshed);
         }
-        return;
       } catch {
-        try {
-          const refreshed = await refreshFromToken(stored.csrfToken);
-
-          if (!cancelled) {
-            applySession(refreshed);
-          }
-          return;
-        } catch {
-          if (!cancelled) {
-            clearSession();
-          }
+        if (!cancelled) {
+          clearSession();
         }
       }
     };

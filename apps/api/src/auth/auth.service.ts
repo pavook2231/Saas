@@ -388,11 +388,23 @@ export class AuthService {
 
     const nextPasswordHash = await hash(dto.newPassword, 12);
 
+    const revokedAt = new Date();
+
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: user.id },
         data: {
           passwordHash: nextPasswordHash,
+        },
+      });
+
+      await tx.refreshToken.updateMany({
+        where: {
+          userId: user.id,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt,
         },
       });
 

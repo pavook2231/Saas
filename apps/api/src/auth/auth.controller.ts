@@ -317,7 +317,7 @@ export class AuthController {
   ): Promise<void> {
     const resolvedState =
       provider === OAuthProvider.VK
-        ? query.state ?? this.authCookieService.getOAuthState(req) ?? undefined
+        ? this.authCookieService.getOAuthState(req) ?? query.state ?? undefined
         : query.state;
 
     this.authCookieService.assertOAuthState(req, resolvedState);

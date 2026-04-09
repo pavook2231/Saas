@@ -969,6 +969,9 @@ export class AuthService {
         throw new ServiceUnavailableException('OAuth vk code verifier is missing');
       }
 
+      queryParams.set('app_id', providerConfig.clientId);
+      queryParams.set('sdk_type', 'vkid');
+      queryParams.set('v', '2.6.5');
       queryParams.set(
         'code_challenge',
         this.generatePkceCodeChallenge(statePayload.codeVerifier),

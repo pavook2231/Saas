@@ -9,9 +9,7 @@ export const OAUTH_PROVIDER_DEFINITIONS: Record<OAuthProvider, OAuthProviderDefi
     userInfoUrl: 'https://www.googleapis.com/oauth2/v3/userinfo',
     defaultScope: ['openid', 'email', 'profile'],
     authorizeParams: {
-      access_type: 'offline',
       include_granted_scopes: 'true',
-      prompt: 'consent',
     },
   },
   VK: {

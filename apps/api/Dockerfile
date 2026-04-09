@@ -44,6 +44,7 @@ RUN npm run prisma:generate -w @saas/api \
 FROM base AS runner
 
 ENV NODE_ENV=production
+ENV NODE_PATH=/app/apps/api/node_modules:/app/node_modules
 
 COPY --from=prod-deps /app/package*.json ./
 COPY --from=prod-deps /app/node_modules ./node_modules

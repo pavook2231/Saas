@@ -1641,6 +1641,18 @@ textarea.ui-field:focus {
   gap: 18px;
 }
 
+.auth-social-section {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-social-section__label {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .auth-tabs {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1769,6 +1781,25 @@ textarea.ui-field:focus {
   justify-content: flex-start;
 }
 
+.auth-link-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.auth-link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary-strong);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-link-button:hover {
+  color: var(--primary);
+}
+
 .auth-code-panel {
   display: grid;
   gap: 14px;
@@ -1794,6 +1825,24 @@ textarea.ui-field:focus {
   color: var(--text-soft);
   font-size: 0.82rem;
   line-height: 1.5;
+}
+
+.auth-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.auth-modal-actions--split {
+  justify-content: flex-start;
+}
+
+.auth-modal-hint {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .auth-error-banner,

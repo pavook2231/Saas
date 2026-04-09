@@ -3,11 +3,16 @@ import { apiBaseUrl } from '../api/config';
 import {
   AuthResponse,
   ChangePasswordPayload,
+  EmailCodeRequestPayload,
+  EmailCodeRequestResponse,
   LoginPayload,
+  LoginWithCodePayload,
   MeResponse,
   OAuthProviderName,
   OAuthStartResponse,
   RegisterPayload,
+  RegisterWithCodePayload,
+  ResetPasswordWithCodePayload,
   UpdateProfilePayload,
 } from './types';
 
@@ -66,6 +71,104 @@ export const authApi = {
 
   async register(payload: RegisterPayload): Promise<AuthResponse> {
     const response = await fetch(`${authBaseUrl}/register`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as AuthResponse;
+  },
+
+  async requestLoginCode(
+    payload: EmailCodeRequestPayload,
+  ): Promise<EmailCodeRequestResponse> {
+    const response = await fetch(`${authBaseUrl}/email/login/request`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as EmailCodeRequestResponse;
+  },
+
+  async loginWithCode(payload: LoginWithCodePayload): Promise<AuthResponse> {
+    const response = await fetch(`${authBaseUrl}/email/login/verify`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as AuthResponse;
+  },
+
+  async requestRegisterCode(
+    payload: EmailCodeRequestPayload,
+  ): Promise<EmailCodeRequestResponse> {
+    const response = await fetch(`${authBaseUrl}/email/register/request`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as EmailCodeRequestResponse;
+  },
+
+  async registerWithCode(payload: RegisterWithCodePayload): Promise<AuthResponse> {
+    const response = await fetch(`${authBaseUrl}/email/register/verify`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as AuthResponse;
+  },
+
+  async requestPasswordResetCode(
+    payload: EmailCodeRequestPayload,
+  ): Promise<EmailCodeRequestResponse> {
+    const response = await fetch(`${authBaseUrl}/email/password/request`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as EmailCodeRequestResponse;
+  },
+
+  async resetPasswordWithCode(
+    payload: ResetPasswordWithCodePayload,
+  ): Promise<AuthResponse> {
+    const response = await fetch(`${authBaseUrl}/email/password/verify`, {
       method: 'POST',
       credentials: 'include',
       headers: {

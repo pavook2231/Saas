@@ -54,6 +54,37 @@ export type RegisterPayload = {
   lastName?: string;
 };
 
+export type EmailCodeRequestPayload = {
+  email: string;
+};
+
+export type EmailCodeRequestResponse = {
+  success: true;
+  maskedEmail: string;
+  expiresInSeconds: number;
+};
+
+export type LoginWithCodePayload = {
+  email: string;
+  code: string;
+};
+
+export type RegisterWithCodePayload = {
+  email: string;
+  code: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  organizationInviteToken?: string;
+  participantInviteToken?: string;
+};
+
+export type ResetPasswordWithCodePayload = {
+  email: string;
+  code: string;
+  newPassword: string;
+};
+
 export type UpdateProfilePayload = {
   firstName?: string;
   lastName?: string;

@@ -1,4 +1,5 @@
-﻿import {
+import {
+  EmailAuthCodePurpose,
   OAuthAccountStatus,
   OrganizationRole,
   OAuthProvider,
@@ -127,6 +128,19 @@ export type OAuthLinkResult = {
 
 export type OAuthCallbackResult = OAuthLoginResult | OAuthLinkResult;
 
+export type EmailCodeRequestResponse = {
+  success: true;
+  maskedEmail: string;
+  expiresInSeconds: number;
+};
+
+export type EmailCodeMessageContext = {
+  email: string;
+  code: string;
+  purpose: EmailAuthCodePurpose;
+  expiresInMinutes: number;
+};
+
 export const providerNameByEnum: Record<OAuthProvider, string> = {
   GOOGLE: 'google',
   VK: 'vk',
@@ -138,3 +152,4 @@ export const providerByName: Record<string, OAuthProvider> = {
   vk: OAuthProvider.VK,
   yandex: OAuthProvider.YANDEX,
 };
+

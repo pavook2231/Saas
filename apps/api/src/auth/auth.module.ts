@@ -9,7 +9,9 @@ import { SecurityModule } from '../security/security.module';
 
 import { AccountController } from './account.controller';
 import { AuthController } from './auth.controller';
+import { AuthEmailService } from './auth-email.service';
 import { AuthService } from './auth.service';
+import { EmailAuthController } from './email-auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -41,8 +43,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       },
     }),
   ],
-  controllers: [AuthController, AccountController],
-  providers: [AuthService, JwtStrategy],
+  controllers: [AuthController, AccountController, EmailAuthController],
+  providers: [AuthService, AuthEmailService, JwtStrategy],
   exports: [AuthService],
 })
 export class AuthModule {}

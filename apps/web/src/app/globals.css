@@ -1651,6 +1651,10 @@ textarea.ui-field:focus {
   background: rgba(247, 249, 252, 0.88);
 }
 
+.auth-tabs--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .auth-tabs button {
   min-height: 42px;
   padding: 0 14px;
@@ -1760,7 +1764,40 @@ textarea.ui-field:focus {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.auth-form-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.auth-code-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(219, 227, 239, 0.92);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.96));
+}
+
+.auth-code-panel__header {
+  display: grid;
+  gap: 4px;
+}
+
+.auth-code-panel__header strong {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.auth-code-panel__header p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .auth-error-banner,
+.auth-success-banner,
 .finance-error,
 .chat-error,
 .finance-notice,
@@ -1778,6 +1815,12 @@ textarea.ui-field:focus {
   background: var(--error-soft);
   border: 1px solid rgba(220, 38, 38, 0.18);
   color: var(--error);
+}
+
+.auth-success-banner {
+  background: var(--success-soft);
+  border: 1px solid rgba(15, 157, 105, 0.18);
+  color: var(--success);
 }
 
 .finance-notice,

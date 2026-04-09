@@ -17,9 +17,14 @@ import {
   AuthStatus,
   AuthUser,
   ChangePasswordPayload,
+  EmailCodeRequestPayload,
+  EmailCodeRequestResponse,
   LoginPayload,
+  LoginWithCodePayload,
   OAuthProviderName,
   RegisterPayload,
+  RegisterWithCodePayload,
+  ResetPasswordWithCodePayload,
   StoredSession,
   UpdateProfilePayload,
 } from '../lib/auth/types';
@@ -31,6 +36,18 @@ type AuthContextValue = {
   csrfToken: string | null;
   login: (payload: LoginPayload) => Promise<StoredSession>;
   register: (payload: RegisterPayload) => Promise<StoredSession>;
+  requestLoginCode: (payload: EmailCodeRequestPayload) => Promise<EmailCodeRequestResponse>;
+  loginWithCode: (payload: LoginWithCodePayload) => Promise<StoredSession>;
+  requestRegisterCode: (
+    payload: EmailCodeRequestPayload,
+  ) => Promise<EmailCodeRequestResponse>;
+  registerWithCode: (payload: RegisterWithCodePayload) => Promise<StoredSession>;
+  requestPasswordResetCode: (
+    payload: EmailCodeRequestPayload,
+  ) => Promise<EmailCodeRequestResponse>;
+  resetPasswordWithCode: (
+    payload: ResetPasswordWithCodePayload,
+  ) => Promise<StoredSession>;
   logout: () => Promise<void>;
   logoutAll: () => Promise<void>;
   updateProfile: (payload: UpdateProfilePayload) => Promise<StoredSession>;
@@ -83,6 +100,45 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const register = useCallback(
     async (payload: RegisterPayload) => {
       const response = await authApi.register(payload);
+      return applySession(toStoredSession(response));
+    },
+    [applySession],
+  );
+
+  const requestLoginCode = useCallback(
+    async (payload: EmailCodeRequestPayload) => authApi.requestLoginCode(payload),
+    [],
+  );
+
+  const loginWithCode = useCallback(
+    async (payload: LoginWithCodePayload) => {
+      const response = await authApi.loginWithCode(payload);
+      return applySession(toStoredSession(response));
+    },
+    [applySession],
+  );
+
+  const requestRegisterCode = useCallback(
+    async (payload: EmailCodeRequestPayload) => authApi.requestRegisterCode(payload),
+    [],
+  );
+
+  const registerWithCode = useCallback(
+    async (payload: RegisterWithCodePayload) => {
+      const response = await authApi.registerWithCode(payload);
+      return applySession(toStoredSession(response));
+    },
+    [applySession],
+  );
+
+  const requestPasswordResetCode = useCallback(
+    async (payload: EmailCodeRequestPayload) => authApi.requestPasswordResetCode(payload),
+    [],
+  );
+
+  const resetPasswordWithCode = useCallback(
+    async (payload: ResetPasswordWithCodePayload) => {
+      const response = await authApi.resetPasswordWithCode(payload);
       return applySession(toStoredSession(response));
     },
     [applySession],
@@ -224,6 +280,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
       csrfToken: session?.csrfToken ?? null,
       login,
       register,
+      requestLoginCode,
+      loginWithCode,
+      requestRegisterCode,
+      registerWithCode,
+      requestPasswordResetCode,
+      resetPasswordWithCode,
       logout,
       logoutAll,
       updateProfile,
@@ -235,11 +297,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
     [
       completeOAuthLogin,
       changePassword,
+      loginWithCode,
       login,
       logout,
       logoutAll,
+      registerWithCode,
       refreshSession,
       register,
+      requestLoginCode,
+      requestPasswordResetCode,
+      requestRegisterCode,
+      resetPasswordWithCode,
       session?.accessToken,
       session?.csrfToken,
       session?.user,

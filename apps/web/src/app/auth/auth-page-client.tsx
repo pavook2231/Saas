@@ -12,7 +12,7 @@ import { useToastFeedback } from '@/components/features/use-toast-feedback';
 
 import { useAuth } from '../providers/auth-provider';
 
-type AuthMode = 'login' | 'register';
+type AuthMode = 'login' | 'register' | 'reset';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -21,11 +21,23 @@ const initialRegisterState = {
   password: '',
   firstName: '',
   lastName: '',
+  code: '',
 };
 
 const initialLoginState = {
   email: '',
   password: '',
+};
+
+const initialLoginCodeState = {
+  email: '',
+  code: '',
+};
+
+const initialResetState = {
+  email: '',
+  code: '',
+  newPassword: '',
 };
 
 const valueHighlights = [
@@ -61,20 +73,44 @@ function VkIdMark() {
   );
 }
 
+const buildCodeSentText = (maskedEmail: string, expiresInSeconds: number) => {
+  const minutes = Math.max(1, Math.round(expiresInSeconds / 60));
+  return `Код отправлен на ${maskedEmail}. Он действует ${minutes} мин.`;
+};
+
 export default function AuthPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { status, login, register, startOAuth } = useAuth();
+  const {
+    status,
+    login,
+    startOAuth,
+    requestLoginCode,
+    loginWithCode,
+    requestRegisterCode,
+    registerWithCode,
+    requestPasswordResetCode,
+    resetPasswordWithCode,
+  } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
   const [loginForm, setLoginForm] = useState(initialLoginState);
+  const [loginCodeForm, setLoginCodeForm] = useState(initialLoginCodeState);
   const [registerForm, setRegisterForm] = useState(initialRegisterState);
+  const [resetForm, setResetForm] = useState(initialResetState);
   const [submitting, setSubmitting] = useState(false);
+  const [codeSending, setCodeSending] = useState<AuthMode | null>(null);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [successText, setSuccessText] = useState<string | null>(null);
 
   useToastFeedback({
     errorText,
-    errorTitle: mode === 'login' ? 'Не удалось войти' : 'Не удалось создать аккаунт',
+    errorTitle:
+      mode === 'login'
+        ? 'Не удалось войти'
+        : mode === 'register'
+          ? 'Не удалось создать аккаунт'
+          : 'Не удалось сменить пароль',
   });
 
   const nextUrl = useMemo(() => {
@@ -88,35 +124,39 @@ export default function AuthPageClient() {
     }
   }, [nextUrl, router, status]);
 
-  const validateLogin = () => {
-    if (!emailPattern.test(loginForm.email.trim())) {
-      throw new Error('Введите корректный email');
-    }
+  const switchMode = (nextMode: AuthMode) => {
+    setMode(nextMode);
+    setErrorText(null);
+    setSuccessText(null);
+  };
 
-    if (loginForm.password.trim().length < 8) {
-      throw new Error('Пароль должен содержать минимум 8 символов');
+  const validateEmail = (email: string) => {
+    if (!emailPattern.test(email.trim())) {
+      throw new Error('Введите корректный email');
     }
   };
 
-  const validateRegister = () => {
-    if (!emailPattern.test(registerForm.email.trim())) {
-      throw new Error('Введите корректный email');
-    }
-
-    if (registerForm.password.trim().length < 8) {
+  const validateStrongPassword = (password: string) => {
+    if (password.trim().length < 8) {
       throw new Error('Пароль должен содержать минимум 8 символов');
     }
 
-    if (!/[A-Z]/.test(registerForm.password)) {
+    if (!/[A-Z]/.test(password)) {
       throw new Error('В пароле нужна хотя бы одна заглавная буква');
     }
 
-    if (!/[a-z]/.test(registerForm.password)) {
+    if (!/[a-z]/.test(password)) {
       throw new Error('В пароле нужна хотя бы одна строчная буква');
     }
 
-    if (!/\d/.test(registerForm.password)) {
+    if (!/\d/.test(password)) {
       throw new Error('В пароле нужна хотя бы одна цифра');
+    }
+  };
+
+  const validateCode = (code: string) => {
+    if (code.trim().length < 4) {
+      throw new Error('Введите код из письма');
     }
   };
 
@@ -124,9 +164,15 @@ export default function AuthPageClient() {
     event.preventDefault();
     setSubmitting(true);
     setErrorText(null);
+    setSuccessText(null);
 
     try {
-      validateLogin();
+      validateEmail(loginForm.email);
+
+      if (loginForm.password.trim().length < 8) {
+        throw new Error('Пароль должен содержать минимум 8 символов');
+      }
+
       await login({
         email: loginForm.email.trim(),
         password: loginForm.password,
@@ -139,15 +185,74 @@ export default function AuthPageClient() {
     }
   };
 
-  const handleRegister = async (event: FormEvent<HTMLFormElement>) => {
+  const handleRequestLoginCode = async () => {
+    setCodeSending('login');
+    setErrorText(null);
+    setSuccessText(null);
+
+    try {
+      validateEmail(loginCodeForm.email);
+      const response = await requestLoginCode({ email: loginCodeForm.email.trim() });
+      setSuccessText(buildCodeSentText(response.maskedEmail, response.expiresInSeconds));
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось отправить код');
+    } finally {
+      setCodeSending(null);
+    }
+  };
+
+  const handleLoginWithCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
     setErrorText(null);
+    setSuccessText(null);
 
     try {
-      validateRegister();
-      await register({
+      validateEmail(loginCodeForm.email);
+      validateCode(loginCodeForm.code);
+
+      await loginWithCode({
+        email: loginCodeForm.email.trim(),
+        code: loginCodeForm.code.trim(),
+      });
+      router.replace(nextUrl);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось войти по коду');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRequestRegisterCode = async () => {
+    setCodeSending('register');
+    setErrorText(null);
+    setSuccessText(null);
+
+    try {
+      validateEmail(registerForm.email);
+      const response = await requestRegisterCode({ email: registerForm.email.trim() });
+      setSuccessText(buildCodeSentText(response.maskedEmail, response.expiresInSeconds));
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось отправить код');
+    } finally {
+      setCodeSending(null);
+    }
+  };
+
+  const handleRegisterWithCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setErrorText(null);
+    setSuccessText(null);
+
+    try {
+      validateEmail(registerForm.email);
+      validateStrongPassword(registerForm.password);
+      validateCode(registerForm.code);
+
+      await registerWithCode({
         email: registerForm.email.trim(),
+        code: registerForm.code.trim(),
         password: registerForm.password,
         firstName: registerForm.firstName.trim() || undefined,
         lastName: registerForm.lastName.trim() || undefined,
@@ -160,9 +265,50 @@ export default function AuthPageClient() {
     }
   };
 
+  const handleRequestResetCode = async () => {
+    setCodeSending('reset');
+    setErrorText(null);
+    setSuccessText(null);
+
+    try {
+      validateEmail(resetForm.email);
+      const response = await requestPasswordResetCode({ email: resetForm.email.trim() });
+      setSuccessText(buildCodeSentText(response.maskedEmail, response.expiresInSeconds));
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось отправить код');
+    } finally {
+      setCodeSending(null);
+    }
+  };
+
+  const handleResetPasswordWithCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setErrorText(null);
+    setSuccessText(null);
+
+    try {
+      validateEmail(resetForm.email);
+      validateStrongPassword(resetForm.newPassword);
+      validateCode(resetForm.code);
+
+      await resetPasswordWithCode({
+        email: resetForm.email.trim(),
+        code: resetForm.code.trim(),
+        newPassword: resetForm.newPassword,
+      });
+      router.replace(nextUrl);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось сменить пароль');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleOAuth = async (provider: 'google' | 'vk' | 'yandex') => {
     setOauthLoading(provider);
     setErrorText(null);
+    setSuccessText(null);
 
     try {
       const callbackPath = `/auth/callback?next=${encodeURIComponent(nextUrl)}`;
@@ -197,176 +343,309 @@ export default function AuthPageClient() {
 
       <Card className="auth-panel">
         <CardHeader>
-          <div className="auth-tabs">
-            <button
-              type="button"
-              className={mode === 'login' ? 'is-active' : ''}
-              onClick={() => {
-                setMode('login');
-                setErrorText(null);
-              }}
-            >
+          <div className="auth-tabs auth-tabs--triple">
+            <button type="button" className={mode === 'login' ? 'is-active' : ''} onClick={() => switchMode('login')}>
               Вход
             </button>
-            <button
-              type="button"
-              className={mode === 'register' ? 'is-active' : ''}
-              onClick={() => {
-                setMode('register');
-                setErrorText(null);
-              }}
-            >
+            <button type="button" className={mode === 'register' ? 'is-active' : ''} onClick={() => switchMode('register')}>
               Регистрация
+            </button>
+            <button type="button" className={mode === 'reset' ? 'is-active' : ''} onClick={() => switchMode('reset')}>
+              Смена пароля
             </button>
           </div>
 
           <div className="auth-panel__header">
-            <CardTitle>{mode === 'login' ? 'С возвращением' : 'Создайте аккаунт'}</CardTitle>
+            <CardTitle>
+              {mode === 'login'
+                ? 'Вход в аккаунт'
+                : mode === 'register'
+                  ? 'Регистрация по коду'
+                  : 'Смена пароля по коду'}
+            </CardTitle>
             <CardDescription>
               {mode === 'login'
-                ? 'Войдите по email или через OAuth-провайдера.'
-                : 'Создайте аккаунт, чтобы перейти в рабочее пространство.'}
+                ? 'Войдите через соцсеть, код из письма или пароль.'
+                : mode === 'register'
+                  ? 'Отправим код на email, после этого завершим создание аккаунта.'
+                  : 'Отправим код на email, после этого вы сможете задать новый пароль.'}
             </CardDescription>
           </div>
         </CardHeader>
 
         <CardContent className="auth-panel__content">
-          <div className="oauth-grid">
-            <Button
-              type="button"
-              variant="ghost"
-              className="oauth-button"
-              onClick={() => void handleOAuth('google')}
-              disabled={oauthLoading !== null || submitting}
-            >
-              {oauthLoading === 'google' ? 'Подключаем Google...' : 'Войти через Google'}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="oauth-button oauth-button--vkid"
-              onClick={() => void handleOAuth('vk')}
-              disabled={oauthLoading !== null || submitting}
-            >
-              <span className="oauth-button__vkid-shell">
-                <span className="oauth-button__vkid-mark">
-                  <VkIdMark />
-                </span>
-                <span className="oauth-button__vkid-copy">
-                  <span className="oauth-button__vkid-title">
-                    {oauthLoading === 'vk' ? 'Подключаем VK ID...' : 'Войти через VK ID'}
-                  </span>
-                  <span className="oauth-button__vkid-caption">
-                    Официальный вход через аккаунт VK
-                  </span>
-                </span>
-              </span>
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="oauth-button"
-              onClick={() => void handleOAuth('yandex')}
-              disabled={oauthLoading !== null || submitting}
-            >
-              {oauthLoading === 'yandex' ? 'Подключаем Yandex...' : 'Войти через Yandex'}
-            </Button>
-          </div>
-
-          <div className="auth-divider">
-            <span>или продолжить по email</span>
-          </div>
-
           {mode === 'login' ? (
-            <form className="auth-form-grid" onSubmit={handleLogin}>
-              <Input
-                autoComplete="email"
-                type="email"
-                label="Email"
-                placeholder="you@company.com"
-                value={loginForm.email}
-                onChange={(event) =>
-                  setLoginForm((current) => ({ ...current, email: event.target.value }))
-                }
-              />
-
-              <Input
-                autoComplete="current-password"
-                type="password"
-                label="Пароль"
-                placeholder="Введите пароль"
-                value={loginForm.password}
-                onChange={(event) =>
-                  setLoginForm((current) => ({ ...current, password: event.target.value }))
-                }
-              />
-
-              <Button type="submit" fullWidth loading={submitting}>
-                {submitting ? 'Входим...' : 'Войти'}
-              </Button>
-            </form>
-          ) : (
-            <form className="auth-form-grid" onSubmit={handleRegister}>
-              <div className="auth-form-grid auth-form-grid--double">
-                <Input
-                  autoComplete="given-name"
-                  label="Имя"
-                  placeholder="Анна"
-                  value={registerForm.firstName}
-                  onChange={(event) =>
-                    setRegisterForm((current) => ({
-                      ...current,
-                      firstName: event.target.value,
-                    }))
-                  }
-                />
-
-                <Input
-                  autoComplete="family-name"
-                  label="Фамилия"
-                  placeholder="Иванова"
-                  value={registerForm.lastName}
-                  onChange={(event) =>
-                    setRegisterForm((current) => ({
-                      ...current,
-                      lastName: event.target.value,
-                    }))
-                  }
-                />
+            <>
+              <div className="oauth-grid">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="oauth-button"
+                  onClick={() => void handleOAuth('google')}
+                  disabled={oauthLoading !== null || submitting || codeSending !== null}
+                >
+                  {oauthLoading === 'google' ? 'Подключаем Google...' : 'Войти через Google'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="oauth-button oauth-button--vkid"
+                  onClick={() => void handleOAuth('vk')}
+                  disabled={oauthLoading !== null || submitting || codeSending !== null}
+                >
+                  <span className="oauth-button__vkid-shell">
+                    <span className="oauth-button__vkid-mark">
+                      <VkIdMark />
+                    </span>
+                    <span className="oauth-button__vkid-copy">
+                      <span className="oauth-button__vkid-title">
+                        {oauthLoading === 'vk' ? 'Подключаем VK ID...' : 'Войти через VK ID'}
+                      </span>
+                      <span className="oauth-button__vkid-caption">
+                        Официальный вход через аккаунт VK
+                      </span>
+                    </span>
+                  </span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="oauth-button"
+                  onClick={() => void handleOAuth('yandex')}
+                  disabled={oauthLoading !== null || submitting || codeSending !== null}
+                >
+                  {oauthLoading === 'yandex' ? 'Подключаем Yandex...' : 'Войти через Yandex'}
+                </Button>
               </div>
 
-              <Input
-                autoComplete="email"
-                type="email"
-                label="Email"
-                placeholder="you@company.com"
-                value={registerForm.email}
-                onChange={(event) =>
-                  setRegisterForm((current) => ({ ...current, email: event.target.value }))
-                }
-              />
+              <div className="auth-divider">
+                <span>или код на почту</span>
+              </div>
 
-              <Input
-                autoComplete="new-password"
-                type="password"
-                label="Пароль"
-                hint="Минимум 8 символов, заглавная и строчная буква, цифра"
-                placeholder="Надежный пароль"
-                value={registerForm.password}
-                onChange={(event) =>
-                  setRegisterForm((current) => ({ ...current, password: event.target.value }))
-                }
-              />
+              <form className="auth-form-grid" onSubmit={handleLoginWithCode}>
+                <div className="auth-code-panel">
+                  <div className="auth-code-panel__header">
+                    <strong>Вход по коду</strong>
+                    <p>Отправим одноразовый код на email и сразу откроем рабочее пространство.</p>
+                  </div>
 
-              <Button type="submit" fullWidth loading={submitting}>
-                {submitting ? 'Создаем аккаунт...' : 'Зарегистрироваться'}
-              </Button>
+                  <Input
+                    autoComplete="email"
+                    type="email"
+                    label="Email"
+                    placeholder="you@company.com"
+                    value={loginCodeForm.email}
+                    onChange={(event) =>
+                      setLoginCodeForm((current) => ({ ...current, email: event.target.value }))
+                    }
+                  />
+
+                  <div className="auth-form-actions">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => void handleRequestLoginCode()}
+                      disabled={submitting || oauthLoading !== null || codeSending !== null}
+                    >
+                      {codeSending === 'login' ? 'Отправляем код...' : 'Получить код'}
+                    </Button>
+                  </div>
+
+                  <Input
+                    inputMode="numeric"
+                    label="Код из письма"
+                    placeholder="123456"
+                    value={loginCodeForm.code}
+                    onChange={(event) =>
+                      setLoginCodeForm((current) => ({ ...current, code: event.target.value }))
+                    }
+                  />
+
+                  <Button type="submit" fullWidth loading={submitting}>
+                    {submitting ? 'Проверяем код...' : 'Войти по коду'}
+                  </Button>
+                </div>
+              </form>
+
+              <div className="auth-divider">
+                <span>или пароль</span>
+              </div>
+
+              <form className="auth-form-grid" onSubmit={handleLogin}>
+                <Input
+                  autoComplete="email"
+                  type="email"
+                  label="Email"
+                  placeholder="you@company.com"
+                  value={loginForm.email}
+                  onChange={(event) =>
+                    setLoginForm((current) => ({ ...current, email: event.target.value }))
+                  }
+                />
+
+                <Input
+                  autoComplete="current-password"
+                  type="password"
+                  label="Пароль"
+                  placeholder="Введите пароль"
+                  value={loginForm.password}
+                  onChange={(event) =>
+                    setLoginForm((current) => ({ ...current, password: event.target.value }))
+                  }
+                />
+
+                <Button type="submit" fullWidth loading={submitting}>
+                  {submitting ? 'Входим...' : 'Войти по паролю'}
+                </Button>
+              </form>
+            </>
+          ) : null}
+
+          {mode === 'register' ? (
+            <form className="auth-form-grid" onSubmit={handleRegisterWithCode}>
+              <div className="auth-code-panel">
+                <div className="auth-code-panel__header">
+                  <strong>Регистрация по коду</strong>
+                  <p>Сначала отправим код подтверждения, затем создадим аккаунт и сразу выполним вход.</p>
+                </div>
+
+                <div className="auth-form-grid auth-form-grid--double">
+                  <Input
+                    autoComplete="given-name"
+                    label="Имя"
+                    placeholder="Анна"
+                    value={registerForm.firstName}
+                    onChange={(event) =>
+                      setRegisterForm((current) => ({ ...current, firstName: event.target.value }))
+                    }
+                  />
+
+                  <Input
+                    autoComplete="family-name"
+                    label="Фамилия"
+                    placeholder="Иванова"
+                    value={registerForm.lastName}
+                    onChange={(event) =>
+                      setRegisterForm((current) => ({ ...current, lastName: event.target.value }))
+                    }
+                  />
+                </div>
+
+                <Input
+                  autoComplete="email"
+                  type="email"
+                  label="Email"
+                  placeholder="you@company.com"
+                  value={registerForm.email}
+                  onChange={(event) =>
+                    setRegisterForm((current) => ({ ...current, email: event.target.value }))
+                  }
+                />
+
+                <div className="auth-form-actions">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => void handleRequestRegisterCode()}
+                    disabled={submitting || codeSending !== null}
+                  >
+                    {codeSending === 'register' ? 'Отправляем код...' : 'Получить код'}
+                  </Button>
+                </div>
+
+                <Input
+                  autoComplete="new-password"
+                  type="password"
+                  label="Пароль"
+                  hint="Минимум 8 символов, заглавная и строчная буква, цифра"
+                  placeholder="Надежный пароль"
+                  value={registerForm.password}
+                  onChange={(event) =>
+                    setRegisterForm((current) => ({ ...current, password: event.target.value }))
+                  }
+                />
+
+                <Input
+                  inputMode="numeric"
+                  label="Код из письма"
+                  placeholder="123456"
+                  value={registerForm.code}
+                  onChange={(event) =>
+                    setRegisterForm((current) => ({ ...current, code: event.target.value }))
+                  }
+                />
+
+                <Button type="submit" fullWidth loading={submitting}>
+                  {submitting ? 'Создаем аккаунт...' : 'Создать аккаунт по коду'}
+                </Button>
+              </div>
             </form>
-          )}
+          ) : null}
 
+          {mode === 'reset' ? (
+            <form className="auth-form-grid" onSubmit={handleResetPasswordWithCode}>
+              <div className="auth-code-panel">
+                <div className="auth-code-panel__header">
+                  <strong>Смена пароля по коду</strong>
+                  <p>Отправим код на email, после проверки сохраним новый пароль и сразу выполним вход.</p>
+                </div>
+
+                <Input
+                  autoComplete="email"
+                  type="email"
+                  label="Email"
+                  placeholder="you@company.com"
+                  value={resetForm.email}
+                  onChange={(event) =>
+                    setResetForm((current) => ({ ...current, email: event.target.value }))
+                  }
+                />
+
+                <div className="auth-form-actions">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => void handleRequestResetCode()}
+                    disabled={submitting || codeSending !== null}
+                  >
+                    {codeSending === 'reset' ? 'Отправляем код...' : 'Получить код'}
+                  </Button>
+                </div>
+
+                <Input
+                  autoComplete="new-password"
+                  type="password"
+                  label="Новый пароль"
+                  hint="Минимум 8 символов, заглавная и строчная буква, цифра"
+                  placeholder="Новый надежный пароль"
+                  value={resetForm.newPassword}
+                  onChange={(event) =>
+                    setResetForm((current) => ({ ...current, newPassword: event.target.value }))
+                  }
+                />
+
+                <Input
+                  inputMode="numeric"
+                  label="Код из письма"
+                  placeholder="123456"
+                  value={resetForm.code}
+                  onChange={(event) =>
+                    setResetForm((current) => ({ ...current, code: event.target.value }))
+                  }
+                />
+
+                <Button type="submit" fullWidth loading={submitting}>
+                  {submitting ? 'Сохраняем пароль...' : 'Сменить пароль по коду'}
+                </Button>
+              </div>
+            </form>
+          ) : null}
+
+          {successText ? <p className="auth-success-banner">{successText}</p> : null}
           {errorText ? <p className="auth-error-banner">{errorText}</p> : null}
         </CardContent>
       </Card>
     </main>
   );
 }
+

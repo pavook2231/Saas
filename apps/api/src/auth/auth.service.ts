@@ -14,6 +14,7 @@ import { JwtService } from '@nestjs/jwt';
 import {
   AuditSeverity,
   AuditTargetType,
+  EmailAuthCodePurpose,
   MembershipStatus,
   OAuthAccountStatus,
   OAuthProvider,
@@ -25,7 +26,7 @@ import {
   RefreshToken,
 } from '@prisma/client';
 import { compare, hash } from 'bcryptjs';
-import { createHash, randomUUID } from 'crypto';
+import { createHash, randomInt, randomUUID } from 'crypto';
 import type { SignOptions } from 'jsonwebtoken';
 
 import { AppConfig, OAuthProviderRuntimeConfig } from '../config/app.config';
@@ -34,13 +35,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OAuthCallbackQueryDto } from './dto/oauth-callback-query.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { LoginWithEmailCodeDto } from './dto/login-with-email-code.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
+import { RegisterWithEmailCodeDto } from './dto/register-with-email-code.dto';
+import { RequestEmailAuthCodeDto } from './dto/request-email-auth-code.dto';
+import { ResetPasswordWithEmailCodeDto } from './dto/reset-password-with-email-code.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { AuthEmailService } from './auth-email.service';
 import { mapOAuthProfile, OAUTH_PROVIDER_DEFINITIONS } from './oauth.providers';
 import {
   AccessTokenPayload,
   AuthResponse,
+  EmailCodeRequestResponse,
   LinkedOAuthAccount,
   MeResponse,
   MembershipClaim,
@@ -58,6 +65,9 @@ import {
 
 const OAUTH_STATE_EXPIRES_IN = '10m';
 const OAUTH_FETCH_TIMEOUT_MS = 12000;
+const EMAIL_AUTH_CODE_EXPIRES_MINUTES = 10;
+const EMAIL_AUTH_CODE_LENGTH = 6;
+const EMAIL_AUTH_CODE_MAX_ATTEMPTS = 5;
 const PASSWORD_TIMING_RESISTANCE_HASH =
   '$2a$12$C6UzMDM.H6dfI/f/IKcEeO1Q8v1p5MNDoAuCEi0aKBslrHonghE6u';
 
@@ -93,6 +103,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService<RuntimeConfig>,
+    private readonly authEmailService: AuthEmailService,
   ) {}
 
   async register(dto: RegisterDto, requestMeta: RequestMeta): Promise<AuthResponse> {
@@ -419,6 +430,236 @@ export class AuthService {
         },
       });
     });
+  }
+
+  async requestLoginEmailCode(
+    dto: RequestEmailAuthCodeDto,
+  ): Promise<EmailCodeRequestResponse> {
+    const email = this.normalizeEmail(dto.email);
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: publicUserSelect,
+    });
+
+    if (user) {
+      this.assertUserEnabled(user);
+      await this.issueEmailAuthCode(email, EmailAuthCodePurpose.LOGIN, user.id);
+    }
+
+    return this.toEmailCodeRequestResponse(email);
+  }
+
+  async loginWithEmailCode(
+    dto: LoginWithEmailCodeDto,
+    requestMeta: RequestMeta,
+  ): Promise<AuthResponse> {
+    const email = this.normalizeEmail(dto.email);
+    await this.consumeEmailAuthCode(email, EmailAuthCodePurpose.LOGIN, dto.code);
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: publicUserSelect,
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Код недействителен или срок его действия истек.');
+    }
+
+    this.assertUserEnabled(user);
+
+    const verifiedUser = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isEmailVerified: true,
+        lastLoginAt: new Date(),
+      },
+      select: publicUserSelect,
+    });
+
+    await this.syncParticipantsForUser(verifiedUser.id, verifiedUser.email);
+
+    const memberships = await this.getMembershipClaims(verifiedUser.id);
+    const tokens = await this.createTokenPair(verifiedUser, memberships, requestMeta);
+
+    return {
+      user: this.toPublicUser(verifiedUser, memberships),
+      tokens,
+    };
+  }
+
+  async requestRegisterEmailCode(
+    dto: RequestEmailAuthCodeDto,
+  ): Promise<EmailCodeRequestResponse> {
+    const email = this.normalizeEmail(dto.email);
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        isEmailVerified: true,
+        isActive: true,
+        deletedAt: true,
+      },
+    });
+
+    if (existingUser?.isEmailVerified && existingUser.deletedAt === null && existingUser.isActive) {
+      throw new ConflictException('Аккаунт с таким email уже существует.');
+    }
+
+    await this.issueEmailAuthCode(email, EmailAuthCodePurpose.REGISTER, existingUser?.id ?? null);
+    return this.toEmailCodeRequestResponse(email);
+  }
+
+  async registerWithEmailCode(
+    dto: RegisterWithEmailCodeDto,
+    requestMeta: RequestMeta,
+  ): Promise<AuthResponse> {
+    const email = this.normalizeEmail(dto.email);
+    this.validatePasswordStrength(dto.password);
+    await this.consumeEmailAuthCode(email, EmailAuthCodePurpose.REGISTER, dto.code);
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+      select: userWithPasswordSelect,
+    });
+
+    if (existingUser?.isEmailVerified && existingUser.deletedAt === null && existingUser.isActive) {
+      throw new ConflictException('Аккаунт с таким email уже существует.');
+    }
+
+    const passwordHash = await hash(dto.password, 12);
+    const now = new Date();
+
+    const user = existingUser
+      ? await this.prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            passwordHash,
+            isEmailVerified: true,
+            isActive: true,
+            deletedAt: null,
+            firstName: this.trimOrNull(dto.firstName) ?? existingUser.firstName,
+            lastName: this.trimOrNull(dto.lastName) ?? existingUser.lastName,
+            lastLoginAt: now,
+          },
+          select: publicUserSelect,
+        })
+      : await this.prisma.user.create({
+          data: {
+            email,
+            passwordHash,
+            isEmailVerified: true,
+            firstName: this.trimOrNull(dto.firstName),
+            lastName: this.trimOrNull(dto.lastName),
+            lastLoginAt: now,
+          },
+          select: publicUserSelect,
+        });
+
+    this.assertUserEnabled(user);
+    await this.claimInviteTokensForUser(user.id, email, {
+      email,
+      password: dto.password,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      organizationInviteToken: dto.organizationInviteToken,
+      participantInviteToken: dto.participantInviteToken,
+    });
+    await this.syncParticipantsForUser(user.id, user.email);
+
+    const memberships = await this.getMembershipClaims(user.id);
+    const tokens = await this.createTokenPair(user, memberships, requestMeta);
+
+    return {
+      user: this.toPublicUser(user, memberships),
+      tokens,
+    };
+  }
+
+  async requestPasswordResetEmailCode(
+    dto: RequestEmailAuthCodeDto,
+  ): Promise<EmailCodeRequestResponse> {
+    const email = this.normalizeEmail(dto.email);
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: publicUserSelect,
+    });
+
+    if (user) {
+      this.assertUserEnabled(user);
+      await this.issueEmailAuthCode(email, EmailAuthCodePurpose.PASSWORD_RESET, user.id);
+    }
+
+    return this.toEmailCodeRequestResponse(email);
+  }
+
+  async resetPasswordWithEmailCode(
+    dto: ResetPasswordWithEmailCodeDto,
+    requestMeta: RequestMeta,
+  ): Promise<AuthResponse> {
+    const email = this.normalizeEmail(dto.email);
+    this.validatePasswordStrength(dto.newPassword);
+    await this.consumeEmailAuthCode(email, EmailAuthCodePurpose.PASSWORD_RESET, dto.code);
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: userWithPasswordSelect,
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Код недействителен или срок его действия истек.');
+    }
+
+    this.assertUserEnabled(user);
+
+    const nextPasswordHash = await hash(dto.newPassword, 12);
+    const revokedAt = new Date();
+
+    const updatedUser = await this.prisma.$transaction(async (tx) => {
+      const nextUser = await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: nextPasswordHash,
+          isEmailVerified: true,
+          lastLoginAt: revokedAt,
+        },
+        select: publicUserSelect,
+      });
+
+      await tx.refreshToken.updateMany({
+        where: {
+          userId: user.id,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          targetType: AuditTargetType.AUTH,
+          targetId: user.id,
+          action: 'auth.password.reset-by-email-code',
+          severity: AuditSeverity.INFO,
+        },
+      });
+
+      return nextUser;
+    });
+
+    await this.syncParticipantsForUser(updatedUser.id, updatedUser.email);
+
+    const memberships = await this.getMembershipClaims(updatedUser.id);
+    const tokens = await this.createTokenPair(updatedUser, memberships, requestMeta);
+
+    return {
+      user: this.toPublicUser(updatedUser, memberships),
+      tokens,
+    };
   }
 
   async getAuthorizationUrlForLogin(
@@ -1739,6 +1980,133 @@ export class AuthService {
     });
   }
 
+  private async issueEmailAuthCode(
+    email: string,
+    purpose: EmailAuthCodePurpose,
+    userId?: string | null,
+  ): Promise<void> {
+    const normalizedEmail = this.normalizeEmail(email);
+    const now = new Date();
+    const code = this.generateEmailAuthCode();
+    const expiresAt = new Date(now.getTime() + EMAIL_AUTH_CODE_EXPIRES_MINUTES * 60 * 1000);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.emailAuthCode.updateMany({
+        where: {
+          email: normalizedEmail,
+          purpose,
+          consumedAt: null,
+        },
+        data: {
+          consumedAt: now,
+        },
+      });
+
+      await tx.emailAuthCode.create({
+        data: {
+          email: normalizedEmail,
+          userId: userId ?? null,
+          purpose,
+          codeHash: this.hashEmailAuthCode(normalizedEmail, purpose, code),
+          expiresAt,
+        },
+      });
+    });
+
+    await this.authEmailService.sendEmailCode({
+      email: normalizedEmail,
+      code,
+      purpose,
+      expiresInMinutes: EMAIL_AUTH_CODE_EXPIRES_MINUTES,
+    });
+  }
+
+  private async consumeEmailAuthCode(
+    email: string,
+    purpose: EmailAuthCodePurpose,
+    code: string,
+  ): Promise<void> {
+    const normalizedEmail = this.normalizeEmail(email);
+    const normalizedCode = code.trim();
+
+    if (!normalizedCode) {
+      throw new BadRequestException('Введите код из письма.');
+    }
+
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.emailAuthCode.updateMany({
+        where: {
+          email: normalizedEmail,
+          purpose,
+          consumedAt: null,
+          expiresAt: {
+            lte: now,
+          },
+        },
+        data: {
+          consumedAt: now,
+        },
+      });
+
+      const record = await tx.emailAuthCode.findFirst({
+        where: {
+          email: normalizedEmail,
+          purpose,
+          consumedAt: null,
+          expiresAt: {
+            gt: now,
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      if (!record) {
+        throw new UnauthorizedException('Код недействителен или срок его действия истек.');
+      }
+
+      if (record.attempts >= EMAIL_AUTH_CODE_MAX_ATTEMPTS) {
+        await tx.emailAuthCode.update({
+          where: { id: record.id },
+          data: {
+            consumedAt: now,
+            lastAttemptAt: now,
+          },
+        });
+
+        throw new UnauthorizedException('Код недействителен или срок его действия истек.');
+      }
+
+      const expectedHash = this.hashEmailAuthCode(normalizedEmail, purpose, normalizedCode);
+
+      if (record.codeHash !== expectedHash) {
+        const nextAttempts = record.attempts + 1;
+
+        await tx.emailAuthCode.update({
+          where: { id: record.id },
+          data: {
+            attempts: nextAttempts,
+            lastAttemptAt: now,
+            consumedAt: nextAttempts >= EMAIL_AUTH_CODE_MAX_ATTEMPTS ? now : undefined,
+          },
+        });
+
+        throw new UnauthorizedException('Код недействителен или срок его действия истек.');
+      }
+
+      await tx.emailAuthCode.update({
+        where: { id: record.id },
+        data: {
+          consumedAt: now,
+          lastAttemptAt: now,
+        },
+      });
+    });
+  }
+
   private validatePasswordStrength(password: string): void {
     const normalized = password.trim();
 
@@ -1760,6 +2128,47 @@ export class AuthService {
 
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  private hashEmailAuthCode(
+    email: string,
+    purpose: EmailAuthCodePurpose,
+    code: string,
+  ): string {
+    return createHash('sha256')
+      .update(`email-auth-code:${email}:${purpose}:${code}`)
+      .digest('hex');
+  }
+
+  private generateEmailAuthCode(): string {
+    return randomInt(0, 10 ** EMAIL_AUTH_CODE_LENGTH)
+      .toString()
+      .padStart(EMAIL_AUTH_CODE_LENGTH, '0');
+  }
+
+  private toEmailCodeRequestResponse(email: string): EmailCodeRequestResponse {
+    return {
+      success: true,
+      maskedEmail: this.maskEmail(email),
+      expiresInSeconds: EMAIL_AUTH_CODE_EXPIRES_MINUTES * 60,
+    };
+  }
+
+  private maskEmail(email: string): string {
+    const normalized = this.normalizeEmail(email);
+    const [localPart, domainPart = ''] = normalized.split('@');
+    const [domainName, ...domainTail] = domainPart.split('.');
+
+    const maskChunk = (value: string, visible = 2): string => {
+      if (value.length <= visible) {
+        return value;
+      }
+
+      return `${value.slice(0, visible)}${'*'.repeat(Math.max(2, value.length - visible))}`;
+    };
+
+    const maskedDomainTail = domainTail.join('.');
+    return `${maskChunk(localPart)}@${maskChunk(domainName)}${maskedDomainTail ? `.${maskedDomainTail}` : ''}`;
   }
 
   private generateSyntheticOAuthEmail(

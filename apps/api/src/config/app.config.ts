@@ -37,6 +37,17 @@ export type AppConfig = {
     privateKey: string;
     enabled: boolean;
   };
+  mail: {
+    smtp: {
+      host: string;
+      port: number;
+      secure: boolean;
+      user: string;
+      password: string;
+      from: string;
+      enabled: boolean;
+    };
+  };
   notifications: {
     reminderOffsetsMinutes: number[];
     webPush: {
@@ -185,6 +196,19 @@ export default registerAs(
           process.env.FIREBASE_CLIENT_EMAIL &&
           process.env.FIREBASE_PRIVATE_KEY,
       ),
+    },
+    mail: {
+      smtp: {
+        host: process.env.SMTP_HOST ?? '',
+        port: toInt(process.env.SMTP_PORT, 587),
+        secure: process.env.SMTP_SECURE === 'true',
+        user: process.env.SMTP_USER ?? '',
+        password: process.env.SMTP_PASSWORD ?? '',
+        from:
+          process.env.SMTP_FROM?.trim() ||
+          'Внутренний сервис театра <no-reply@rpglife.online>',
+        enabled: Boolean(process.env.SMTP_HOST?.trim() && process.env.SMTP_FROM?.trim()),
+      },
     },
     notifications: {
       reminderOffsetsMinutes: parseMinuteOffsets(process.env.REMINDER_OFFSETS_MINUTES),

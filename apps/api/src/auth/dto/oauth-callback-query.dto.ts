@@ -43,6 +43,21 @@ export class OAuthCallbackQueryDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
+  type?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  expires_in?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  ext_id?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(200)
   error?: string;
 

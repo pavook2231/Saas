@@ -4675,6 +4675,30 @@ textarea.ui-field {
   .app-mobile-sidebar { display: block; }
   .app-mobile-sidebar:not(.is-open) { pointer-events: none; }
 
+  .app-topbar--calendar-mobile-compact {
+    min-height: auto;
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .app-topbar--calendar-mobile-compact .app-topbar__title,
+  .app-topbar--calendar-mobile-compact .app-topbar__right {
+    display: none;
+  }
+
+  .app-topbar--calendar-mobile-compact .app-topbar__left {
+    width: 100%;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .app-topbar--calendar-mobile-compact .app-topbar__workspace,
+  .app-topbar--calendar-mobile-compact .app-topbar__org-select {
+    min-width: 0;
+    width: 100%;
+    flex: 1 1 auto;
+  }
+
   .app-mobile-sidebar__backdrop {
     position: fixed;
     inset: 0;
@@ -4750,6 +4774,20 @@ textarea.ui-field {
   .app-topbar__workspace,
   .app-topbar__org-select {
     width: 100%;
+  }
+
+  .app-topbar--calendar-mobile-compact {
+    padding: 10px 12px;
+    border-radius: 18px;
+  }
+
+  .app-topbar--calendar-mobile-compact .app-topbar__left {
+    flex-wrap: nowrap;
+  }
+
+  .app-topbar--calendar-mobile-compact .app-topbar__workspace,
+  .app-topbar--calendar-mobile-compact .app-topbar__org-select {
+    width: auto;
   }
 
   .feature-page-header { align-items: flex-start; }

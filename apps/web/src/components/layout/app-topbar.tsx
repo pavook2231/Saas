@@ -4,6 +4,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
+import { cn } from '@/lib/cn';
 import { roleLabels } from '@/lib/organization-access';
 
 import { MenuIcon } from './nav-icons';
@@ -24,6 +25,7 @@ type AppTopbarProps = {
   organizationsLoading: boolean;
   activeOrganizationId: string | null;
   onOrganizationChange: (organizationId: string) => void;
+  compactCalendarMobile?: boolean;
 };
 
 export function AppTopbar({
@@ -36,9 +38,10 @@ export function AppTopbar({
   organizationsLoading,
   activeOrganizationId,
   onOrganizationChange,
+  compactCalendarMobile = false,
 }: AppTopbarProps) {
   return (
-    <header className="app-topbar">
+    <header className={cn('app-topbar', compactCalendarMobile && 'app-topbar--calendar-mobile-compact')}>
       <div className="app-topbar__left">
         <Button
           type="button"

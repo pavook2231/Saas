@@ -155,6 +155,7 @@ export function AppShell({ children }: PropsWithChildren) {
           organizationsLoading={organizationsLoading}
           activeOrganizationId={activeOrganizationId}
           onOrganizationChange={setActiveOrganizationId}
+          compactCalendarMobile={pathname === '/calendar'}
         />
         <main className="app-frame__content">
           <PageTransition>{children}</PageTransition>

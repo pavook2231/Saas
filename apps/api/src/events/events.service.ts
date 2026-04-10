@@ -153,6 +153,11 @@ const eventNotificationDateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
   minute: '2-digit',
 });
 
+const eventNotificationWeekDateFormat = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: 'short',
+});
+
 type NormalizedTemplateRoleInput = {
   name: string;
   requiredCount: number;
@@ -931,14 +936,34 @@ export class EventsService {
 
     const createdEvent = await this.getEvent(organizationId, created);
 
-    if (createdEvent.status !== EventStatus.DRAFT) {
-      await this.notifyScheduleChangeSafe({
+    if (
+      createdEvent.status !== EventStatus.DRAFT &&
+      createdEvent.status !== EventStatus.CANCELLED
+    ) {
+      const createdSnapshot = this.toEventNotificationSnapshot(createdEvent);
+      const publishedWeekAlreadyExists = await this.hasPublishedWeekSchedule(
         organizationId,
-        actorUserId,
-        event: createdEvent,
-        userIds: this.extractLinkedUserIds(createdEvent.participants),
-        variant: 'assigned',
-      });
+        createdEvent.startsAt,
+        createdEvent.id,
+      );
+
+      if (!publishedWeekAlreadyExists) {
+        await this.notifyScheduleChangeSafe({
+          organizationId,
+          actorUserId,
+          event: createdSnapshot,
+          userIds: await this.listOrganizationScheduleRecipientUserIds(organizationId),
+          variant: 'weekly',
+        });
+      } else {
+        await this.notifyScheduleChangeSafe({
+          organizationId,
+          actorUserId,
+          event: createdSnapshot,
+          userIds: this.extractLinkedUserIds(createdEvent.participants),
+          variant: 'assigned',
+        });
+      }
     }
 
     return createdEvent;
@@ -1097,42 +1122,77 @@ export class EventsService {
     });
 
     const updatedEvent = await this.getEvent(organizationId, existing.id);
+    const existingSnapshot = this.toEventNotificationSnapshot(existing);
+    const updatedSnapshot = this.toEventNotificationSnapshot(updatedEvent);
     const affectedUserIds = this.mergeUserIds(
       this.extractLinkedUserIds(existing.participants),
       this.extractLinkedUserIds(updatedEvent.participants),
     );
+    const replacementDetected =
+      existing.type === EventType.PERFORMANCE &&
+      updatedEvent.type === EventType.PERFORMANCE &&
+      existing.title !== updatedEvent.title;
+
+    if (existing.status === EventStatus.DRAFT && updatedEvent.status === EventStatus.DRAFT) {
+      return updatedEvent;
+    }
+
+    if (existing.status === EventStatus.DRAFT && updatedEvent.status === EventStatus.CANCELLED) {
+      return updatedEvent;
+    }
 
     if (updatedEvent.status === EventStatus.DRAFT) {
       await this.notifyScheduleChangeSafe({
         organizationId,
         actorUserId,
-        event: updatedEvent,
+        event: updatedSnapshot,
         userIds: affectedUserIds,
+        previousEvent: existingSnapshot,
         variant: 'draft',
       });
     } else if (updatedEvent.status === EventStatus.CANCELLED && existing.status !== EventStatus.CANCELLED) {
       await this.notifyScheduleChangeSafe({
         organizationId,
         actorUserId,
-        event: updatedEvent,
+        event: updatedSnapshot,
         userIds: affectedUserIds,
+        previousEvent: existingSnapshot,
         variant: 'cancelled',
       });
     } else if (existing.status === EventStatus.DRAFT) {
-      await this.notifyScheduleChangeSafe({
+      const publishedWeekAlreadyExists = await this.hasPublishedWeekSchedule(
         organizationId,
-        actorUserId,
-        event: updatedEvent,
-        userIds: affectedUserIds,
-        variant: 'assigned',
-      });
+        updatedEvent.startsAt,
+        updatedEvent.id,
+      );
+
+      if (!publishedWeekAlreadyExists) {
+        await this.notifyScheduleChangeSafe({
+          organizationId,
+          actorUserId,
+          event: updatedSnapshot,
+          userIds: await this.listOrganizationScheduleRecipientUserIds(organizationId),
+          previousEvent: existingSnapshot,
+          variant: 'weekly',
+        });
+      } else {
+        await this.notifyScheduleChangeSafe({
+          organizationId,
+          actorUserId,
+          event: updatedSnapshot,
+          userIds: affectedUserIds,
+          previousEvent: existingSnapshot,
+          variant: 'assigned',
+        });
+      }
     } else {
       await this.notifyScheduleChangeSafe({
         organizationId,
         actorUserId,
-        event: updatedEvent,
+        event: updatedSnapshot,
         userIds: affectedUserIds,
-        variant: 'updated',
+        previousEvent: existingSnapshot,
+        variant: replacementDetected ? 'replacement' : 'updated',
       });
     }
 
@@ -1249,11 +1309,12 @@ export class EventsService {
       await this.notifyScheduleChangeSafe({
         organizationId,
         actorUserId,
-        event: updatedEvent,
+        event: this.toEventNotificationSnapshot(updatedEvent),
         userIds: this.mergeUserIds(
           this.extractLinkedUserIds(event.participants),
           this.extractLinkedUserIds(updatedEvent.participants),
         ),
+        previousEvent: this.toEventNotificationSnapshot(event),
         variant: 'participants',
       });
     }
@@ -1326,7 +1387,7 @@ export class EventsService {
     await this.notifyScheduleChangeSafe({
       organizationId,
       actorUserId,
-      event,
+      event: this.toEventNotificationSnapshot(event),
       userIds: this.extractLinkedUserIds(event.participants),
       variant: 'removed',
     });
@@ -1871,6 +1932,99 @@ export class EventsService {
     );
   }
 
+  private toEventNotificationSnapshot(event: {
+    id: string;
+    title: string;
+    startsAt: Date;
+    type: EventType;
+    status: EventStatus;
+    location: string | null;
+  }): EventNotificationSnapshot {
+    return {
+      id: event.id,
+      title: event.title,
+      startsAt: event.startsAt,
+      type: event.type,
+      status: event.status,
+      location: event.location,
+    };
+  }
+
+  private getWeekBounds(anchor: Date) {
+    const start = new Date(anchor);
+    start.setHours(0, 0, 0, 0);
+
+    const day = start.getDay();
+    const mondayShift = day === 0 ? -6 : 1 - day;
+    start.setDate(start.getDate() + mondayShift);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+
+    return {
+      start,
+      end,
+    };
+  }
+
+  private isCurrentWeekEvent(startsAt: Date) {
+    const { start, end } = this.getWeekBounds(new Date());
+    return startsAt >= start && startsAt < end;
+  }
+
+  private formatWeekRangeLabel(startsAt: Date) {
+    const { start, end } = this.getWeekBounds(startsAt);
+    const weekEnd = new Date(end);
+    weekEnd.setDate(weekEnd.getDate() - 1);
+
+    return `${eventNotificationWeekDateFormat.format(start)} — ${eventNotificationWeekDateFormat.format(weekEnd)}`;
+  }
+
+  private async listOrganizationScheduleRecipientUserIds(organizationId: string) {
+    const memberships = await this.prisma.membership.findMany({
+      where: {
+        organizationId,
+        status: MembershipStatus.ACTIVE,
+        user: {
+          is: {
+            isActive: true,
+            deletedAt: null,
+          },
+        },
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    return this.mergeUserIds(memberships.map((membership) => membership.userId));
+  }
+
+  private async hasPublishedWeekSchedule(
+    organizationId: string,
+    startsAt: Date,
+    excludeEventId?: string,
+  ) {
+    const { start, end } = this.getWeekBounds(startsAt);
+
+    const count = await this.prisma.event.count({
+      where: {
+        organizationId,
+        deletedAt: null,
+        startsAt: {
+          gte: start,
+          lt: end,
+        },
+        status: {
+          in: [EventStatus.PLANNED, EventStatus.CONFIRMED, EventStatus.COMPLETED],
+        },
+        ...(excludeEventId ? { id: { not: excludeEventId } } : {}),
+      },
+    });
+
+    return count > 0;
+  }
+
   private getEventNotificationSummary(event: EventNotificationSnapshot): string {
     const parts = [
       `${eventTypeLabelMap[event.type]} «${event.title}»`,
@@ -1896,7 +2050,92 @@ export class EventsService {
       status: event.status,
       location: event.location,
       url,
+      tag: `schedule-${event.id}`,
     };
+  }
+
+  private buildScheduleNotificationMessage(input: {
+    event: EventNotificationSnapshot;
+    previousEvent?: EventNotificationSnapshot;
+    variant:
+      | 'weekly'
+      | 'assigned'
+      | 'updated'
+      | 'participants'
+      | 'cancelled'
+      | 'removed'
+      | 'draft'
+      | 'replacement';
+  }) {
+    const summary = this.getEventNotificationSummary(input.event);
+    const previousSummary = input.previousEvent
+      ? this.getEventNotificationSummary(input.previousEvent)
+      : null;
+
+    switch (input.variant) {
+      case 'weekly':
+        return {
+          type: NotificationType.SYSTEM,
+          title: 'Новое расписание на актуальную неделю',
+          body: `Опубликовано расписание на ${this.formatWeekRangeLabel(input.event.startsAt)}. Откройте календарь и проверьте все события.`,
+          url: '/calendar',
+        };
+      case 'assigned':
+        return {
+          type: NotificationType.EVENT_ASSIGNED,
+          title: 'В расписании появилось новое событие',
+          body: `${summary}. Проверьте детали и состав в календаре.`,
+          url: `/calendar?eventId=${input.event.id}`,
+        };
+      case 'participants':
+        return {
+          type: NotificationType.EVENT_UPDATED,
+          title: 'Изменился состав события',
+          body: `${summary}. Проверьте роли и участников в календаре.`,
+          url: `/calendar?eventId=${input.event.id}`,
+        };
+      case 'cancelled':
+        return {
+          type: NotificationType.EVENT_UPDATED,
+          title: 'Событие отменено',
+          body: `${summary}. Событие снято с актуальной недели.`,
+          url: `/calendar?eventId=${input.event.id}`,
+        };
+      case 'removed':
+        return {
+          type: NotificationType.EVENT_UPDATED,
+          title: 'Событие удалено из расписания',
+          body: `«${input.event.title}» удалено из календаря. Проверьте актуальную неделю целиком.`,
+          url: '/calendar',
+        };
+      case 'draft':
+        return {
+          type: NotificationType.EVENT_UPDATED,
+          title: 'Событие снято с расписания',
+          body: `«${input.event.title}» переведено в черновик и больше не активно в текущей неделе.`,
+          url: '/calendar',
+        };
+      case 'replacement':
+        return {
+          type: NotificationType.EVENT_UPDATED,
+          title: 'В расписании замена спектакля',
+          body: previousSummary
+            ? `${previousSummary} заменено на ${summary}.`
+            : `${summary}. Проверьте актуальную версию в календаре.`,
+          url: `/calendar?eventId=${input.event.id}`,
+        };
+      case 'updated':
+      default:
+        return {
+          type: NotificationType.EVENT_UPDATED,
+          title: 'Изменение в расписании на этой неделе',
+          body:
+            previousSummary && previousSummary !== summary
+              ? `${previousSummary} обновлено. Теперь: ${summary}.`
+              : `${summary}. Проверьте время, площадку и детали события.`,
+          url: `/calendar?eventId=${input.event.id}`,
+        };
+    }
   }
 
   private async notifyScheduleChangeSafe(input: {
@@ -1904,52 +2143,40 @@ export class EventsService {
     actorUserId: string;
     event: EventNotificationSnapshot;
     userIds: string[];
-    variant: 'assigned' | 'updated' | 'participants' | 'cancelled' | 'removed' | 'draft';
+    previousEvent?: EventNotificationSnapshot;
+    variant:
+      | 'weekly'
+      | 'assigned'
+      | 'updated'
+      | 'participants'
+      | 'cancelled'
+      | 'removed'
+      | 'draft'
+      | 'replacement';
   }) {
-    if (input.userIds.length === 0) {
+    const touchesCurrentWeek =
+      this.isCurrentWeekEvent(input.event.startsAt) ||
+      (input.previousEvent ? this.isCurrentWeekEvent(input.previousEvent.startsAt) : false);
+
+    if (input.userIds.length === 0 || !touchesCurrentWeek) {
       return;
     }
 
-    const summary = this.getEventNotificationSummary(input.event);
-    let title = 'Изменение в расписании';
-    let body = summary;
-    let type: NotificationType = NotificationType.EVENT_UPDATED;
-    let url = `/calendar?eventId=${input.event.id}`;
-
-    if (input.variant === 'assigned') {
-      title = 'Новое событие в расписании';
-      type = NotificationType.EVENT_ASSIGNED;
-    }
-
-    if (input.variant === 'participants') {
-      title = 'Изменен состав события';
-    }
-
-    if (input.variant === 'cancelled') {
-      title = 'Событие отменено';
-    }
-
-    if (input.variant === 'removed') {
-      title = 'Событие удалено из расписания';
-      body = `«${input.event.title}» удалено из календаря`;
-      url = '/calendar';
-    }
-
-    if (input.variant === 'draft') {
-      title = 'Событие снято с расписания';
-      body = `«${input.event.title}» переведено в черновик`;
-      url = '/calendar';
-    }
+    const message = this.buildScheduleNotificationMessage({
+      event: input.event,
+      previousEvent: input.previousEvent,
+      variant: input.variant,
+    });
 
     try {
       await this.notificationsService.notifyUsers({
         organizationId: input.organizationId,
         eventId: input.event.id,
         actorUserId: input.actorUserId,
-        type,
-        title,
-        body,
-        payload: this.buildEventNotificationPayload(input.event, url),
+        type: message.type,
+        title: message.title,
+        body: message.body,
+        payload: this.buildEventNotificationPayload(input.event, message.url),
         userIds: input.userIds,
       });
     } catch (error) {

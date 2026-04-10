@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 import {
@@ -232,13 +232,11 @@ export function CalendarWorkspace() {
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [cursorDate, setCursorDate] = useState<Date>(() => startOfDay(new Date()));
-  const mobileDayRefs = useRef<Record<string, HTMLElement | null>>({});
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [templates, setTemplates] = useState<TemplateRecord[]>([]);
   const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [activeMobileDayKey, setActiveMobileDayKey] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [composerState, setComposerState] = useState<CalendarComposerState | null>(null);
   const [composerSaving, setComposerSaving] = useState(false);
@@ -471,22 +469,6 @@ export function CalendarWorkspace() {
     setCursorDate((current) => addDays(current, viewMode === 'month' ? direction * 28 : direction * 7));
   };
 
-  useEffect(() => {
-    if (mobileWeekDays.length === 0) {
-      setActiveMobileDayKey(null);
-      return;
-    }
-
-    setActiveMobileDayKey((current) => {
-      if (current && mobileWeekDays.some((item) => item.dayKey === current)) {
-        return current;
-      }
-
-      const today = mobileWeekDays.find((item) => item.isToday);
-      return today?.dayKey ?? mobileWeekDays[0]?.dayKey ?? null;
-    });
-  }, [mobileWeekDays]);
-
   const openComposer = (date: Date, lane: TheatreLane | null = null) => {
     const kind = mapLaneToComposerKind(lane);
 
@@ -668,15 +650,6 @@ export function CalendarWorkspace() {
     const label = weekDayNameFormat.format(date).replace('.', '').trim();
     return label.slice(0, 1).toUpperCase() + label.slice(1);
   };
-
-  const scrollToMobileDay = useCallback((dayKey: string) => {
-    setActiveMobileDayKey(dayKey);
-    const target = mobileDayRefs.current[dayKey];
-    target?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    });
-  }, []);
 
   if (!activeOrganizationId || !accessToken) {
     return (
@@ -875,22 +848,6 @@ export function CalendarWorkspace() {
           </div>
         </section>
         <section className="theatre-week-mobile">
-          <div className="theatre-week-mobile__strip" aria-label="Дни недели">
-            {mobileWeekDays.map(({ day, dayKey, isToday, totalEvents }) => (
-              <button
-                key={`${dayKey}-pill`}
-                type="button"
-                className={`theatre-week-mobile__pill${activeMobileDayKey === dayKey ? ' is-active' : ''}${isToday ? ' is-today' : ''}${totalEvents > 0 ? ' has-events' : ''}`}
-                onClick={() => scrollToMobileDay(dayKey)}
-                aria-pressed={activeMobileDayKey === dayKey}
-              >
-                <span>{formatDayName(day).slice(0, 2)}</span>
-                <strong>{day.getDate()}</strong>
-                <small>{totalEvents > 0 ? totalEvents : '·'}</small>
-              </button>
-            ))}
-          </div>
-
           <div className="theatre-week-mobile__list">
             {mobileWeekDays.map(({ day, dayKey, events: dayEvents, summary, totalEvents, isToday }) => {
               const canCreateOnDay = canOpenControlPanel && totalEvents === 0;
@@ -898,10 +855,7 @@ export function CalendarWorkspace() {
               return (
                 <article
                   key={`${dayKey}-mobile`}
-                  ref={(node) => {
-                    mobileDayRefs.current[dayKey] = node;
-                  }}
-                  className={`theatre-day-card${isToday ? ' is-today' : ''}${totalEvents > 0 ? ' has-events' : ' is-empty'}${canCreateOnDay ? ' is-interactive' : ''}${activeMobileDayKey === dayKey ? ' is-active' : ''}`}
+                  className={`theatre-day-card${isToday ? ' is-today' : ''}${totalEvents > 0 ? ' has-events' : ' is-empty'}${canCreateOnDay ? ' is-interactive' : ''}`}
                   onClick={canCreateOnDay ? () => openComposer(day) : undefined}
                   role={canCreateOnDay ? 'button' : undefined}
                   tabIndex={canCreateOnDay ? 0 : undefined}

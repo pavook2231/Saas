@@ -70,11 +70,11 @@ jobs:
           path: .
 
       - name: Prepare production env file
-        if: ${{ secrets.ENV_PRODUCTION != '' }}
+        env:
+          ENV_PRODUCTION: ${{ secrets.ENV_PRODUCTION }}
+        if: ${{ env.ENV_PRODUCTION != '' }}
         run: |
-          cat > .env.production.upload <<'EOF'
-          ${{ secrets.ENV_PRODUCTION }}
-          EOF
+          printf '%s' "$ENV_PRODUCTION" > .env.production.upload
 
       - name: Configure SSH
         env:

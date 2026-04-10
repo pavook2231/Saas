@@ -19,7 +19,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
-import { Select } from '@/components/ui/select';
 import { BrowserNotificationsSettings } from './browser-notifications-settings';
 import { CreateOrganizationAction } from './create-organization-action';
 import { PageHeader } from './page-header';
@@ -350,7 +349,11 @@ export function ProfileWorkspace() {
       accountPreferencesStorage.save(next);
       return next;
     });
-    setNoticeText('Настройки интерфейса сохранены для этого браузера.');
+    setNoticeText(
+      key === 'browserNotifications'
+        ? 'Настройка push-уведомлений сохранена для этого устройства.'
+        : 'Настройки сохранены для этого браузера.',
+    );
   };
 
   const profileModalFooter = (
@@ -580,35 +583,10 @@ export function ProfileWorkspace() {
       <div className="account-settings-grid">
         <Card>
           <CardHeader>
-            <CardTitle>Настройки интерфейса</CardTitle>
-            <CardDescription>Сохраняются в этом браузере.</CardDescription>
+            <CardTitle>Уведомления</CardTitle>
+            <CardDescription>Только нужное: push-подписка и статус этого устройства.</CardDescription>
           </CardHeader>
           <CardContent className="account-settings-card">
-            <div className="account-form-grid">
-              <Select
-                label="Язык интерфейса"
-                value={preferences.interfaceLanguage}
-                onChange={(event) =>
-                  handlePreferenceChange(
-                    'interfaceLanguage',
-                    event.target.value as AccountPreferences['interfaceLanguage'],
-                  )
-                }
-              >
-                <option value="ru">Русский</option>
-                <option value="en">English</option>
-              </Select>
-
-              <Input
-                label="Часовой пояс"
-                value={preferences.interfaceTimezone}
-                onChange={(event) =>
-                  handlePreferenceChange('interfaceTimezone', event.target.value)
-                }
-                placeholder="Europe/Moscow"
-              />
-            </div>
-
             <div className="account-toggle-list">
               <BrowserNotificationsSettings
                 accessToken={accessToken}
@@ -619,17 +597,6 @@ export function ProfileWorkspace() {
                 onNotice={setNoticeText}
                 onError={setErrorText}
               />
-
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={preferences.emailDigest}
-                  onChange={(event) =>
-                    handlePreferenceChange('emailDigest', event.target.checked)
-                  }
-                />
-                <span>Показывать дневную сводку уведомлений</span>
-              </label>
             </div>
           </CardContent>
         </Card>

@@ -1466,12 +1466,14 @@ textarea.ui-field:focus {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
   margin-top: 18px;
+  align-items: start;
 }
 
 .account-settings-card,
 .account-security-card {
   display: grid;
-  gap: 16px;
+  gap: 14px;
+  align-content: start;
 }
 
 .account-form-grid {
@@ -1482,27 +1484,78 @@ textarea.ui-field:focus {
 
 .account-toggle-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .account-browser-push {
   display: grid;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 12px 14px;
   border: 1px solid rgba(219, 227, 239, 0.82);
-  border-radius: 16px;
-  background: rgba(247, 249, 252, 0.72);
+  border-radius: 18px;
+  background: rgba(247, 250, 253, 0.84);
+}
+
+.account-browser-push__header,
+.account-browser-push__subscription {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.account-browser-push__toggle {
+  flex: 1 1 260px;
+  align-items: flex-start;
+  margin: 0;
+}
+
+.account-browser-push__toggle span,
+.account-browser-push__subscription-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.account-browser-push__toggle strong,
+.account-browser-push__subscription-copy strong {
+  font-size: 0.92rem;
+}
+
+.account-browser-push__toggle small,
+.account-browser-push__subscription-copy span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
 .account-browser-push__meta {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .account-browser-push__meta span {
   color: var(--text-muted);
-  font-size: 0.84rem;
-  line-height: 1.45;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.account-browser-push__subscriptions {
+  display: grid;
+  gap: 8px;
+}
+
+.account-browser-push__subscription {
+  padding: 10px 12px;
+  border: 1px solid rgba(219, 227, 239, 0.86);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.account-browser-push__actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .account-security-card__group {
@@ -1514,6 +1567,12 @@ textarea.ui-field:focus {
   color: var(--text-muted);
   font-size: 0.88rem;
   line-height: 1.45;
+}
+
+.account-security-card .resource-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .account-profile-preview {
@@ -3341,6 +3400,13 @@ textarea.ui-field {
   min-width: 0;
 }
 
+.schedule-form-card .ui-card__header,
+.schedule-form-card .ui-card__content,
+.schedule-sidebar-stack > .ui-card .ui-card__header,
+.schedule-sidebar-stack > .ui-card .ui-card__content {
+  padding: 18px;
+}
+
 .schedule-sidebar-stack,
 .schedule-success-card,
 .schedule-participant-block,
@@ -3349,7 +3415,7 @@ textarea.ui-field {
 .schedule-legend-grid,
 .schedule-history-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .schedule-inline-actions {
@@ -3358,9 +3424,9 @@ textarea.ui-field {
 }
 
 .schedule-participant-block {
-  padding: 16px;
+  padding: 14px;
   border: 1px solid rgba(219, 227, 239, 0.9);
-  border-radius: 18px;
+  border-radius: 16px;
   background: rgba(247, 250, 255, 0.8);
 }
 
@@ -3427,12 +3493,43 @@ textarea.ui-field {
 }
 
 .schedule-notes-field {
-  min-height: 108px;
+  min-height: 92px;
   resize: vertical;
 }
 
 .schedule-form-actions {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.schedule-timing-grid {
+  align-items: end;
+}
+
+.schedule-time-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid rgba(219, 227, 239, 0.88);
+  border-radius: 16px;
+  background: rgba(247, 249, 252, 0.82);
+}
+
+.schedule-time-summary__item {
+  display: grid;
+  gap: 4px;
+}
+
+.schedule-time-summary__item span {
+  color: var(--text-soft);
+  font-size: 0.77rem;
+  font-weight: 600;
+}
+
+.schedule-time-summary__item strong {
+  font-size: 0.92rem;
+  line-height: 1.25;
 }
 
 .schedule-filter-grid {
@@ -3461,7 +3558,7 @@ textarea.ui-field {
 }
 
 .schedule-event-card__top span {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 700;
   color: var(--text);
 }
@@ -4494,6 +4591,106 @@ textarea.ui-field {
 
   .play-card {
     flex-direction: column;
+  }
+
+  .account-layout,
+  .account-settings-grid {
+    gap: 12px;
+  }
+
+  .account-settings-grid {
+    margin-top: 12px;
+  }
+
+  .account-page__actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .account-page__actions .ui-button,
+  .account-security-card .resource-card__actions .ui-button,
+  .account-browser-push__actions .ui-button,
+  .schedule-form-actions .ui-button,
+  .schedule-inline-actions .ui-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .account-browser-push {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .account-browser-push__header,
+  .account-browser-push__subscription {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .account-browser-push__toggle {
+    flex: initial;
+  }
+
+  .account-layout .profile-item-card .resource-card__actions,
+  .account-security-card .resource-card__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .schedule-layout,
+  .schedule-sidebar-stack {
+    gap: 12px;
+  }
+
+  .schedule-form-card .ui-card__header,
+  .schedule-form-card .ui-card__content,
+  .schedule-sidebar-stack > .ui-card .ui-card__header,
+  .schedule-sidebar-stack > .ui-card .ui-card__content {
+    padding: 16px;
+  }
+
+  .schedule-timing-grid,
+  .schedule-form-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-time-summary {
+    grid-template-columns: 1fr;
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .schedule-participant-block {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .schedule-participant-head,
+  .schedule-conflict-box__header,
+  .schedule-detail-card__head,
+  .schedule-event-card__top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .schedule-quick-groups,
+  .schedule-inline-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-selected-participants {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-event-card .resource-card__actions,
+  .schedule-detail-card__head .resource-card__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
   }
 
   .theatre-day-card {

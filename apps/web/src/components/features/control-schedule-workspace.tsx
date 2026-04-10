@@ -37,7 +37,7 @@ type ScheduleFormState = {
   title: string;
   date: string;
   startsAt: string;
-  endsAt: string;
+  durationMinutes: number;
   location: VenueName;
   participantIds: string[];
   description: string;
@@ -74,6 +74,12 @@ const repeatModeLabels: Record<ScheduleRepeatMode, string> = {
   WEEKLY: 'Каждую неделю',
 };
 
+const defaultDurationByKind: Record<ScheduleKind, number> = {
+  PERFORMANCE: 120,
+  REHEARSAL: 120,
+  EVENT: 120,
+};
+
 const techCrewPattern = /(тех|звук|свет|костюм|реквиз|бутафор|монтаж|сцена|освет|гример|машинист)/i;
 
 const todayDate = () => new Date().toISOString().slice(0, 10);
@@ -89,7 +95,7 @@ const initialFormState: ScheduleFormState = {
   title: '',
   date: todayDate(),
   startsAt: plusHoursTime(0),
-  endsAt: plusHoursTime(2),
+  durationMinutes: defaultDurationByKind.EVENT,
   location: 'БЗ',
   participantIds: [],
   description: '',
@@ -108,6 +114,31 @@ const plusMinutesIso = (iso: string, minutes: number) => {
   date.setMinutes(date.getMinutes() + minutes);
   return date.toISOString();
 };
+
+const durationBetweenIsoMinutes = (startsAt: string, endsAt: string) =>
+  Math.max(15, Math.round((new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000));
+
+const formatDurationLabel = (minutes: number) => {
+  const safeMinutes = Math.max(0, minutes);
+  const hours = Math.floor(safeMinutes / 60);
+  const restMinutes = safeMinutes % 60;
+
+  if (hours > 0 && restMinutes > 0) {
+    return `${hours} ч ${restMinutes} мин`;
+  }
+
+  if (hours > 0) {
+    return `${hours} ч`;
+  }
+
+  return `${restMinutes} мин`;
+};
+
+const formatTimeOnly = (value: string) =>
+  new Intl.DateTimeFormat('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
 
 const shiftDate = (dateValue: string, days: number) => {
   const date = new Date(`${dateValue}T00:00:00`);
@@ -214,7 +245,7 @@ const mapEventToForm = (event: EventRecord): ScheduleFormState => ({
   title: event.type === 'PERFORMANCE' ? event.template?.name ?? event.title : event.title,
   date: event.startsAt.slice(0, 10),
   startsAt: new Date(event.startsAt).toISOString().slice(11, 16),
-  endsAt: new Date(event.endsAt).toISOString().slice(11, 16),
+  durationMinutes: durationBetweenIsoMinutes(event.startsAt, event.endsAt),
   location: venueOptions.includes(event.location as VenueName) ? (event.location as VenueName) : 'БЗ',
   participantIds: event.participants.map((item) => item.participantId),
   description: event.description ?? '',
@@ -346,17 +377,26 @@ export function ControlScheduleWorkspace() {
     }
 
     const startsAtIso = toIso(form.date, form.startsAt);
+    const durationMinutes =
+      form.kind === 'PERFORMANCE'
+        ? selectedPlay?.durationMinutes ?? defaultDurationByKind.PERFORMANCE
+        : form.durationMinutes;
 
-    if (form.kind === 'PERFORMANCE') {
-      return plusMinutesIso(startsAtIso, selectedPlay?.durationMinutes ?? 120);
-    }
+    return plusMinutesIso(startsAtIso, Math.max(durationMinutes, 15));
+  }, [form.date, form.durationMinutes, form.kind, form.startsAt, selectedPlay]);
 
-    if (!form.endsAt) {
-      return null;
-    }
+  const effectiveDurationMinutes = useMemo(
+    () =>
+      form.kind === 'PERFORMANCE'
+        ? selectedPlay?.durationMinutes ?? defaultDurationByKind.PERFORMANCE
+        : form.durationMinutes,
+    [form.durationMinutes, form.kind, selectedPlay],
+  );
 
-    return toIso(form.date, form.endsAt);
-  }, [form.date, form.endsAt, form.kind, form.startsAt, selectedPlay]);
+  const computedEndsAtLabel = useMemo(
+    () => (computedEndsAtIso ? formatTimeOnly(computedEndsAtIso) : null),
+    [computedEndsAtIso],
+  );
 
   const filteredEvents = useMemo(() => {
     return events
@@ -478,6 +518,10 @@ export function ControlScheduleWorkspace() {
       kind,
       playId: kind === 'PERFORMANCE' ? current.playId : '',
       title: kind === 'PERFORMANCE' ? current.title : current.title,
+      durationMinutes:
+        kind === 'PERFORMANCE'
+          ? current.durationMinutes
+          : defaultDurationByKind[kind],
     }));
   };
 
@@ -543,8 +587,8 @@ export function ControlScheduleWorkspace() {
     const startsAtIso = toIso(dateValue, form.startsAt);
     const endsAtIso =
       form.kind === 'PERFORMANCE'
-        ? plusMinutesIso(startsAtIso, selectedPlay?.durationMinutes ?? 120)
-        : toIso(dateValue, form.endsAt);
+        ? plusMinutesIso(startsAtIso, selectedPlay?.durationMinutes ?? defaultDurationByKind.PERFORMANCE)
+        : plusMinutesIso(startsAtIso, Math.max(form.durationMinutes, 15));
 
     if (new Date(endsAtIso) <= new Date(startsAtIso)) {
       throw new Error('Время окончания должно быть позже времени начала.');
@@ -902,21 +946,27 @@ export function ControlScheduleWorkspace() {
               </Select>
             </div>
 
-            <div className={`resource-form-grid ${form.kind === 'PERFORMANCE' ? '' : 'resource-form-grid--double'}`}>
+            <div className="resource-form-grid resource-form-grid--double schedule-timing-grid">
               <Input
                 label="Начало"
                 type="time"
                 value={form.startsAt}
                 onChange={(event) => setForm((current) => ({ ...current, startsAt: event.target.value }))}
               />
-              {form.kind !== 'PERFORMANCE' ? (
-                <Input
-                  label="Окончание"
-                  type="time"
-                  value={form.endsAt}
-                  onChange={(event) => setForm((current) => ({ ...current, endsAt: event.target.value }))}
-                />
-              ) : null}
+              <div className="schedule-time-summary" aria-live="polite">
+                <div className="schedule-time-summary__item">
+                  <span>Длительность</span>
+                  <strong>
+                    {form.kind === 'PERFORMANCE'
+                      ? `${formatDurationLabel(effectiveDurationMinutes)} по спектаклю`
+                      : formatDurationLabel(effectiveDurationMinutes)}
+                  </strong>
+                </div>
+                <div className="schedule-time-summary__item">
+                  <span>Закончится</span>
+                  <strong>{computedEndsAtLabel ?? '—'}</strong>
+                </div>
+              </div>
             </div>
 
             {!editingEventId ? (

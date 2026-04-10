@@ -29,6 +29,19 @@ const detectDeviceLabel = () => {
     : 'Браузер';
 };
 
+const formatLastSeenAt = (value: string | null | undefined) => {
+  if (!value) {
+    return '—';
+  }
+
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+};
+
 export function BrowserNotificationsSettings({
   accessToken,
   enabled,
@@ -171,45 +184,39 @@ export function BrowserNotificationsSettings({
 
   return (
     <div className="account-browser-push">
-      <label className="checkbox-row">
-        <input
-          type="checkbox"
-          checked={enabled}
-          disabled={loading || !accessToken}
-          onChange={(event) => void handleToggle(event.target.checked)}
-        />
-        <span>Показывать напоминания и уведомления в браузере</span>
-      </label>
+      <div className="account-browser-push__header">
+        <label className="checkbox-row account-browser-push__toggle">
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={loading || !accessToken}
+            onChange={(event) => void handleToggle(event.target.checked)}
+          />
+          <span>
+            <strong>Push-уведомления</strong>
+            <small>Изменения расписания и напоминания в браузере</small>
+          </span>
+        </label>
+        <Badge variant={enabled ? 'success' : 'neutral'}>{stateLabel}</Badge>
+      </div>
 
       <div className="account-browser-push__meta">
-        <Badge variant={enabled ? 'success' : 'neutral'}>{stateLabel}</Badge>
         {permission === 'default' ? (
           <span>После включения браузер попросит разрешение на уведомления.</span>
         ) : null}
         {permission === 'denied' ? (
           <span>Разрешение можно вернуть в настройках браузера.</span>
         ) : null}
-        <span>На iPhone уведомления работают после добавления сайта на экран Домой.</span>
+        <span>На iPhone push работает после добавления сайта на экран Домой.</span>
       </div>
 
       {subscriptions.length > 0 ? (
-        <div className="profile-stack">
+        <div className="account-browser-push__subscriptions">
           {subscriptions.map((subscription) => (
-            <div key={subscription.id} className="profile-item-card">
-              <div className="resource-inline-info">
+            <div key={subscription.id} className="account-browser-push__subscription">
+              <div className="account-browser-push__subscription-copy">
                 <strong>{subscription.deviceLabel || 'Браузер'}</strong>
-                <span>{subscription.endpointFingerprint}</span>
-                <span>
-                  Последняя активность:{' '}
-                  {subscription.lastSeenAt
-                    ? new Intl.DateTimeFormat('ru-RU', {
-                        day: '2-digit',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      }).format(new Date(subscription.lastSeenAt))
-                    : '—'}
-                </span>
+                <span>Последняя активность: {formatLastSeenAt(subscription.lastSeenAt)}</span>
               </div>
               <Badge variant={subscription.isActive ? 'success' : 'neutral'}>
                 {subscription.isActive ? 'Активна' : 'Выключена'}
@@ -220,15 +227,17 @@ export function BrowserNotificationsSettings({
       ) : null}
 
       {enabled ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => void loadSubscriptions()}
-          loading={loading}
-        >
-          Обновить подписки
-        </Button>
+        <div className="account-browser-push__actions">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => void loadSubscriptions()}
+            loading={loading}
+          >
+            Обновить подписки
+          </Button>
+        </div>
       ) : null}
     </div>
   );

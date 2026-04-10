@@ -682,7 +682,7 @@ export function CalendarWorkspace() {
         error instanceof Error
           ? error.message
           : composerEditingEventId
-            ? 'Не удалось заменить событие.'
+            ? 'Не удалось сохранить изменения.'
             : 'Не удалось создать событие.',
       );
     } finally {
@@ -844,11 +844,29 @@ export function CalendarWorkspace() {
           </div>
           {canOpenControlPanel ? (
             <Link className="ui-button ui-button--primary ui-button--md" href="/control/schedule">
-              <span className="ui-button__content">Составить расписание</span>
+              <span className="ui-button__content">Составить неделю</span>
             </Link>
           ) : null}
         </div>
       </div>
+
+      <Card className="schedule-mode-card schedule-mode-card--calendar">
+        <CardContent className="schedule-mode-card__body">
+          <div className="schedule-mode-card__copy">
+            <p className="kicker">Режим 2</p>
+            <h2>Точечное редактирование</h2>
+            <p>Здесь меняют отдельные опубликованные события. Уведомление отправляется только участникам выбранного события и только если оно касается текущей недели.</p>
+          </div>
+          <div className="schedule-mode-card__actions">
+            <Badge variant="primary">Точечное редактирование</Badge>
+            {canOpenControlPanel ? (
+              <Link className="ui-button ui-button--ghost ui-button--md" href="/control/schedule">
+                <span className="ui-button__content">Перейти к планированию</span>
+              </Link>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
 
       {errorText ? <p className="finance-error">{errorText}</p> : null}
       {loading ? <p className="empty-state">Загружаем расписание...</p> : null}
@@ -1056,10 +1074,10 @@ export function CalendarWorkspace() {
       <Modal
         open={Boolean(composerState)}
         onClose={closeComposer}
-        title={composerEditingEventId ? 'Заменить событие' : 'Составить расписание'}
+        title={composerEditingEventId ? 'Редактировать событие' : 'Новое событие'}
         description={
           composerState
-            ? `${composerEditingEventId ? 'Слот' : 'Новый слот'} на ${weekdayLongFormat.format(new Date(`${composerState.date}T00:00:00`))}`
+            ? `${composerEditingEventId ? 'Изменение одного события' : 'Новый слот'} на ${weekdayLongFormat.format(new Date(`${composerState.date}T00:00:00`))}`
             : undefined
         }
         size="lg"
@@ -1070,7 +1088,7 @@ export function CalendarWorkspace() {
                 Отмена
               </Button>
               <Button type="button" onClick={() => void handleComposerSave()} loading={composerSaving}>
-                {composerEditingEventId ? 'Сохранить замену' : 'Добавить в расписание'}
+                {composerEditingEventId ? 'Сохранить изменения' : 'Добавить событие'}
               </Button>
             </>
           ) : undefined
@@ -1277,7 +1295,7 @@ export function CalendarWorkspace() {
                 onClick={() => openComposerForReplacement(selectedEvent)}
                 disabled={Boolean(eventActionLoading)}
               >
-                Заменить
+                Редактировать
               </Button>
               {selectedEvent.status !== 'CANCELLED' ? (
                 <Button
@@ -1328,6 +1346,10 @@ export function CalendarWorkspace() {
                 <p>Состав не указан.</p>
               )}
             </div>
+
+            <p className="selected-event-panel__note">
+              Для этого режима уведомления уходят только участникам этого события и только если изменение касается текущей недели.
+            </p>
           </div>
         ) : null}
       </Modal>

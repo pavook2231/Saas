@@ -442,8 +442,18 @@ class InMemoryPrisma {
       },
     ],
   });
-  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.SYSTEM).length, 1);
-  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.EVENT_ASSIGNED).length, 0);
+  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.SYSTEM).length, 0);
+  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.EVENT_ASSIGNED).length, 1);
+  const assignedRecipientUserIds = new Set(
+    prisma.state.notificationRecipients
+      .filter((recipient) => {
+        const notification = prisma.state.notifications.find((item) => item.id === recipient.notificationId);
+        return notification?.type === NotificationType.EVENT_ASSIGNED;
+      })
+      .map((recipient) => recipient.userId),
+  );
+  assert.equal(assignedRecipientUserIds.has(invitedAuth.user.id), true);
+  assert.equal(assignedRecipientUserIds.has(directorAuth.user.id), false);
 
   const mainEventRange = getWeekEventRange(6, 18, 0, 90);
   const mainEvent = await eventsService.createEvent(organization.id, adminAuth.user.id, {
@@ -459,13 +469,57 @@ class InMemoryPrisma {
       },
     ],
   });
-  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.SYSTEM).length, 1);
-  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.EVENT_ASSIGNED).length, 1);
+  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.SYSTEM).length, 0);
+  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.EVENT_ASSIGNED).length, 2);
   const updatedEvent = await eventsService.updateEvent(organization.id, mainEvent.id, adminAuth.user.id, { title: 'April 26 Performance Updated' });
   assert.equal(updatedEvent.title, 'April 26 Performance Updated');
   assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.EVENT_UPDATED && n.eventId === mainEvent.id).length, 1);
+  const updatedRecipientUserIds = new Set(
+    prisma.state.notificationRecipients
+      .filter((recipient) => {
+        const notification = prisma.state.notifications.find((item) => item.id === recipient.notificationId);
+        return notification?.type === NotificationType.EVENT_UPDATED && notification?.eventId === mainEvent.id;
+      })
+      .map((recipient) => recipient.userId),
+  );
+  assert.equal(updatedRecipientUserIds.has(invitedAuth.user.id), true);
+  assert.equal(updatedRecipientUserIds.has(directorAuth.user.id), false);
   assert.equal(notificationsGateway.emissions.some((item) => item.event === 'notifications:new'), true);
   results.push('8. create/update event -> notifications');
+
+  const weeklyDraftRangeA = getWeekEventRange(15, 11, 0, 60);
+  const weeklyDraftRangeB = getWeekEventRange(16, 14, 0, 60);
+  await eventsService.createEvent(organization.id, adminAuth.user.id, {
+    title: 'Weekly Draft A',
+    type: EventType.REHEARSAL,
+    status: EventStatus.DRAFT,
+    startsAt: weeklyDraftRangeA.startsAt,
+    endsAt: weeklyDraftRangeA.endsAt,
+    participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }],
+  });
+  await eventsService.createEvent(organization.id, adminAuth.user.id, {
+    title: 'Weekly Draft B',
+    type: EventType.EVENT,
+    status: EventStatus.DRAFT,
+    startsAt: weeklyDraftRangeB.startsAt,
+    endsAt: weeklyDraftRangeB.endsAt,
+    participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }],
+  });
+  const publishResult = await eventsService.publishWeekSchedule(organization.id, adminAuth.user.id, {
+    anchorDate: weeklyDraftRangeA.startsAt,
+  });
+  assert.equal(publishResult.publishedCount, 2);
+  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.SYSTEM).length, 1);
+  const weeklyNotification = prisma.state.notifications.find((notification) => notification.type === NotificationType.SYSTEM);
+  assert.equal(Boolean(weeklyNotification), true);
+  const weeklyRecipientUserIds = new Set(
+    prisma.state.notificationRecipients
+      .filter((recipient) => recipient.notificationId === weeklyNotification.id)
+      .map((recipient) => recipient.userId),
+  );
+  assert.equal(weeklyRecipientUserIds.has(invitedAuth.user.id), true);
+  assert.equal(weeklyRecipientUserIds.has(directorAuth.user.id), false);
+  results.push('9. weekly publish -> deduplicated participant notifications');
 
   const conflictStartsAt = new Date(mainEventRange.startsAt);
   conflictStartsAt.setMinutes(conflictStartsAt.getMinutes() + 30);
@@ -479,7 +533,7 @@ class InMemoryPrisma {
     endsAt: conflictEndsAt.toISOString(),
     participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }],
   }), (error) => error instanceof ConflictException);
-  results.push('9. overlapping event conflict is detected');
+  results.push('10. overlapping event conflict is detected');
 
   console.log('Scenario smoke passed:');
   results.forEach((item) => console.log(`- ${item}`));

@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
@@ -319,6 +320,15 @@ const getEventTone = (event: EventRecord) => {
   return 'event';
 };
 
+const countUniqueLinkedParticipantUsers = (events: EventRecord[]) =>
+  new Set(
+    events.flatMap((event) =>
+      event.participants
+        .map((participant) => participant.participant.userId)
+        .filter((userId): userId is string => typeof userId === 'string' && userId.length > 0),
+    ),
+  ).size;
+
 export function ControlScheduleWorkspace() {
   const { accessToken, activeOrganizationId } = useActiveWorkspace();
   const [viewMode, setViewMode] = useState<ViewMode>('month');
@@ -563,6 +573,10 @@ export function ControlScheduleWorkspace() {
         .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime()),
     [events, publicationWeek.endKey, publicationWeek.startKey],
   );
+  const weekNotificationRecipientsCount = useMemo(
+    () => countUniqueLinkedParticipantUsers(weekDraftEvents),
+    [weekDraftEvents],
+  );
   const calendarConflicts = useMemo(() => computeConflictMap(events), [events]);
 
   const closeModal = () => {
@@ -707,7 +721,6 @@ export function ControlScheduleWorkspace() {
       </span>
       <span className="chip-time">{formatEventScheduleLabel(event)}</span>
       <span className="chip-meta">{event.participants.length} {pluralize(event.participants.length, 'участник', 'участника', 'участников')}</span>
-      {event.status === 'DRAFT' ? <span className="control-schedule-event-chip__draft">черновик</span> : null}
     </button>
   );
 
@@ -827,8 +840,8 @@ export function ControlScheduleWorkspace() {
       upsertManyEvents(result.publishedEvents);
       setNoticeText(
         result.notified
-          ? `Неделя ${publicationWeek.label} опубликована. Всем ушло одно уведомление за всю неделю.`
-          : `Неделя ${publicationWeek.label} опубликована. Активных получателей для общего уведомления пока не нашлось.`,
+          ? `Неделя ${publicationWeek.label} опубликована. Уведомления отправлены ${weekNotificationRecipientsCount} ${pluralize(weekNotificationRecipientsCount, 'участнику', 'участникам', 'участникам')}.`
+          : `Неделя ${publicationWeek.label} опубликована, но уведомления участникам не были отправлены.`,
       );
       setPublishModalOpen(false);
     } catch (error) {
@@ -841,9 +854,25 @@ export function ControlScheduleWorkspace() {
   return (
     <ManagementShell
       title="Составить расписание"
-      description="Календарь как основа: создавайте, редактируйте и публикуйте события прямо в сетке."
+      description="Режим планирования недели: сначала соберите черновики, затем опубликуйте всю неделю одним действием."
     >
       <div className="control-schedule-board">
+        <Card className="schedule-mode-card schedule-mode-card--planner">
+          <CardContent className="schedule-mode-card__body">
+            <div className="schedule-mode-card__copy">
+              <p className="kicker">Режим 1</p>
+              <h2>Составить расписание</h2>
+              <p>Здесь планируют неделю целиком. Уведомления уходят только после массовой публикации недели.</p>
+            </div>
+            <div className="schedule-mode-card__actions">
+              <Badge variant="primary">Массовая публикация</Badge>
+              <Link className="ui-button ui-button--ghost ui-button--md" href="/calendar">
+                <span className="ui-button__content">Открыть календарь</span>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="control-schedule-board__toolbar-card">
           <CardContent className="control-schedule-board__toolbar">
             <div className="control-schedule-board__toolbar-main">
@@ -871,15 +900,21 @@ export function ControlScheduleWorkspace() {
             <div className="control-schedule-board__toolbar-aside">
               <div className="control-schedule-board__period">
                 <strong>{viewMode === 'month' ? monthTitleFormat.format(cursorDate) : publicationWeek.label}</strong>
-                <span>
-                  {weekDraftEvents.length > 0
-                    ? `${weekDraftEvents.length} ${pluralize(weekDraftEvents.length, 'событие', 'события', 'событий')} в черновиках на эту неделю`
-                    : 'На эту неделю черновиков пока нет'}
-                </span>
+                <span>Соберите события в черновики и опубликуйте неделю одним подтверждением.</span>
               </div>
-              <Button type="button" onClick={() => setPublishModalOpen(true)} disabled={weekDraftEvents.length === 0}>
-                Опубликовать неделю
-              </Button>
+              <div className="control-schedule-board__publish-actions">
+                <Badge
+                  variant={weekDraftEvents.length > 0 ? 'warning' : 'success'}
+                  className="control-schedule-board__publish-counter"
+                >
+                  {weekDraftEvents.length > 0
+                    ? `Не опубликовано: ${weekDraftEvents.length} ${pluralize(weekDraftEvents.length, 'событие', 'события', 'событий')}`
+                    : 'Все события опубликованы'}
+                </Badge>
+                <Button type="button" onClick={() => setPublishModalOpen(true)} disabled={weekDraftEvents.length === 0}>
+                  Опубликовать неделю
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -1281,8 +1316,8 @@ export function ControlScheduleWorkspace() {
             setPublishModalOpen(false);
           }
         }}
-        title="Опубликовать неделю"
-        description={`${publicationWeek.label} · ${weekDraftEvents.length} ${pluralize(weekDraftEvents.length, 'черновик', 'черновика', 'черновиков')}`}
+        title="Подтвердить публикацию недели"
+        description={publicationWeek.label}
         size="sm"
         footer={
           <div className="control-schedule-modal__footer">
@@ -1299,6 +1334,12 @@ export function ControlScheduleWorkspace() {
         }
       >
         <div className="control-schedule-publish-modal">
+          <div className="control-schedule-publish-modal__summary">
+            <strong>
+              Будет опубликовано {weekDraftEvents.length} {pluralize(weekDraftEvents.length, 'событие', 'события', 'событий')}. Уведомления получат {weekNotificationRecipientsCount} {pluralize(weekNotificationRecipientsCount, 'участник', 'участника', 'участников')}.
+            </strong>
+            <p>Ниже список событий, которые уйдут в опубликованное расписание.</p>
+          </div>
           {weekDraftEvents.length > 0 ? (
             <div className="control-schedule-publish-modal__list">
               {weekDraftEvents.map((event) => (

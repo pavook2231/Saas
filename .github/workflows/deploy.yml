@@ -4,11 +4,19 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -37,37 +45,108 @@ jobs:
           NEXT_PUBLIC_API_URL: https://example.com/api
         run: npm run build
 
+      - name: Pack release
+        run: git archive --format=tar.gz --output release.tar.gz HEAD
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-tarball
+          path: release.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
   deploy:
     runs-on: ubuntu-latest
     needs: test
-    timeout-minutes: 20
+    timeout-minutes: 25
+    environment: production
 
     steps:
-      - name: Configure SSH
+      - name: Download release artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: release-tarball
+          path: .
+
+      - name: Prepare production env file
+        if: ${{ secrets.ENV_PRODUCTION != '' }}
         run: |
+          cat > .env.production.upload <<'EOF'
+          ${{ secrets.ENV_PRODUCTION }}
+          EOF
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.HOST }}
+          DEPLOY_SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+          DEPLOY_SSH_KEY: ${{ secrets.SSH_KEY }}
+        run: |
+          set -Eeuo pipefail
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ secrets.HOST }}" >> ~/.ssh/known_hosts
+          if [ -n "${DEPLOY_KNOWN_HOSTS}" ]; then
+            printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "${DEPLOY_SSH_PORT:-22}" -H "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+          fi
+
+      - name: Upload release bundle
+        env:
+          DEPLOY_HOST: ${{ secrets.HOST }}
+          DEPLOY_USER: ${{ secrets.USER }}
+          DEPLOY_SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          set -Eeuo pipefail
+          scp -P "${DEPLOY_SSH_PORT:-22}" release.tar.gz "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/saas-platform-release.tar.gz"
+          if [ -f .env.production.upload ]; then
+            scp -P "${DEPLOY_SSH_PORT:-22}" .env.production.upload "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/saas-platform.env.production"
+          fi
 
       - name: Deploy on server
         env:
-          HOST: ${{ secrets.HOST }}
-          USER: ${{ secrets.USER }}
-          APP_DIR: /opt/saas-platform
-          REPOSITORY: ${{ github.repository }}
+          DEPLOY_HOST: ${{ secrets.HOST }}
+          DEPLOY_USER: ${{ secrets.USER }}
+          DEPLOY_SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_APP_DIR: ${{ secrets.APP_DIR }}
         run: |
-          ssh "${USER}@${HOST}" "
-            set -euo pipefail
-            mkdir -p ${APP_DIR}
-            if [ ! -d ${APP_DIR}/.git ]; then
-              git clone git@github.com:${REPOSITORY}.git ${APP_DIR}
+          set -Eeuo pipefail
+          ssh -p "${DEPLOY_SSH_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "
+            set -Eeuo pipefail
+            APP_DIR=\"${DEPLOY_APP_DIR:-/opt/saas-platform}\"
+            RELEASE_ARCHIVE=\"/tmp/saas-platform-release.tar.gz\"
+            ENV_UPLOAD=\"/tmp/saas-platform.env.production\"
+
+            case \"\${APP_DIR}\" in
+              ''|'/')
+                echo 'APP_DIR must be a non-root absolute path' >&2
+                exit 1
+                ;;
+            esac
+
+            mkdir -p \"\${APP_DIR}\"
+
+            if [ -f \"\${ENV_UPLOAD}\" ]; then
+              install -m 600 \"\${ENV_UPLOAD}\" \"\${APP_DIR}/.env.production\"
+              rm -f \"\${ENV_UPLOAD}\"
             fi
-            cd ${APP_DIR}
-            git config --global --add safe.directory ${APP_DIR}
-            git fetch --all --prune
-            git checkout main
-            git pull --ff-only origin main
+
+            if [ ! -f \"\${APP_DIR}/.env.production\" ]; then
+              echo '.env.production is missing on the server. Set ENV_PRODUCTION secret or create the file manually.' >&2
+              exit 1
+            fi
+
+            find \"\${APP_DIR}\" -mindepth 1 -maxdepth 1 \
+              ! -name '.env.production' \
+              ! -name 'backups' \
+              -exec rm -rf {} +
+
+            tar -xzf \"\${RELEASE_ARCHIVE}\" -C \"\${APP_DIR}\"
+            rm -f \"\${RELEASE_ARCHIVE}\"
+
+            cd \"\${APP_DIR}\"
             chmod +x deploy/scripts/*.sh
             ./deploy/scripts/deploy.sh
           "

@@ -1,1 +1,1 @@
-﻿ALTER TABLE "Event" ADD COLUMN "assemblyAt" TIMESTAMP(3);
+ALTER TABLE "Event" ADD COLUMN "assemblyAt" TIMESTAMP(3);

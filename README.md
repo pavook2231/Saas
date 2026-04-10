@@ -22,3 +22,18 @@ Universal SaaS platform for organizations, schedule planning, participants, even
 4. `npm run prisma:generate`
 5. `npm run prisma:migrate`
 6. `npm run dev`
+
+## Auto Deploy
+
+Проект деплоится через GitHub Actions workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml):
+
+1. На сервере один раз установите Docker и Compose через `deploy/scripts/bootstrap-ubuntu.sh`.
+2. SSH-пользователь для деплоя должен иметь доступ к Docker.
+3. В GitHub Secrets добавьте:
+   `HOST`, `USER`, `SSH_KEY`
+4. Опционально добавьте:
+   `SSH_PORT` для нестандартного SSH-порта
+   `APP_DIR` если нужно развернуть не в `/opt/saas-platform`
+   `KNOWN_HOSTS` если хотите pin host key вместо `ssh-keyscan`
+   `ENV_PRODUCTION` если хотите, чтобы workflow сам обновлял `.env.production` на сервере
+5. После пуша в `main` workflow прогонит проверки, загрузит release-архив на сервер и выполнит `deploy/scripts/deploy.sh`.

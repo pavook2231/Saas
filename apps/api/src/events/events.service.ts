@@ -1028,30 +1028,13 @@ export class EventsService {
       createdEvent.status !== EventStatus.DRAFT &&
       createdEvent.status !== EventStatus.CANCELLED
     ) {
-      const createdSnapshot = this.toEventNotificationSnapshot(createdEvent);
-      const publishedWeekAlreadyExists = await this.hasPublishedWeekSchedule(
+      await this.notifyScheduleChangeSafe({
         organizationId,
-        createdEvent.startsAt,
-        createdEvent.id,
-      );
-
-      if (!publishedWeekAlreadyExists) {
-        await this.notifyScheduleChangeSafe({
-          organizationId,
-          actorUserId,
-          event: createdSnapshot,
-          userIds: await this.listOrganizationScheduleRecipientUserIds(organizationId),
-          variant: 'weekly',
-        });
-      } else {
-        await this.notifyScheduleChangeSafe({
-          organizationId,
-          actorUserId,
-          event: createdSnapshot,
-          userIds: this.extractLinkedUserIds(createdEvent.participants),
-          variant: 'assigned',
-        });
-      }
+        actorUserId,
+        event: this.toEventNotificationSnapshot(createdEvent),
+        userIds: this.extractLinkedUserIds(createdEvent.participants),
+        variant: 'assigned',
+      });
     }
 
     return createdEvent;
@@ -1292,10 +1275,7 @@ export class EventsService {
     const updatedEvent = await this.getEvent(organizationId, existing.id);
     const existingSnapshot = this.toEventNotificationSnapshot(existing);
     const updatedSnapshot = this.toEventNotificationSnapshot(updatedEvent);
-    const affectedUserIds = this.mergeUserIds(
-      this.extractLinkedUserIds(existing.participants),
-      this.extractLinkedUserIds(updatedEvent.participants),
-    );
+    const eventParticipantUserIds = this.extractLinkedUserIds(updatedEvent.participants);
     const replacementDetected =
       existing.type === EventType.PERFORMANCE &&
       updatedEvent.type === EventType.PERFORMANCE &&
@@ -1314,7 +1294,7 @@ export class EventsService {
         organizationId,
         actorUserId,
         event: updatedSnapshot,
-        userIds: affectedUserIds,
+        userIds: eventParticipantUserIds,
         previousEvent: existingSnapshot,
         variant: 'draft',
       });
@@ -1323,42 +1303,25 @@ export class EventsService {
         organizationId,
         actorUserId,
         event: updatedSnapshot,
-        userIds: affectedUserIds,
+        userIds: eventParticipantUserIds,
         previousEvent: existingSnapshot,
         variant: 'cancelled',
       });
     } else if (existing.status === EventStatus.DRAFT) {
-      const publishedWeekAlreadyExists = await this.hasPublishedWeekSchedule(
+      await this.notifyScheduleChangeSafe({
         organizationId,
-        updatedEvent.startsAt,
-        updatedEvent.id,
-      );
-
-      if (!publishedWeekAlreadyExists) {
-        await this.notifyScheduleChangeSafe({
-          organizationId,
-          actorUserId,
-          event: updatedSnapshot,
-          userIds: await this.listOrganizationScheduleRecipientUserIds(organizationId),
-          previousEvent: existingSnapshot,
-          variant: 'weekly',
-        });
-      } else {
-        await this.notifyScheduleChangeSafe({
-          organizationId,
-          actorUserId,
-          event: updatedSnapshot,
-          userIds: affectedUserIds,
-          previousEvent: existingSnapshot,
-          variant: 'assigned',
-        });
-      }
+        actorUserId,
+        event: updatedSnapshot,
+        userIds: eventParticipantUserIds,
+        previousEvent: existingSnapshot,
+        variant: 'assigned',
+      });
     } else {
       await this.notifyScheduleChangeSafe({
         organizationId,
         actorUserId,
         event: updatedSnapshot,
-        userIds: affectedUserIds,
+        userIds: eventParticipantUserIds,
         previousEvent: existingSnapshot,
         variant: replacementDetected ? 'replacement' : 'updated',
       });
@@ -1488,10 +1451,7 @@ export class EventsService {
         organizationId,
         actorUserId,
         event: this.toEventNotificationSnapshot(updatedEvent),
-        userIds: this.mergeUserIds(
-          this.extractLinkedUserIds(event.participants),
-          this.extractLinkedUserIds(updatedEvent.participants),
-        ),
+        userIds: this.extractLinkedUserIds(updatedEvent.participants),
         previousEvent: this.toEventNotificationSnapshot(event),
         variant: 'participants',
       });
@@ -1653,12 +1613,14 @@ export class EventsService {
       orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
       select: eventSelect,
     });
+    const recipientUserIds = this.extractLinkedUserIdsFromEvents(publishedEvents);
 
     const notified = await this.notifyWeekSchedulePublishedSafe({
       organizationId,
       actorUserId,
       startsAt: start,
       publishedCount: publishedEvents.length,
+      userIds: recipientUserIds,
     });
 
     return {
@@ -2528,6 +2490,20 @@ export class EventsService {
     );
   }
 
+  private extractLinkedUserIdsFromEvents(
+    events: Array<{
+      participants: Array<{
+        participant?: {
+          userId: string | null;
+        } | null;
+      }>;
+    }>,
+  ): string[] {
+    return this.mergeUserIds(
+      ...events.map((event) => this.extractLinkedUserIds(event.participants)),
+    );
+  }
+
   private mergeUserIds(...groups: string[][]): string[] {
     return Array.from(
       new Set(
@@ -2584,69 +2560,6 @@ export class EventsService {
     return `${eventNotificationWeekDateFormat.format(start)} — ${eventNotificationWeekDateFormat.format(weekEnd)}`;
   }
 
-  private async listOrganizationScheduleRecipientUserIds(organizationId: string) {
-    const memberships = await this.prisma.membership.findMany({
-      where: {
-        organizationId,
-        status: MembershipStatus.ACTIVE,
-        user: {
-          is: {
-            isActive: true,
-            deletedAt: null,
-          },
-        },
-      },
-      select: {
-        userId: true,
-      },
-    });
-
-    const linkedParticipants = await this.prisma.participant.findMany({
-      where: {
-        organizationId,
-        deletedAt: null,
-        userId: {
-          not: null,
-        },
-      },
-      select: {
-        userId: true,
-      },
-    });
-
-    return this.mergeUserIds(
-      memberships.map((membership) => membership.userId),
-      linkedParticipants
-        .map((participant) => participant.userId)
-        .filter((userId): userId is string => typeof userId === 'string' && userId.length > 0),
-    );
-  }
-
-  private async hasPublishedWeekSchedule(
-    organizationId: string,
-    startsAt: Date,
-    excludeEventId?: string,
-  ) {
-    const { start, end } = this.getWeekBounds(startsAt);
-
-    const count = await this.prisma.event.count({
-      where: {
-        organizationId,
-        deletedAt: null,
-        startsAt: {
-          gte: start,
-          lt: end,
-        },
-        status: {
-          in: [EventStatus.PLANNED, EventStatus.CONFIRMED, EventStatus.COMPLETED],
-        },
-        ...(excludeEventId ? { id: { not: excludeEventId } } : {}),
-      },
-    });
-
-    return count > 0;
-  }
-
   private getEventNotificationSummary(event: EventNotificationSnapshot): string {
     const parts = [
       `${eventTypeLabelMap[event.type]} «${event.title}»`,
@@ -2680,7 +2593,6 @@ export class EventsService {
     event: EventNotificationSnapshot;
     previousEvent?: EventNotificationSnapshot;
     variant:
-      | 'weekly'
       | 'assigned'
       | 'updated'
       | 'participants'
@@ -2695,13 +2607,6 @@ export class EventsService {
       : null;
 
     switch (input.variant) {
-      case 'weekly':
-        return {
-          type: NotificationType.SYSTEM,
-          title: 'Новое расписание на актуальную неделю',
-          body: `Опубликовано расписание на ${this.formatWeekRangeLabel(input.event.startsAt)}. Откройте календарь и проверьте все события.`,
-          url: '/calendar',
-        };
       case 'assigned':
         return {
           type: NotificationType.EVENT_ASSIGNED,
@@ -2767,7 +2672,6 @@ export class EventsService {
     userIds: string[];
     previousEvent?: EventNotificationSnapshot;
     variant:
-      | 'weekly'
       | 'assigned'
       | 'updated'
       | 'participants'
@@ -2813,10 +2717,9 @@ export class EventsService {
     actorUserId: string;
     startsAt: Date;
     publishedCount: number;
+    userIds: string[];
   }) {
-    const userIds = await this.listOrganizationScheduleRecipientUserIds(input.organizationId);
-
-    if (userIds.length === 0) {
+    if (input.userIds.length === 0) {
       return false;
     }
 
@@ -2832,7 +2735,7 @@ export class EventsService {
           weekStart: this.getWeekBounds(input.startsAt).start.toISOString(),
           publishedCount: input.publishedCount,
         },
-        userIds,
+        userIds: input.userIds,
       });
       return true;
     } catch (error) {

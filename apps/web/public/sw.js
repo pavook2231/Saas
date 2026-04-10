@@ -1,4 +1,4 @@
-self.addEventListener('install', (event) => {
+﻿self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
 });
 
@@ -27,12 +27,32 @@ self.addEventListener('push', (event) => {
     };
   }
 
+  const data = payload.data || {};
+  const tag =
+    typeof data.tag === 'string' && data.tag.length > 0
+      ? data.tag
+      : typeof data.eventId === 'string' && data.eventId.length > 0
+        ? `schedule-${data.eventId}`
+        : typeof data.notificationId === 'string' && data.notificationId.length > 0
+          ? `notification-${data.notificationId}`
+          : 'schedule-alert';
+
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
       icon: '/icons/icon-192.svg',
       badge: '/icons/icon-192.svg',
-      data: payload.data || {},
+      tag,
+      renotify: true,
+      requireInteraction: true,
+      vibrate: [240, 120, 240, 120, 320],
+      data,
+      actions: [
+        {
+          action: 'open',
+          title: 'Открыть календарь',
+        },
+      ],
     }),
   );
 });

@@ -551,7 +551,10 @@ export function CalendarWorkspace() {
         key={event.id}
         type="button"
         className={`event-chip type-${event.type.toLowerCase()}${selectedEventId === event.id ? ' is-selected' : ''}${event.status === 'CANCELLED' ? ' status-cancelled' : ''}`}
-        onClick={() => setSelectedEventId(event.id)}
+        onClick={(action) => {
+          action.stopPropagation();
+          setSelectedEventId(event.id);
+        }}
       >
         <span className="chip-time">{timeFormat.format(new Date(event.startsAt))}</span>
         <span className="chip-title">{event.title}</span>
@@ -661,28 +664,36 @@ export function CalendarWorkspace() {
               const items = monthEventMap.get(key) ?? [];
               const isOutside = day.getMonth() !== cursorDate.getMonth();
               const isToday = isSameDay(day, new Date());
+              const canCreateOnDay = canOpenControlPanel && items.length === 0;
 
               return (
-                <article key={key} className={`month-cell${isOutside ? ' outside' : ''}${isToday ? ' today' : ''}`}>
+                <article
+                  key={key}
+                  className={`month-cell${isOutside ? ' outside' : ''}${isToday ? ' today' : ''}${canCreateOnDay ? ' is-interactive' : ''}`}
+                  onClick={canCreateOnDay ? () => openComposer(day) : undefined}
+                  role={canCreateOnDay ? 'button' : undefined}
+                  tabIndex={canCreateOnDay ? 0 : undefined}
+                  onKeyDown={
+                    canCreateOnDay
+                      ? (event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            openComposer(day);
+                          }
+                        }
+                      : undefined
+                  }
+                  aria-label={
+                    canCreateOnDay ? `Открыть создание события на ${weekdayLongFormat.format(day)}` : undefined
+                  }
+                >
                   <div className="month-cell-header">
                     <span>{day.getDate()}</span>
-                    <div className="month-cell-header__actions">
-                      {isToday ? <small>Сегодня</small> : null}
-                      {canOpenControlPanel ? (
-                        <button
-                          type="button"
-                          className="month-cell-add"
-                          onClick={() => openComposer(day)}
-                          aria-label={`Добавить событие на ${weekdayLongFormat.format(day)}`}
-                          title="Добавить событие"
-                        >
-                          +
-                        </button>
-                      ) : null}
-                    </div>
+                    <div className="month-cell-header__actions">{isToday ? <small>Сегодня</small> : null}</div>
                   </div>
                   <div className="month-events">
                     {items.slice(0, 3).map((item) => renderEventChip(item))}
+                    {canCreateOnDay ? <p className="month-cell__hint">Свободно</p> : null}
                     {items.length > 3 ? <p className="more-events">Еще {items.length - 3}</p> : null}
                   </div>
                 </article>
@@ -721,23 +732,38 @@ export function CalendarWorkspace() {
 
                     {theatreLaneMeta.map((lane) => {
                       const items = laneEvents?.[lane.id] ?? [];
+                      const canCreateInCell = canOpenControlPanel && items.length === 0;
 
                       return (
-                        <div key={`${dayKey}-${lane.id}`} className="theatre-week-table__cell">
+                        <div
+                          key={`${dayKey}-${lane.id}`}
+                          className={`theatre-week-table__cell${canCreateInCell ? ' theatre-week-table__cell--interactive' : ''}`}
+                          onClick={canCreateInCell ? () => openComposer(day, lane.id) : undefined}
+                          role={canCreateInCell ? 'button' : undefined}
+                          tabIndex={canCreateInCell ? 0 : undefined}
+                          onKeyDown={
+                            canCreateInCell
+                              ? (event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    openComposer(day, lane.id);
+                                  }
+                                }
+                              : undefined
+                          }
+                          aria-label={
+                            canCreateInCell ? `Открыть создание события на ${weekdayLongFormat.format(day)}` : undefined
+                          }
+                        >
                           {items.length > 0 ? (
                             <div className="theatre-week-table__events">
                               {items.map((event) => renderTheatreEvent(event))}
                             </div>
                           ) : (
-                            canOpenControlPanel ? (
-                              <button
-                                type="button"
-                                className="theatre-week-table__empty-slot"
-                                onClick={() => openComposer(day, lane.id)}
-                              >
-                                <span>+</span>
-                                <small>Добавить</small>
-                              </button>
+                            canCreateInCell ? (
+                              <div className="theatre-week-table__empty">
+                                <small>Свободно</small>
+                              </div>
                             ) : (
                               <div className="theatre-week-table__empty">
                                 —
@@ -760,11 +786,25 @@ export function CalendarWorkspace() {
             const isToday = isSameDay(day, new Date());
             const populatedLanes = theatreLaneMeta.filter((lane) => (laneEvents?.[lane.id] ?? []).length > 0);
             const totalDayEvents = populatedLanes.reduce((sum, lane) => sum + (laneEvents?.[lane.id] ?? []).length, 0);
+            const canCreateOnDay = canOpenControlPanel && totalDayEvents === 0;
 
             return (
               <article
                 key={`${dayKey}-mobile`}
-                className={`theatre-day-card${isToday ? ' is-today' : ''}${totalDayEvents > 0 ? ' has-events' : ' is-empty'}`}
+                className={`theatre-day-card${isToday ? ' is-today' : ''}${totalDayEvents > 0 ? ' has-events' : ' is-empty'}${canCreateOnDay ? ' is-interactive' : ''}`}
+                onClick={canCreateOnDay ? () => openComposer(day) : undefined}
+                role={canCreateOnDay ? 'button' : undefined}
+                tabIndex={canCreateOnDay ? 0 : undefined}
+                onKeyDown={
+                  canCreateOnDay
+                    ? (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openComposer(day);
+                        }
+                      }
+                    : undefined
+                }
               >
                 <div className="theatre-day-card__header">
                   <div className="theatre-day-card__day">
@@ -772,17 +812,6 @@ export function CalendarWorkspace() {
                     <span>{weekDayNumberFormat.format(day)}</span>
                   </div>
                   <div className="theatre-day-card__header-meta">
-                    {canOpenControlPanel ? (
-                      <button
-                        type="button"
-                        className="theatre-day-card__add"
-                        onClick={() => openComposer(day)}
-                        aria-label={`Добавить событие на ${weekdayLongFormat.format(day)}`}
-                        title="Добавить событие"
-                      >
-                        +
-                      </button>
-                    ) : null}
                     {totalDayEvents > 0 ? <span className="theatre-day-card__count">{totalDayEvents}</span> : null}
                     {isToday ? <Badge variant="primary">Сегодня</Badge> : null}
                   </div>
@@ -807,12 +836,8 @@ export function CalendarWorkspace() {
                   </div>
                 ) : (
                   <div className="theatre-day-card__empty">
-                    <span>Нет событий</span>
-                    {canOpenControlPanel ? (
-                      <Button type="button" variant="ghost" size="sm" onClick={() => openComposer(day)}>
-                        Добавить событие
-                      </Button>
-                    ) : null}
+                    <span>Свободный день</span>
+                    {canCreateOnDay ? <small>Нажмите, чтобы составить расписание</small> : null}
                   </div>
                 )}
               </article>

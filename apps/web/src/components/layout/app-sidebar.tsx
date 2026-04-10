@@ -88,22 +88,21 @@ export function AppSidebar({
           ) : null}
         </div>
 
-        <Tooltip content={collapsed ? 'Развернуть меню' : 'Свернуть меню'}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="app-sidebar__collapse"
-            onClick={onToggleCollapse}
-            aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
-          >
-            {collapsed ? (
-              <ChevronRightIcon width={16} height={16} />
-            ) : (
-              <ChevronLeftIcon width={16} height={16} />
-            )}
-          </Button>
-        </Tooltip>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="app-sidebar__collapse"
+          onClick={onToggleCollapse}
+          aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+          title={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+        >
+          {collapsed ? (
+            <ChevronRightIcon width={16} height={16} />
+          ) : (
+            <ChevronLeftIcon width={16} height={16} />
+          )}
+        </Button>
       </div>
 
       <Card tone="subtle" className="app-sidebar__org-card">

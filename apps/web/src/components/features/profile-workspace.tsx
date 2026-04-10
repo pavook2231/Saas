@@ -7,11 +7,6 @@ import {
   type OrganizationInvitation,
   type OrganizationInvitationHistory,
 } from '@/app/lib/api/organizations';
-import {
-  accountPreferencesStorage,
-  defaultAccountPreferences,
-  type AccountPreferences,
-} from '@/app/lib/profile/account-preferences';
 import { useAuth } from '@/app/providers/auth-provider';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -102,9 +97,6 @@ export function ProfileWorkspace() {
     newPassword: '',
     confirmPassword: '',
   });
-  const [preferences, setPreferences] = useState<AccountPreferences>(
-    defaultAccountPreferences(),
-  );
 
   useToastFeedback({
     noticeText,
@@ -129,10 +121,6 @@ export function ProfileWorkspace() {
       avatarUrl: user.avatarUrl ?? '',
     });
   }, [user]);
-
-  useEffect(() => {
-    setPreferences(accountPreferencesStorage.load());
-  }, []);
 
   const loadProfileData = useCallback(async () => {
     if (!accessToken) {
@@ -334,26 +322,6 @@ export function ProfileWorkspace() {
     } finally {
       setProcessingId(null);
     }
-  };
-
-  const handlePreferenceChange = <K extends keyof AccountPreferences>(
-    key: K,
-    value: AccountPreferences[K],
-  ) => {
-    setPreferences((current) => {
-      const next = {
-        ...current,
-        [key]: value,
-      };
-
-      accountPreferencesStorage.save(next);
-      return next;
-    });
-    setNoticeText(
-      key === 'browserNotifications'
-        ? 'Настройка push-уведомлений сохранена для этого устройства.'
-        : 'Настройки сохранены для этого браузера.',
-    );
   };
 
   const profileModalFooter = (
@@ -590,10 +558,6 @@ export function ProfileWorkspace() {
             <div className="account-toggle-list">
               <BrowserNotificationsSettings
                 accessToken={accessToken}
-                enabled={preferences.browserNotifications}
-                onEnabledChange={(value) =>
-                  handlePreferenceChange('browserNotifications', value)
-                }
                 onNotice={setNoticeText}
                 onError={setErrorText}
               />

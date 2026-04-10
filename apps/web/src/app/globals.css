@@ -2278,6 +2278,57 @@ textarea.ui-field:focus {
 .month-cell-header span { font-weight: 700; }
 
 .month-events { display: grid; align-content: start; gap: 6px; min-width: 0; overflow: hidden; }
+.month-events__list {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.month-cell__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(219, 227, 239, 0.9);
+}
+.month-cell__summary small {
+  color: var(--text-soft);
+  font-size: 0.66rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.month-cell__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.88);
+}
+.month-cell__dot--performance {
+  background: #2563eb;
+}
+.month-cell__dot--rehearsal {
+  background: #16a34a;
+}
+.month-cell__dot--tour {
+  background: #7c3aed;
+}
+.month-cell__dot--other {
+  background: #64748b;
+}
+.month-cell__title-preview {
+  display: none;
+  margin: 0;
+  min-width: 0;
+  color: var(--primary-strong);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .month-empty-text {
   margin: 0;
   color: var(--text-soft);
@@ -4876,22 +4927,39 @@ textarea.ui-field {
     padding: 6px;
     border-radius: 14px;
   }
+  .month-cell-header {
+    align-items: center;
+  }
   .month-cell-header span {
     font-size: 0.82rem;
+  }
+  .month-cell-header__actions {
+    gap: 4px;
+  }
+  .month-cell__summary {
+    min-height: 18px;
+    padding-inline: 6px;
+  }
+  .month-cell__summary small {
+    font-size: 0.62rem;
+  }
+  .month-cell__dot {
+    width: 5px;
+    height: 5px;
   }
   .month-events {
     gap: 4px;
   }
-  .month-events .event-chip {
-    padding: 5px 6px;
-    border-radius: 10px;
+  .month-cell__title-preview {
+    display: block;
   }
-  .month-events .chip-time,
-  .month-events .chip-meta {
-    font-size: 0.63rem;
+  .month-events__list {
+    display: none;
   }
-  .month-events .chip-title {
-    font-size: 0.73rem;
+  .month-cell__hint,
+  .more-events {
+    font-size: 0.66rem;
+    line-height: 1.15;
   }
 
   .ui-modal__header,

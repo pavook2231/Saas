@@ -764,10 +764,30 @@ export function CalendarWorkspace() {
                 >
                   <div className="month-cell-header">
                     <span>{day.getDate()}</span>
-                    <div className="month-cell-header__actions">{isToday ? <small>Сегодня</small> : null}</div>
+                    <div className="month-cell-header__actions">
+                      {items.length > 0 ? (
+                        <div className="month-cell__summary" aria-label={`Событий: ${items.length}`}>
+                          {items.slice(0, 3).map((item) => (
+                            <span
+                              key={`${item.id}-dot`}
+                              className={`month-cell__dot month-cell__dot--${classifyTheatreLane(item).toLowerCase()}`}
+                            />
+                          ))}
+                          <small>{items.length}</small>
+                        </div>
+                      ) : null}
+                      {isToday ? <small>Сегодня</small> : null}
+                    </div>
                   </div>
                   <div className="month-events">
-                    {items.slice(0, 2).map((item) => renderEventChip(item))}
+                    {items[0] ? (
+                      <p className="month-cell__title-preview" title={items[0].title}>
+                        {items[0].title}
+                      </p>
+                    ) : null}
+                    <div className="month-events__list">
+                      {items.slice(0, 2).map((item) => renderEventChip(item))}
+                    </div>
                     {canCreateOnDay ? <p className="month-cell__hint">Свободно</p> : null}
                     {items.length > 2 ? <p className="more-events">Еще {items.length - 2}</p> : null}
                   </div>

@@ -7,12 +7,14 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { RateLimitGuard } from './guards/rate-limit.guard';
 import { AuthCookieService } from './services/auth-cookie.service';
 import { DataEncryptionService } from './services/data-encryption.service';
+import { RateLimitMaintenanceService } from './services/rate-limit-maintenance.service';
 
 @Module({
   imports: [ConfigModule, PrismaModule],
   providers: [
     DataEncryptionService,
     AuthCookieService,
+    RateLimitMaintenanceService,
     {
       provide: APP_GUARD,
       useClass: RateLimitGuard,

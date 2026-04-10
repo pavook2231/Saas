@@ -167,6 +167,8 @@ export class NotificationsGateway
   private ensureAllowedTransport(client: Socket): void {
     const requireHttps =
       this.configService.get<boolean>('appConfig.security.requireHttps') ?? false;
+    const trustProxy =
+      this.configService.get<boolean>('appConfig.security.trustProxy') ?? false;
 
     if (!requireHttps) {
       return;
@@ -178,7 +180,9 @@ export class NotificationsGateway
       : forwardedProtoHeader;
     const isSecure =
       client.handshake.secure ||
-      (typeof forwardedProto === 'string' && forwardedProto.toLowerCase() === 'https');
+      (trustProxy &&
+        typeof forwardedProto === 'string' &&
+        forwardedProto.toLowerCase() === 'https');
 
     if (!isSecure) {
       throw new Error('Требуется защищенный WebSocket-транспорт');

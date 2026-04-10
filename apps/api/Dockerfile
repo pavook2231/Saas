@@ -46,16 +46,18 @@ FROM base AS runner
 ENV NODE_ENV=production
 ENV NODE_PATH=/app/apps/api/node_modules:/app/node_modules
 
-COPY --from=prod-deps /app/package*.json ./
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=prod-deps /app/apps/api/package.json ./apps/api/package.json
-COPY --from=prod-deps /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=prod-deps /app/apps/web/package.json ./apps/web/package.json
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
-COPY --from=builder /app/packages ./packages
+COPY --chown=node:node --from=prod-deps /app/package*.json ./
+COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
+COPY --chown=node:node --from=prod-deps /app/apps/api/package.json ./apps/api/package.json
+COPY --chown=node:node --from=prod-deps /app/apps/api/node_modules ./apps/api/node_modules
+COPY --chown=node:node --from=prod-deps /app/apps/web/package.json ./apps/web/package.json
+COPY --chown=node:node --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --chown=node:node --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --chown=node:node --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --chown=node:node --from=builder /app/apps/api/prisma ./apps/api/prisma
+COPY --chown=node:node --from=builder /app/packages ./packages
+
+USER node
 
 EXPOSE 3001
 

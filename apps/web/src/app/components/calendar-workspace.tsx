@@ -114,26 +114,31 @@ const theatreLaneMeta: Array<{
   id: TheatreLane;
   label: string;
   mobileLabel: string;
+  iconClassName: string;
 }> = [
   {
     id: 'PERFORMANCE',
     label: 'Спектакли',
     mobileLabel: 'Спект.',
+    iconClassName: 'is-performance',
   },
   {
     id: 'REHEARSAL',
     label: 'Репетиции',
     mobileLabel: 'Реп.',
+    iconClassName: 'is-rehearsal',
   },
   {
     id: 'TOUR',
     label: 'Гастроли',
     mobileLabel: 'Гастр.',
+    iconClassName: 'is-tour',
   },
   {
     id: 'OTHER',
     label: 'Прочее',
     mobileLabel: 'Прочее',
+    iconClassName: 'is-other',
   },
 ];
 
@@ -455,6 +460,11 @@ export function CalendarWorkspace() {
 
     return map;
   }, [events, weekDays]);
+
+  const weekHasEvents = useMemo(
+    () => weekDays.some((day) => (monthEventMap.get(toDayKey(day))?.length ?? 0) > 0),
+    [monthEventMap, weekDays],
+  );
 
   const mobileWeekDays = useMemo(
     () =>
@@ -829,44 +839,48 @@ export function CalendarWorkspace() {
           <p className="period-label">{periodLabel}</p>
         </div>
         <div className="calendar-simple__actions">
-          <div className="segmented">
-            <button className={viewMode === 'week' ? 'active' : ''} onClick={() => setViewMode('week')} type="button">
-              Неделя
-            </button>
-            <button className={viewMode === 'month' ? 'active' : ''} onClick={() => setViewMode('month')} type="button">
-              Месяц
-            </button>
-          </div>
-          <div className="nav-controls">
-            <button onClick={() => navigate(-1)} type="button">Назад</button>
-            <button onClick={() => setCursorDate(startOfDay(new Date()))} type="button">Сегодня</button>
-            <button onClick={() => navigate(1)} type="button">Вперед</button>
+          <div className="calendar-simple__actions-main">
+            <div className="segmented">
+              <button className={viewMode === 'week' ? 'active' : ''} onClick={() => setViewMode('week')} type="button">
+                Неделя
+              </button>
+              <button className={viewMode === 'month' ? 'active' : ''} onClick={() => setViewMode('month')} type="button">
+                Месяц
+              </button>
+            </div>
+            <div className="nav-controls">
+              <button onClick={() => navigate(-1)} type="button">Назад</button>
+              <button onClick={() => setCursorDate(startOfDay(new Date()))} type="button">Сегодня</button>
+              <button onClick={() => navigate(1)} type="button">Вперед</button>
+            </div>
           </div>
           {canOpenControlPanel ? (
-            <Link className="ui-button ui-button--primary ui-button--md" href="/control/schedule">
-              <span className="ui-button__content">Составить неделю</span>
-            </Link>
+            <div className="calendar-simple__actions-cta">
+              <Link className="ui-button ui-button--primary ui-button--md" href="/control/schedule">
+                <span className="ui-button__content">Составить расписание</span>
+              </Link>
+            </div>
           ) : null}
         </div>
       </div>
 
-      <Card className="schedule-mode-card schedule-mode-card--calendar">
-        <CardContent className="schedule-mode-card__body">
-          <div className="schedule-mode-card__copy">
-            <p className="kicker">Режим 2</p>
-            <h2>Точечное редактирование</h2>
-            <p>Здесь меняют отдельные опубликованные события. Уведомление отправляется только участникам выбранного события и только если оно касается текущей недели.</p>
-          </div>
-          <div className="schedule-mode-card__actions">
-            <Badge variant="primary">Точечное редактирование</Badge>
-            {canOpenControlPanel ? (
+      {canOpenControlPanel ? (
+        <Card className="schedule-mode-card schedule-mode-card--calendar">
+          <CardContent className="schedule-mode-card__body">
+            <div className="schedule-mode-card__copy">
+              <p className="kicker">Режим 2</p>
+              <h2>Точечное редактирование</h2>
+              <p>Здесь меняют отдельные опубликованные события. Уведомление отправляется только участникам выбранного события и только если оно касается текущей недели.</p>
+            </div>
+            <div className="schedule-mode-card__actions">
+              <Badge variant="primary">Точечное редактирование</Badge>
               <Link className="ui-button ui-button--ghost ui-button--md" href="/control/schedule">
                 <span className="ui-button__content">Перейти к планированию</span>
               </Link>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {errorText ? <p className="finance-error">{errorText}</p> : null}
       {loading ? <p className="empty-state">Загружаем расписание...</p> : null}
@@ -949,19 +963,27 @@ export function CalendarWorkspace() {
               <div className="theatre-week-table__day-heading">Дни</div>
               {theatreLaneMeta.map((lane) => (
                 <div key={lane.id} className="theatre-week-table__heading">
-                  {lane.label}
+                  <span className={`theatre-week-table__heading-icon ${lane.iconClassName}`} aria-hidden="true" />
+                  <span>{lane.label}</span>
                 </div>
               ))}
             </div>
+
+            {canOpenControlPanel && !weekHasEvents ? (
+              <div className="theatre-week-table__empty-week">
+                Событий на этой неделе нет - нажмите пустую ячейку, чтобы добавить.
+              </div>
+            ) : null}
 
             <div className="theatre-week-table__body">
               {weekDays.map((day) => {
                 const dayKey = toDayKey(day);
                 const laneEvents = theatreWeekMap.get(dayKey);
                 const isToday = isSameDay(day, new Date());
+                const isWeekend = day.getDay() === 0 || day.getDay() === 6;
 
                 return (
-                  <div key={dayKey} className={`theatre-week-table__row${isToday ? ' is-today' : ''}`}>
+                  <div key={dayKey} className={`theatre-week-table__row${isToday ? ' is-today' : ''}${isWeekend ? ' is-weekend' : ''}`}>
                     <aside className="theatre-week-table__day">
                       <strong>{formatDayName(day)}</strong>
                       <span className="theatre-week-table__day-meta">{weekDayNumberFormat.format(day)}</span>
@@ -998,7 +1020,14 @@ export function CalendarWorkspace() {
                               {items.map((event) => renderTheatreEvent(event))}
                             </div>
                           ) : (
-                            <div className="theatre-week-table__empty" aria-hidden="true" />
+                            <div className="theatre-week-table__empty" aria-hidden="true">
+                              {canCreateInCell ? (
+                                <>
+                                  <span className="theatre-week-table__empty-plus">+</span>
+                                  <span className="theatre-week-table__empty-text">Добавить</span>
+                                </>
+                              ) : null}
+                            </div>
                           )}
                         </div>
                       );
@@ -1013,11 +1042,12 @@ export function CalendarWorkspace() {
           <div className="theatre-week-mobile__list">
             {mobileWeekDays.map(({ day, dayKey, events: dayEvents, summary, totalEvents, isToday }) => {
               const canCreateOnDay = canOpenControlPanel && totalEvents === 0;
+              const isWeekend = day.getDay() === 0 || day.getDay() === 6;
 
               return (
                 <article
                   key={`${dayKey}-mobile`}
-                  className={`theatre-day-card${isToday ? ' is-today' : ''}${totalEvents > 0 ? ' has-events' : ' is-empty'}${canCreateOnDay ? ' is-interactive' : ''}`}
+                  className={`theatre-day-card${isToday ? ' is-today' : ''}${isWeekend ? ' is-weekend' : ''}${totalEvents > 0 ? ' has-events' : ' is-empty'}${canCreateOnDay ? ' is-interactive' : ''}`}
                   onClick={canCreateOnDay ? () => openComposer(day) : undefined}
                   role={canCreateOnDay ? 'button' : undefined}
                   tabIndex={canCreateOnDay ? 0 : undefined}

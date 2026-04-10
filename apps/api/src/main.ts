@@ -49,12 +49,7 @@ async function bootstrap(): Promise<void> {
     }
 
     if (config?.security.requireHttps) {
-      const forwardedProtoHeader = req.headers['x-forwarded-proto'];
-      const forwardedProto = Array.isArray(forwardedProtoHeader)
-        ? forwardedProtoHeader[0]
-        : forwardedProtoHeader;
-      const isSecure =
-        req.secure || (typeof forwardedProto === 'string' && forwardedProto === 'https');
+      const isSecure = req.secure;
 
       if (!isSecure) {
         res.status(426).json({

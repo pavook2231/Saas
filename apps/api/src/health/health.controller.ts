@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SkipRateLimit } from '../security/decorators/rate-limit.decorator';
@@ -23,11 +23,11 @@ export class HealthController {
         database: 'up',
       };
     } catch {
-      return {
+      throw new ServiceUnavailableException({
         status: 'degraded',
         timestamp: new Date().toISOString(),
         database: 'down',
-      };
+      });
     }
   }
 }

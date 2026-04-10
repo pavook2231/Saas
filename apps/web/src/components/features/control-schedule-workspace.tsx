@@ -13,6 +13,7 @@ import {
   type EventStatus,
   type EventType,
   type ParticipantRecord,
+  type PublishWeekScheduleResult,
   type TemplateRecord,
 } from '@/app/lib/api/operations';
 import { ParticipantPicker } from '@/components/features/participant-picker';
@@ -183,6 +184,35 @@ const formatHistoryTime = (value: string) =>
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
+
+const weekRangeFormat = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: 'short',
+});
+
+const getWeekBoundsFromDateValue = (dateValue: string) => {
+  const date = new Date(`${dateValue}T00:00:00`);
+  const day = date.getDay();
+  const mondayShift = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + mondayShift);
+  date.setHours(0, 0, 0, 0);
+
+  const start = new Date(date);
+  const endExclusive = new Date(start);
+  endExclusive.setDate(endExclusive.getDate() + 7);
+
+  const endInclusive = new Date(endExclusive);
+  endInclusive.setDate(endInclusive.getDate() - 1);
+
+  return {
+    start,
+    endExclusive,
+    endInclusive,
+    startKey: start.toISOString().slice(0, 10),
+    endKey: endInclusive.toISOString().slice(0, 10),
+    label: `${weekRangeFormat.format(start)} — ${weekRangeFormat.format(endInclusive)}`,
+  };
+};
 
 const isAlternateRoleName = (name: string) => {
   const normalized = name.trim().toLowerCase();
@@ -375,6 +405,7 @@ export function ControlScheduleWorkspace() {
   const [lastSavedEvents, setLastSavedEvents] = useState<EventRecord[]>([]);
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [publishingWeek, setPublishingWeek] = useState(false);
 
   useToastFeedback({
     noticeText,
@@ -497,6 +528,37 @@ export function ControlScheduleWorkspace() {
   const selectedEvent = useMemo(
     () => events.find((event) => event.id === selectedEventId) ?? null,
     [events, selectedEventId],
+  );
+  const publicationWeek = useMemo(
+    () => getWeekBoundsFromDateValue(filterDate || form.date || todayDate()),
+    [filterDate, form.date],
+  );
+  const weekDraftEvents = useMemo(
+    () =>
+      events.filter((event) => {
+        const eventDate = event.startsAt.slice(0, 10);
+
+        return (
+          event.status === 'DRAFT' &&
+          eventDate >= publicationWeek.startKey &&
+          eventDate <= publicationWeek.endKey
+        );
+      }),
+    [events, publicationWeek.endKey, publicationWeek.startKey],
+  );
+  const weekPublishedEvents = useMemo(
+    () =>
+      events.filter((event) => {
+        const eventDate = event.startsAt.slice(0, 10);
+
+        return (
+          event.status !== 'DRAFT' &&
+          event.status !== 'CANCELLED' &&
+          eventDate >= publicationWeek.startKey &&
+          eventDate <= publicationWeek.endKey
+        );
+      }),
+    [events, publicationWeek.endKey, publicationWeek.startKey],
   );
 
   useEffect(() => {
@@ -809,6 +871,21 @@ export function ControlScheduleWorkspace() {
     });
   };
 
+  const upsertManyEvents = (nextEvents: EventRecord[]) => {
+    if (nextEvents.length === 0) {
+      return;
+    }
+
+    setEvents((current) => {
+      const byId = new Map(current.map((event) => [event.id, event]));
+      nextEvents.forEach((event) => byId.set(event.id, event));
+
+      return Array.from(byId.values()).sort(
+        (left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
+      );
+    });
+  };
+
   const handleSave = async ({ intent, openCalendar = false, keepForm = false }: SaveOptions) => {
     if (!accessToken || !activeOrganizationId || saving) {
       return;
@@ -971,6 +1048,37 @@ export function ControlScheduleWorkspace() {
       setErrorText(error instanceof Error ? error.message : 'Не удалось отменить событие.');
     } finally {
       setProcessingEventId(null);
+    }
+  };
+
+  const handlePublishWeek = async () => {
+    if (!accessToken || !activeOrganizationId || publishingWeek) {
+      return;
+    }
+
+    setPublishingWeek(true);
+    setNoticeText(null);
+    setErrorText(null);
+
+    try {
+      const result: PublishWeekScheduleResult = await operationsApi.publishWeekSchedule({
+        organizationId: activeOrganizationId,
+        accessToken,
+        anchorDate: publicationWeek.startKey,
+      });
+
+      upsertManyEvents(result.publishedEvents);
+      setLastSavedEvents(result.publishedEvents);
+      setSelectedEventId(result.publishedEvents[0]?.id ?? null);
+      setNoticeText(
+        result.notified
+          ? `Неделя ${publicationWeek.label} опубликована. Всем ушло одно уведомление за все расписание.`
+          : `Неделя ${publicationWeek.label} опубликована без общего уведомления, потому что это не текущая неделя.`,
+      );
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось опубликовать неделю.');
+    } finally {
+      setPublishingWeek(false);
     }
   };
 
@@ -1316,15 +1424,28 @@ export function ControlScheduleWorkspace() {
             </label>
 
             <div className="schedule-form-actions">
-              <Button type="button" onClick={() => void handleSave({ intent: 'PLANNED' })} loading={saving}>
-                {editingEventId ? 'Сохранить изменения' : 'Добавить в расписание'}
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => void handleSave({ intent: 'PLANNED', openCalendar: true })} disabled={saving}>
-                Создать и открыть в календаре
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => void handleSave({ intent: 'DRAFT', keepForm: true })} disabled={saving}>
-                Сохранить как черновик
-              </Button>
+              {editingEventId ? (
+                <>
+                  <Button type="button" onClick={() => void handleSave({ intent: 'PLANNED' })} loading={saving}>
+                    Сохранить изменения
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => void handleSave({ intent: 'PLANNED', openCalendar: true })} disabled={saving}>
+                    Сохранить и открыть в календаре
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button type="button" onClick={() => void handleSave({ intent: 'DRAFT', keepForm: true })} loading={saving}>
+                    Добавить в черновики недели
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => void handleSave({ intent: 'PLANNED' })} disabled={saving}>
+                    Опубликовать событие сразу
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => void handleSave({ intent: 'PLANNED', openCalendar: true })} disabled={saving}>
+                    Создать и открыть в календаре
+                  </Button>
+                </>
+              )}
               <Button type="button" variant="ghost" onClick={() => resetForm()} disabled={saving}>
                 Очистить форму
               </Button>
@@ -1403,6 +1524,41 @@ export function ControlScheduleWorkspace() {
                     <p>{form.participantIds.length > 0 ? 'Пересечений по текущему времени не найдено.' : 'Как только появятся участники, покажем конфликты.'}</p>
                   </div>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Публикация недели</CardTitle>
+              <CardDescription>Соберите события в черновиках и опубликуйте неделю одним уведомлением.</CardDescription>
+            </CardHeader>
+            <CardContent className="profile-stack">
+              <div className="resource-empty-inline">
+                <strong>{publicationWeek.label}</strong>
+                <p>
+                  {weekDraftEvents.length > 0
+                    ? `В черновиках ${weekDraftEvents.length} ${weekDraftEvents.length === 1 ? 'событие' : weekDraftEvents.length < 5 ? 'события' : 'событий'}, опубликовано ${weekPublishedEvents.length}.`
+                    : 'Черновиков на эту неделю пока нет. Сохраняйте события в черновики, а потом публикуйте неделю целиком.'}
+                </p>
+              </div>
+              <div className="schedule-inline-actions">
+                <Button
+                  type="button"
+                  onClick={() => void handlePublishWeek()}
+                  disabled={weekDraftEvents.length === 0}
+                  loading={publishingWeek}
+                >
+                  Опубликовать неделю
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFilterDate(publicationWeek.startKey)}
+                >
+                  Показать неделю с понедельника
+                </Button>
               </div>
             </CardContent>
           </Card>

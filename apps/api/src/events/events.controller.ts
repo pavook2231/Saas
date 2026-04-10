@@ -26,6 +26,7 @@ import { CreateTemplateDto } from './dto/create-template.dto';
 import { ListEventsQueryDto } from './dto/list-events-query.dto';
 import { ListParticipantsQueryDto } from './dto/list-participants-query.dto';
 import { ListTemplatesQueryDto } from './dto/list-templates-query.dto';
+import { PublishWeekScheduleDto } from './dto/publish-week-schedule.dto';
 import { SetEventParticipantsDto } from './dto/set-event-participants.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { UpdateParticipantDto } from './dto/update-participant.dto';
@@ -192,6 +193,21 @@ export class EventsController {
     @Query() query: ListEventsQueryDto,
   ) {
     return this.eventsService.listEvents(organizationId, query);
+  }
+
+  @Post('events/week/publish')
+  @RequireOrgRoles(
+    OrganizationRole.ADMIN,
+    OrganizationRole.DIRECTOR,
+    OrganizationRole.ASSISTANT,
+  )
+  async publishWeekSchedule(
+    @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
+    organizationId: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: PublishWeekScheduleDto,
+  ) {
+    return this.eventsService.publishWeekSchedule(organizationId, user.sub, dto);
   }
 
   @Get('events/:eventId')

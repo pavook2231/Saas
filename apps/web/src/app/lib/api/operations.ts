@@ -105,6 +105,14 @@ export type EventRecord = {
   participants: EventParticipantRecord[];
 };
 
+export type PublishWeekScheduleResult = {
+  publishedEvents: EventRecord[];
+  publishedCount: number;
+  weekStart: string;
+  weekEnd: string;
+  notified: boolean;
+};
+
 export type EventHistoryRecord = {
   id: string;
   action: string;
@@ -429,6 +437,21 @@ export const operationsApi = {
       method: 'PATCH',
       path: `/organizations/${params.organizationId}/events/${params.eventId}`,
       body: params.payload,
+    });
+  },
+
+  publishWeekSchedule(
+    params: OrganizationScopedRequest & {
+      anchorDate: string;
+    },
+  ) {
+    return apiRequest<PublishWeekScheduleResult>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: `/organizations/${params.organizationId}/events/week/publish`,
+      body: {
+        anchorDate: params.anchorDate,
+      },
     });
   },
 

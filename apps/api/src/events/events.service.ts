@@ -29,6 +29,7 @@ import { EventParticipantInputDto } from './dto/event-participant-input.dto';
 import { ListEventsQueryDto } from './dto/list-events-query.dto';
 import { ListParticipantsQueryDto } from './dto/list-participants-query.dto';
 import { ListTemplatesQueryDto } from './dto/list-templates-query.dto';
+import { PublishWeekScheduleDto } from './dto/publish-week-schedule.dto';
 import { SetEventParticipantsDto } from './dto/set-event-participants.dto';
 import { TemplateRoleInputDto } from './dto/template-role-input.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
@@ -1558,6 +1559,104 @@ export class EventsService {
     };
   }
 
+  async publishWeekSchedule(
+    organizationId: string,
+    actorUserId: string,
+    dto: PublishWeekScheduleDto,
+  ) {
+    const anchorDate = new Date(dto.anchorDate);
+
+    if (Number.isNaN(anchorDate.getTime())) {
+      throw new BadRequestException('Некорректная дата недели');
+    }
+
+    const { start, end } = this.getWeekBounds(anchorDate);
+    const weekEnd = new Date(end);
+    weekEnd.setDate(weekEnd.getDate() - 1);
+
+    const draftEvents = await this.prisma.event.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        startsAt: {
+          gte: start,
+          lt: end,
+        },
+        status: EventStatus.DRAFT,
+      },
+      orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        id: true,
+      },
+    });
+
+    if (draftEvents.length === 0) {
+      throw new BadRequestException('В выбранной неделе нет черновиков для публикации');
+    }
+
+    const draftIds = draftEvents.map((event) => event.id);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.event.updateMany({
+        where: {
+          id: {
+            in: draftIds,
+          },
+        },
+        data: {
+          status: EventStatus.PLANNED,
+          updatedByUserId: actorUserId,
+        },
+      });
+
+      await tx.auditLog.createMany({
+        data: draftIds.map((eventId) => ({
+          organizationId,
+          actorUserId,
+          targetType: AuditTargetType.EVENT,
+          targetId: eventId,
+          action: 'event.weekly_published',
+          description: 'Event published as part of week schedule',
+          payload: this.toAuditPayload({
+            weekStart: start.toISOString(),
+            weekEnd: weekEnd.toISOString(),
+            publishedCount: draftIds.length,
+          }),
+        })),
+      });
+    });
+
+    const publishedEvents = await this.prisma.event.findMany({
+      where: {
+        id: {
+          in: draftIds,
+        },
+        deletedAt: null,
+      },
+      orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
+      select: eventSelect,
+    });
+
+    const shouldNotifyWholeWeek = this.isCurrentWeekEvent(start);
+
+    if (shouldNotifyWholeWeek) {
+      await this.notifyWeekSchedulePublishedSafe({
+        organizationId,
+        actorUserId,
+        startsAt: start,
+        publishedCount: publishedEvents.length,
+      });
+    }
+
+    return {
+      publishedEvents,
+      publishedCount: publishedEvents.length,
+      weekStart: start.toISOString(),
+      weekEnd: weekEnd.toISOString(),
+      notified: shouldNotifyWholeWeek,
+    };
+  }
+
   async checkEventConflicts(organizationId: string, dto: CheckEventConflictsDto) {
     const range = this.parseDateRange(dto.startsAt, dto.endsAt);
 
@@ -2683,6 +2782,54 @@ export class EventsService {
         `Failed to send schedule change notification for event=${input.event.id}: ${(error as Error).message}`,
       );
     }
+  }
+
+  private async notifyWeekSchedulePublishedSafe(input: {
+    organizationId: string;
+    actorUserId: string;
+    startsAt: Date;
+    publishedCount: number;
+  }) {
+    const userIds = await this.listOrganizationScheduleRecipientUserIds(input.organizationId);
+
+    if (userIds.length === 0) {
+      return;
+    }
+
+    try {
+      await this.notificationsService.notifyUsers({
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        type: NotificationType.SYSTEM,
+        title: 'Новое расписание на неделю',
+        body: `Опубликовано расписание на ${this.formatWeekRangeLabel(input.startsAt)}. В расписании ${input.publishedCount} ${this.pluralizeEvents(input.publishedCount)}.`,
+        payload: {
+          url: '/calendar',
+          weekStart: this.getWeekBounds(input.startsAt).start.toISOString(),
+          publishedCount: input.publishedCount,
+        },
+        userIds,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to send weekly schedule notification for organization=${input.organizationId}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  private pluralizeEvents(count: number) {
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+
+    if (mod10 === 1 && mod100 !== 11) {
+      return 'событие';
+    }
+
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+      return 'события';
+    }
+
+    return 'событий';
   }
 
   private parseDateRange(startsAtIso: string, endsAtIso: string) {

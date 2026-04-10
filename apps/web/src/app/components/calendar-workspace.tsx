@@ -226,6 +226,9 @@ const formatDurationLabel = (minutes: number) => {
   return `${restMinutes} мин`;
 };
 
+const durationBetweenIsoMinutes = (startsAt: string, endsAt: string) =>
+  Math.max(15, Math.round((new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000));
+
 const isAlternateRoleName = (name: string) => {
   const normalized = name.trim().toLowerCase();
   return normalized === 'дубль' || alternateRoleSuffixPattern.test(name.trim());
@@ -249,8 +252,10 @@ export function CalendarWorkspace() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [composerState, setComposerState] = useState<CalendarComposerState | null>(null);
+  const [composerEditingEventId, setComposerEditingEventId] = useState<string | null>(null);
   const [composerSaving, setComposerSaving] = useState(false);
   const [composerErrorText, setComposerErrorText] = useState<string | null>(null);
+  const [eventActionLoading, setEventActionLoading] = useState<'cancel' | 'delete' | null>(null);
 
   const canOpenControlPanel = canAccessControlPanel(activeRole);
 
@@ -483,9 +488,23 @@ export function CalendarWorkspace() {
     setCursorDate((current) => addDays(current, viewMode === 'month' ? direction * 28 : direction * 7));
   };
 
+  const buildComposerStateForEvent = (event: EventRecord): CalendarComposerState => ({
+    lane: classifyTheatreLane(event),
+    kind: event.type === 'PERFORMANCE' ? 'PERFORMANCE' : event.type === 'REHEARSAL' ? 'REHEARSAL' : 'EVENT',
+    playId: event.templateId ?? '',
+    title: event.type === 'PERFORMANCE' ? event.template?.name ?? event.title : event.title,
+    date: formatDateInput(new Date(event.startsAt)),
+    startsAt: timeFormat.format(new Date(event.startsAt)),
+    durationMinutes: durationBetweenIsoMinutes(event.startsAt, event.endsAt),
+    location: isVenueName(event.location) ? event.location : defaultLocationForLane(classifyTheatreLane(event)),
+    participantIds: event.participants.map((item) => item.participantId),
+    description: event.description ?? '',
+  });
+
   const openComposer = (date: Date, lane: TheatreLane | null = null) => {
     const kind = mapLaneToComposerKind(lane);
 
+    setComposerEditingEventId(null);
     setComposerState({
       lane,
       kind,
@@ -506,7 +525,15 @@ export function CalendarWorkspace() {
       return;
     }
 
+    setComposerEditingEventId(null);
     setComposerState(null);
+    setComposerErrorText(null);
+  };
+
+  const openComposerForReplacement = (event: EventRecord) => {
+    setSelectedEventId(null);
+    setComposerEditingEventId(event.id);
+    setComposerState(buildComposerStateForEvent(event));
     setComposerErrorText(null);
   };
 
@@ -571,40 +598,108 @@ export function CalendarWorkspace() {
         throw new Error('Укажите название события.');
       }
 
-      const created = await operationsApi.createEvent({
+      const payload = {
+        title,
+        type: payloadType,
+        status: 'PLANNED' as const,
+        startsAt: startsAtIso,
+        endsAt: endsAtIso,
+        location: composerState.location,
+        description: composerState.description.trim() || undefined,
+        templateId: composerState.kind === 'PERFORMANCE' ? composerState.playId : undefined,
+        participants:
+          composerState.kind === 'PERFORMANCE'
+            ? undefined
+            : composerState.participantIds.map((participantId) => ({
+                participantId,
+                isRequired: true,
+              })),
+      };
+
+      const saved = composerEditingEventId
+        ? await operationsApi.updateEvent({
+            organizationId: activeOrganizationId,
+            accessToken,
+            eventId: composerEditingEventId,
+            payload,
+          })
+        : await operationsApi.createEvent({
+            organizationId: activeOrganizationId,
+            accessToken,
+            payload,
+          });
+
+      setEvents((current) =>
+        (composerEditingEventId
+          ? current.map((event) => (event.id === saved.id ? saved : event))
+          : [...current, saved]
+        ).sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime()),
+      );
+      setSelectedEventId(saved.id);
+      setCursorDate(startOfDay(new Date(saved.startsAt)));
+      setComposerEditingEventId(null);
+      setComposerState(null);
+    } catch (error) {
+      setComposerErrorText(
+        error instanceof Error
+          ? error.message
+          : composerEditingEventId
+            ? 'Не удалось заменить событие.'
+            : 'Не удалось создать событие.',
+      );
+    } finally {
+      setComposerSaving(false);
+    }
+  };
+
+  const handleCancelSelectedEvent = async () => {
+    if (!selectedEvent || !accessToken || !activeOrganizationId || eventActionLoading) {
+      return;
+    }
+
+    setEventActionLoading('cancel');
+    setErrorText(null);
+
+    try {
+      const updated = await operationsApi.updateEvent({
         organizationId: activeOrganizationId,
         accessToken,
+        eventId: selectedEvent.id,
         payload: {
-          title,
-          type: payloadType,
-          status: 'PLANNED',
-          startsAt: startsAtIso,
-          endsAt: endsAtIso,
-          location: composerState.location,
-          description: composerState.description.trim() || undefined,
-          templateId: composerState.kind === 'PERFORMANCE' ? composerState.playId : undefined,
-          participants:
-            composerState.kind === 'PERFORMANCE'
-              ? undefined
-              : composerState.participantIds.map((participantId) => ({
-                  participantId,
-                  isRequired: true,
-                })),
+          status: 'CANCELLED',
         },
       });
 
-      setEvents((current) =>
-        [...current, created].sort(
-          (left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
-        ),
-      );
-      setSelectedEventId(created.id);
-      setCursorDate(startOfDay(new Date(created.startsAt)));
-      setComposerState(null);
+      setEvents((current) => current.map((event) => (event.id === updated.id ? updated : event)));
+      setSelectedEventId(updated.id);
     } catch (error) {
-      setComposerErrorText(error instanceof Error ? error.message : 'Не удалось создать событие.');
+      setErrorText(error instanceof Error ? error.message : 'Не удалось отменить событие.');
     } finally {
-      setComposerSaving(false);
+      setEventActionLoading(null);
+    }
+  };
+
+  const handleDeleteSelectedEvent = async () => {
+    if (!selectedEvent || !accessToken || !activeOrganizationId || eventActionLoading) {
+      return;
+    }
+
+    setEventActionLoading('delete');
+    setErrorText(null);
+
+    try {
+      await operationsApi.deleteEvent({
+        organizationId: activeOrganizationId,
+        accessToken,
+        eventId: selectedEvent.id,
+      });
+
+      setEvents((current) => current.filter((event) => event.id !== selectedEvent.id));
+      setSelectedEventId(null);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось удалить событие.');
+    } finally {
+      setEventActionLoading(null);
     }
   };
 
@@ -781,7 +876,6 @@ export function CalendarWorkspace() {
                     <div className="month-events__list">
                       {items.slice(0, 2).map((item) => renderEventChip(item))}
                     </div>
-                    {canCreateOnDay ? <p className="month-cell__hint">Свободно</p> : null}
                     {items.length > 2 ? <p className="more-events">Еще {items.length - 2}</p> : null}
                   </div>
                 </article>
@@ -848,15 +942,7 @@ export function CalendarWorkspace() {
                               {items.map((event) => renderTheatreEvent(event))}
                             </div>
                           ) : (
-                            canCreateInCell ? (
-                              <div className="theatre-week-table__empty">
-                                <small>Свободно</small>
-                              </div>
-                            ) : (
-                              <div className="theatre-week-table__empty">
-                                —
-                              </div>
-                            )
+                            <div className="theatre-week-table__empty" aria-hidden="true" />
                           )}
                         </div>
                       );
@@ -919,10 +1005,7 @@ export function CalendarWorkspace() {
                       {dayEvents.map(({ event }) => renderTheatreEvent(event))}
                     </div>
                   ) : (
-                    <div className="theatre-day-card__empty">
-                      <span>Свободный день</span>
-                      {canCreateOnDay ? <small>Нажмите, чтобы составить расписание</small> : null}
-                    </div>
+                    <div className="theatre-day-card__empty" aria-hidden="true" />
                   )}
                 </article>
               );
@@ -935,10 +1018,10 @@ export function CalendarWorkspace() {
       <Modal
         open={Boolean(composerState)}
         onClose={closeComposer}
-        title="Составить расписание"
+        title={composerEditingEventId ? 'Заменить событие' : 'Составить расписание'}
         description={
           composerState
-            ? `Новый слот на ${weekdayLongFormat.format(new Date(`${composerState.date}T00:00:00`))}`
+            ? `${composerEditingEventId ? 'Слот' : 'Новый слот'} на ${weekdayLongFormat.format(new Date(`${composerState.date}T00:00:00`))}`
             : undefined
         }
         size="lg"
@@ -949,7 +1032,7 @@ export function CalendarWorkspace() {
                 Отмена
               </Button>
               <Button type="button" onClick={() => void handleComposerSave()} loading={composerSaving}>
-                Добавить в расписание
+                {composerEditingEventId ? 'Сохранить замену' : 'Добавить в расписание'}
               </Button>
             </>
           ) : undefined
@@ -1128,6 +1211,41 @@ export function CalendarWorkspace() {
         title={selectedEvent?.title ?? 'Событие'}
         description={selectedEvent ? `${typeLabel[selectedEvent.type]} · ${getEventTimeRange(selectedEvent)}` : undefined}
         size="lg"
+        footer={
+          selectedEvent && canOpenControlPanel ? (
+            <>
+              <Button type="button" variant="ghost" onClick={() => setSelectedEventId(null)} disabled={Boolean(eventActionLoading)}>
+                Закрыть
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => openComposerForReplacement(selectedEvent)}
+                disabled={Boolean(eventActionLoading)}
+              >
+                Заменить
+              </Button>
+              {selectedEvent.status !== 'CANCELLED' ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => void handleCancelSelectedEvent()}
+                  loading={eventActionLoading === 'cancel'}
+                >
+                  Отменить
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => void handleDeleteSelectedEvent()}
+                loading={eventActionLoading === 'delete'}
+              >
+                Удалить
+              </Button>
+            </>
+          ) : undefined
+        }
       >
         {selectedEvent ? (
           <div className="selected-event-modal">

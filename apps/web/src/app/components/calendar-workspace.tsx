@@ -163,7 +163,7 @@ const getEventTimeRange = (event: EventRecord) =>
 
 const getEventScheduleRange = (event: Pick<EventRecord, 'startsAt' | 'endsAt' | 'assemblyAt'>) => {
   const performanceTime = `${timeFormat.format(new Date(event.startsAt))} — ${timeFormat.format(new Date(event.endsAt))}`;
-  return event.assemblyAt ? `Сбор ${timeFormat.format(new Date(event.assemblyAt))} · ${performanceTime}` : performanceTime;
+  return event.assemblyAt ? `Выезд ${timeFormat.format(new Date(event.assemblyAt))} · ${performanceTime}` : performanceTime;
 };
 
 const classifyTheatreLane = (event: EventRecord): TheatreLane => {
@@ -520,26 +520,29 @@ export function CalendarWorkspace() {
     setCursorDate((current) => addDays(current, viewMode === 'month' ? direction * 28 : direction * 7));
   };
 
-  const buildComposerStateForEvent = (event: EventRecord): CalendarComposerState => ({
-    lane: classifyTheatreLane(event),
-    kind:
-      event.type === 'PERFORMANCE'
-        ? 'PERFORMANCE'
-        : event.type === 'REHEARSAL'
-          ? 'REHEARSAL'
-          : event.type === 'TOUR'
-            ? 'TOUR'
-            : 'EVENT',
-    playId: event.templateId ?? '',
-    title: event.type === 'PERFORMANCE' ? event.template?.name ?? event.title : event.title,
-    date: formatDateInput(new Date(event.startsAt)),
-    startsAt: formatTimeInputValue(event.startsAt),
-    assemblyAt: event.assemblyAt ? formatTimeInputValue(event.assemblyAt) : '',
-    durationMinutes: durationBetweenIsoMinutes(event.startsAt, event.endsAt),
-    location: isVenueName(event.location) ? event.location : defaultLocationForLane(classifyTheatreLane(event)),
-    participantIds: event.participants.map((item) => item.participantId),
-    description: event.description ?? '',
-  });
+  const buildComposerStateForEvent = (event: EventRecord): CalendarComposerState => {
+    const lane = classifyTheatreLane(event);
+    return {
+      lane,
+      kind:
+        event.type === 'PERFORMANCE'
+          ? 'PERFORMANCE'
+          : event.type === 'REHEARSAL'
+            ? 'REHEARSAL'
+            : event.type === 'TOUR' || lane === 'TOUR'
+              ? 'TOUR'
+              : 'EVENT',
+      playId: event.templateId ?? '',
+      title: event.type === 'PERFORMANCE' ? event.template?.name ?? event.title : event.title,
+      date: formatDateInput(new Date(event.startsAt)),
+      startsAt: formatTimeInputValue(event.startsAt),
+      assemblyAt: event.assemblyAt ? formatTimeInputValue(event.assemblyAt) : '',
+      durationMinutes: durationBetweenIsoMinutes(event.startsAt, event.endsAt),
+      location: isVenueName(event.location) ? event.location : defaultLocationForLane(classifyTheatreLane(event)),
+      participantIds: event.participants.map((item) => item.participantId),
+      description: event.description ?? '',
+    };
+  };
 
   const openComposer = (date: Date, lane: TheatreLane | null = null) => {
     const kind = mapLaneToComposerKind(lane);
@@ -631,7 +634,12 @@ export function CalendarWorkspace() {
     try {
       const startsAtIso = toIso(composerState.date, composerState.startsAt);
       const endsAtIso = plusMinutesIso(startsAtIso, composerDurationMinutes);
-      const payloadType: EventType = composerState.kind === 'EVENT' ? 'EVENT' : composerState.kind;
+      const payloadType: EventType =
+        composerState.kind === 'EVENT'
+          ? composerState.location === 'Выезд' || composerState.lane === 'TOUR'
+            ? 'TOUR'
+            : 'EVENT'
+          : composerState.kind;
       const title =
         composerState.kind === 'PERFORMANCE'
           ? composerSelectedPlay?.name ?? ''
@@ -1020,14 +1028,7 @@ export function CalendarWorkspace() {
                               {items.map((event) => renderTheatreEvent(event))}
                             </div>
                           ) : (
-                            <div className="theatre-week-table__empty" aria-hidden="true">
-                              {canCreateInCell ? (
-                                <>
-                                  <span className="theatre-week-table__empty-plus">+</span>
-                                  <span className="theatre-week-table__empty-text">Добавить</span>
-                                </>
-                              ) : null}
-                            </div>
+                            <div className="theatre-week-table__empty" aria-hidden="true" />
                           )}
                         </div>
                       );
@@ -1189,9 +1190,9 @@ export function CalendarWorkspace() {
                   )
                 }
               />
-              {composerState.kind === 'TOUR' ? (
+              {composerState.kind === 'TOUR' || composerState.location === 'Выезд' ? (
                 <Input
-                  label="Сбор"
+                  label="Выезд"
                   type="time"
                   value={composerState.assemblyAt}
                   onChange={(event) =>
@@ -1228,9 +1229,9 @@ export function CalendarWorkspace() {
             </div>
 
             <div className="calendar-composer__summary calendar-composer__summary--wide">
-              <span>{composerState.kind === 'TOUR' ? 'Сбор и окончание' : 'Закончится'}</span>
+              <span>{composerState.kind === 'TOUR' || composerState.location === 'Выезд' ? 'Выезд и окончание' : 'Закончится'}</span>
               <strong>
-                {composerState.kind === 'TOUR' && composerState.assemblyAt
+                {(composerState.kind === 'TOUR' || composerState.location === 'Выезд') && composerState.assemblyAt
                   ? `${composerState.assemblyAt} · ${composerEndsAtLabel ?? '—'}`
                   : composerEndsAtLabel ?? '—'}
               </strong>

@@ -156,12 +156,9 @@ const formatDurationLabel = (minutes: number) => {
   return `${restMinutes} мин`;
 };
 
-const formatEventTimeRange = (event: EventRecord) =>
-  `${timeFormat.format(new Date(event.startsAt))} — ${timeFormat.format(new Date(event.endsAt))}`;
-
 const formatEventScheduleLabel = (event: Pick<EventRecord, 'startsAt' | 'endsAt' | 'assemblyAt'>) => {
   const performanceTime = `${timeFormat.format(new Date(event.startsAt))} — ${timeFormat.format(new Date(event.endsAt))}`;
-  return event.assemblyAt ? `Сбор ${formatTimeOnly(event.assemblyAt)} · ${performanceTime}` : performanceTime;
+  return event.assemblyAt ? `Выезд ${formatTimeOnly(event.assemblyAt)} · ${performanceTime}` : performanceTime;
 };
 
 const formatTimeOnly = (value: string) => timeFormat.format(new Date(value));
@@ -1108,7 +1105,7 @@ export function ControlScheduleWorkspace() {
             {form.location === 'Выезд' ? (
               <div className="control-schedule-modal__field">
                 <Input
-                  label="Сбор"
+                  label="Выезд"
                   type="time"
                   value={form.assemblyAt}
                   onChange={(event) => setForm((current) => ({ ...current, assemblyAt: event.target.value }))}
@@ -1159,7 +1156,7 @@ export function ControlScheduleWorkspace() {
                 </div>
                 {form.location === 'Выезд' ? (
                   <div>
-                    <span>Сбор</span>
+                    <span>Выезд</span>
                     <strong>{form.assemblyAt || 'Не указан'}</strong>
                   </div>
                 ) : null}
@@ -1347,7 +1344,7 @@ export function ControlScheduleWorkspace() {
                   <div>
                     <strong>{event.title}</strong>
                     <p>
-                      {weekdayLongFormat.format(new Date(event.startsAt))} · {formatEventTimeRange(event)}
+                      {weekdayLongFormat.format(new Date(event.startsAt))} · {formatEventScheduleLabel(event)}
                     </p>
                   </div>
                   <Badge variant="neutral">{eventTypeLabels[event.type]}</Badge>

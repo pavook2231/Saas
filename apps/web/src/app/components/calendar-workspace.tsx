@@ -26,7 +26,7 @@ import { isVenueName, venueLabelMap, venueOptions, venueToneClass, type VenueNam
 
 type ViewMode = 'week' | 'month';
 type TheatreLane = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'OTHER';
-type CalendarComposerKind = 'PERFORMANCE' | 'REHEARSAL' | 'EVENT';
+type CalendarComposerKind = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'EVENT';
 type CalendarComposerState = {
   lane: TheatreLane | null;
   kind: CalendarComposerKind;
@@ -104,6 +104,7 @@ const isSameDay = (left: Date, right: Date): boolean =>
 const typeLabel: Record<EventRecord['type'], string> = {
   PERFORMANCE: 'Спектакль',
   REHEARSAL: 'Репетиция',
+  TOUR: 'Гастроли',
   EVENT: 'Событие',
   CUSTOM: 'Событие',
 };
@@ -138,6 +139,7 @@ const theatreLaneMeta: Array<{
 const composerKindLabels: Record<CalendarComposerKind, string> = {
   PERFORMANCE: 'Спектакль',
   REHEARSAL: 'Репетиция',
+  TOUR: 'Гастроли',
   EVENT: 'Событие',
 };
 
@@ -146,6 +148,7 @@ const composerDurationOptions = [30, 45, 60, 90, 120, 150, 180];
 const defaultDurationByKind: Record<CalendarComposerKind, number> = {
   PERFORMANCE: 120,
   REHEARSAL: 120,
+  TOUR: 120,
   EVENT: 90,
 };
 
@@ -159,6 +162,10 @@ const classifyTheatreLane = (event: EventRecord): TheatreLane => {
 
   if (event.type === 'REHEARSAL') {
     return 'REHEARSAL';
+  }
+
+  if (event.type === 'TOUR') {
+    return 'TOUR';
   }
 
   const searchableText = `${event.title} ${event.description ?? ''} ${event.location ?? ''}`.toLowerCase();
@@ -178,11 +185,15 @@ const mapLaneToComposerKind = (lane: TheatreLane | null): CalendarComposerKind =
     return 'REHEARSAL';
   }
 
+  if (lane === 'TOUR') {
+    return 'TOUR';
+  }
+
   return 'EVENT';
 };
 
 const defaultLocationForLane = (lane: TheatreLane | null): VenueName =>
-  lane === 'REHEARSAL' ? 'Реп зал' : 'БЗ';
+  lane === 'REHEARSAL' ? 'Реп зал' : lane === 'TOUR' ? 'Выезд' : 'БЗ';
 
 const defaultTitleForLane = (lane: TheatreLane | null) => (lane === 'TOUR' ? 'Гастроли' : '');
 
@@ -490,7 +501,14 @@ export function CalendarWorkspace() {
 
   const buildComposerStateForEvent = (event: EventRecord): CalendarComposerState => ({
     lane: classifyTheatreLane(event),
-    kind: event.type === 'PERFORMANCE' ? 'PERFORMANCE' : event.type === 'REHEARSAL' ? 'REHEARSAL' : 'EVENT',
+    kind:
+      event.type === 'PERFORMANCE'
+        ? 'PERFORMANCE'
+        : event.type === 'REHEARSAL'
+          ? 'REHEARSAL'
+          : event.type === 'TOUR'
+            ? 'TOUR'
+            : 'EVENT',
     playId: event.templateId ?? '',
     title: event.type === 'PERFORMANCE' ? event.template?.name ?? event.title : event.title,
     date: formatDateInput(new Date(event.startsAt)),
@@ -544,9 +562,16 @@ export function CalendarWorkspace() {
             ...current,
             kind,
             playId: kind === 'PERFORMANCE' ? current.playId : '',
-            title: kind === 'EVENT' && current.lane === 'TOUR' ? 'Гастроли' : kind === 'PERFORMANCE' ? '' : current.title,
+            title:
+              kind === 'TOUR'
+                ? 'Гастроли'
+                : kind === 'EVENT' && current.lane === 'TOUR'
+                  ? 'Гастроли'
+                  : kind === 'PERFORMANCE'
+                    ? ''
+                    : current.title,
             durationMinutes: kind === 'PERFORMANCE' ? current.durationMinutes : defaultDurationByKind[kind],
-            location: kind === 'REHEARSAL' ? 'Реп зал' : current.location,
+            location: kind === 'REHEARSAL' ? 'Реп зал' : kind === 'TOUR' ? 'Выезд' : current.location,
             participantIds: kind === 'PERFORMANCE' ? [] : current.participantIds,
           }
         : current,
@@ -583,8 +608,7 @@ export function CalendarWorkspace() {
     try {
       const startsAtIso = toIso(composerState.date, composerState.startsAt);
       const endsAtIso = plusMinutesIso(startsAtIso, composerDurationMinutes);
-      const payloadType: EventType =
-        composerState.kind === 'EVENT' ? 'EVENT' : composerState.kind;
+      const payloadType: EventType = composerState.kind === 'EVENT' ? 'EVENT' : composerState.kind;
       const title =
         composerState.kind === 'PERFORMANCE'
           ? composerSelectedPlay?.name ?? ''

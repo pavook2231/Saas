@@ -47,6 +47,7 @@ const alternateRoleSuffixPattern = /\s+\(дубль\)$/i;
 const eventTypeLabels: Record<EventType, string> = {
   PERFORMANCE: 'Спектакль',
   REHEARSAL: 'Репетиция',
+  TOUR: 'Гастроли',
   EVENT: 'Событие',
   CUSTOM: 'Свободный формат',
 };
@@ -54,6 +55,7 @@ const eventTypeLabels: Record<EventType, string> = {
 const defaultTitles: Record<EventType, string> = {
   PERFORMANCE: 'Спектакль',
   REHEARSAL: 'Репетиция',
+  TOUR: 'Гастроли',
   EVENT: 'Событие',
   CUSTOM: 'Событие',
 };

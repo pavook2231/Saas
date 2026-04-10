@@ -69,6 +69,7 @@ enum ParticipantInviteStatus {
 enum EventType {
   PERFORMANCE
   REHEARSAL
+  TOUR
   EVENT
   CUSTOM
 }

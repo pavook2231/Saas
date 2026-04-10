@@ -1,6 +1,6 @@
 import { apiRequest } from './fetcher';
 
-export type EventType = 'PERFORMANCE' | 'REHEARSAL' | 'EVENT' | 'CUSTOM';
+export type EventType = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'EVENT' | 'CUSTOM';
 export type EventStatus = 'DRAFT' | 'PLANNED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
 export type EventAttendanceStatus =
   | 'INVITED'

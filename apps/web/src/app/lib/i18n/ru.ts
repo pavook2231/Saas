@@ -15,6 +15,7 @@
     eventTypeLabels: {
       PERFORMANCE: 'Спектакль',
       REHEARSAL: 'Репетиция',
+      TOUR: 'Гастроли',
       EVENT: 'Мероприятие',
       CUSTOM: 'Другое',
     },

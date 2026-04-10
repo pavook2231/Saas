@@ -3971,6 +3971,11 @@ textarea.ui-field {
   color: #1d4ed8;
 }
 
+.venue-badge.is-tour {
+  background: rgba(14, 165, 233, 0.14);
+  color: #0369a1;
+}
+
 .calendar-simple__header {
   display: flex;
   align-items: flex-end;

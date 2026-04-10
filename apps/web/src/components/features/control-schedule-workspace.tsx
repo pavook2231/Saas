@@ -29,7 +29,7 @@ import { ManagementShell } from './management-shell';
 import { useActiveWorkspace } from './use-active-workspace';
 import { useToastFeedback } from './use-toast-feedback';
 
-type ScheduleKind = 'PERFORMANCE' | 'REHEARSAL' | 'EVENT';
+type ScheduleKind = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'EVENT';
 type ScheduleRepeatMode = 'NONE' | 'DAILY' | 'WEEKLY';
 type PerformanceCastMode = 'AUTO' | 'CAST_1' | 'CAST_2';
 
@@ -59,6 +59,7 @@ type SaveOptions = {
 const eventTypeLabels: Record<EventType, string> = {
   PERFORMANCE: 'Спектакль',
   REHEARSAL: 'Репетиция',
+  TOUR: 'Гастроли',
   EVENT: 'Событие',
   CUSTOM: 'Событие',
 };
@@ -80,6 +81,7 @@ const repeatModeLabels: Record<ScheduleRepeatMode, string> = {
 const defaultDurationByKind: Record<ScheduleKind, number> = {
   PERFORMANCE: 120,
   REHEARSAL: 120,
+  TOUR: 120,
   EVENT: 120,
 };
 
@@ -313,6 +315,10 @@ const eventKindFromType = (type: EventType): ScheduleKind => {
     return 'REHEARSAL';
   }
 
+  if (type === 'TOUR') {
+    return 'TOUR';
+  }
+
   return 'EVENT';
 };
 
@@ -369,7 +375,7 @@ const mapEventToForm = (event: EventRecord): ScheduleFormState => ({
   date: event.startsAt.slice(0, 10),
   startsAt: new Date(event.startsAt).toISOString().slice(11, 16),
   durationMinutes: durationBetweenIsoMinutes(event.startsAt, event.endsAt),
-  location: venueOptions.includes(event.location as VenueName) ? (event.location as VenueName) : 'БЗ',
+  location: venueOptions.includes(event.location as VenueName) ? (event.location as VenueName) : event.type === 'TOUR' ? 'Выезд' : 'БЗ',
   participantIds: event.participants.map((item) => item.participantId),
   performanceCastMode:
     event.type === 'PERFORMANCE' && event.performanceCastLocked && event.performanceCastNumber === 1
@@ -739,12 +745,13 @@ export function ControlScheduleWorkspace() {
       ...current,
       kind,
       playId: kind === 'PERFORMANCE' ? current.playId : '',
-      title: kind === 'PERFORMANCE' ? current.title : '',
+      title: kind === 'PERFORMANCE' ? current.title : kind === 'TOUR' ? 'Гастроли' : '',
       durationMinutes:
         kind === 'PERFORMANCE'
           ? current.durationMinutes
           : defaultDurationByKind[kind],
       performanceCastMode: kind === 'PERFORMANCE' ? current.performanceCastMode : 'AUTO',
+      location: kind === 'REHEARSAL' ? 'Реп зал' : kind === 'TOUR' ? 'Выезд' : current.location,
     }));
   };
 

@@ -164,6 +164,7 @@ const eventSelect = {
 const eventTypeLabelMap: Record<EventType, string> = {
   PERFORMANCE: 'Спектакль',
   REHEARSAL: 'Репетиция',
+  TOUR: 'Гастроли',
   EVENT: 'Событие',
   CUSTOM: 'Событие',
 };

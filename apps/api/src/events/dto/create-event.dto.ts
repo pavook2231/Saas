@@ -44,6 +44,10 @@ export class CreateEventDto {
   endsAt!: string;
 
   @IsOptional()
+  @IsDateString()
+  assemblyAt?: string;
+
+  @IsOptional()
   @IsString()
   @MaxLength(120)
   timezone?: string;

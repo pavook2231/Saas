@@ -28,7 +28,6 @@ import { useToastFeedback } from './use-toast-feedback';
 
 type ViewMode = 'month' | 'week';
 type ScheduleKind = 'PERFORMANCE' | 'REHEARSAL' | 'EVENT';
-type RepeatMode = 'NONE' | 'DAILY' | 'WEEKLY';
 type PerformanceCastMode = 'AUTO' | 'CAST_1' | 'CAST_2';
 type SaveIntent = 'PLANNED' | 'DRAFT';
 
@@ -38,13 +37,12 @@ type ScheduleFormState = {
   title: string;
   date: string;
   startsAt: string;
+  assemblyAt: string;
   durationMinutes: number;
   location: VenueName;
   participantIds: string[];
   performanceCastMode: PerformanceCastMode;
   description: string;
-  repeatMode: RepeatMode;
-  repeatCount: number;
 };
 
 const alternateRoleSuffixPattern = /\s+\(дубль\)$/i;
@@ -56,12 +54,6 @@ const weekDayNumberFormat = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', m
 const weekDayNameFormat = new Intl.DateTimeFormat('ru-RU', { weekday: 'short' });
 const weekdayLongFormat = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
 const timeFormat = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false });
-
-const repeatModeLabels: Record<RepeatMode, string> = {
-  NONE: 'Без повтора',
-  DAILY: 'Каждый день',
-  WEEKLY: 'Каждую неделю',
-};
 
 const defaultDurationByKind: Record<ScheduleKind, number> = {
   PERFORMANCE: 120,
@@ -83,13 +75,12 @@ const initialFormState: ScheduleFormState = {
   title: '',
   date: new Date().toISOString().slice(0, 10),
   startsAt: '12:00',
+  assemblyAt: '',
   durationMinutes: defaultDurationByKind.EVENT,
   location: 'БЗ',
   participantIds: [],
   performanceCastMode: 'AUTO',
   description: '',
-  repeatMode: 'NONE',
-  repeatCount: 2,
 };
 
 const addDays = (date: Date, amount: number) => {
@@ -150,6 +141,11 @@ const plusMinutesIso = (iso: string, minutes: number) => {
 const durationBetweenIsoMinutes = (startsAt: string, endsAt: string) =>
   Math.max(15, Math.round((new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000));
 
+const formatTimeInputValue = (iso: string) => {
+  const date = new Date(iso);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
 const formatDurationLabel = (minutes: number) => {
   const safeMinutes = Math.max(0, minutes);
   const hours = Math.floor(safeMinutes / 60);
@@ -162,22 +158,17 @@ const formatDurationLabel = (minutes: number) => {
 const formatEventTimeRange = (event: EventRecord) =>
   `${timeFormat.format(new Date(event.startsAt))} — ${timeFormat.format(new Date(event.endsAt))}`;
 
+const formatEventScheduleLabel = (event: Pick<EventRecord, 'startsAt' | 'endsAt' | 'assemblyAt'>) => {
+  const performanceTime = `${timeFormat.format(new Date(event.startsAt))} — ${timeFormat.format(new Date(event.endsAt))}`;
+  return event.assemblyAt ? `Сбор ${formatTimeOnly(event.assemblyAt)} · ${performanceTime}` : performanceTime;
+};
+
 const formatTimeOnly = (value: string) => timeFormat.format(new Date(value));
 
 const eventKindFromType = (type: EventType): ScheduleKind => {
   if (type === 'PERFORMANCE') return 'PERFORMANCE';
   if (type === 'REHEARSAL') return 'REHEARSAL';
   return 'EVENT';
-};
-
-const buildRepeatDates = (dateValue: string, mode: RepeatMode, count: number) => {
-  const safeCount = Math.min(Math.max(count, 2), 12);
-  if (mode === 'NONE') return [dateValue];
-  return Array.from({ length: safeCount }, (_, index) => {
-    const base = new Date(`${dateValue}T00:00:00`);
-    base.setDate(base.getDate() + (mode === 'DAILY' ? index : index * 7));
-    return base.toISOString().slice(0, 10);
-  });
 };
 
 const pluralize = (count: number, one: string, two: string, many: string) => {
@@ -262,7 +253,8 @@ const mapEventToForm = (event: EventRecord): ScheduleFormState => ({
   playId: event.templateId ?? '',
   title: event.type === 'PERFORMANCE' ? event.template?.name ?? event.title : event.title,
   date: event.startsAt.slice(0, 10),
-  startsAt: new Date(event.startsAt).toISOString().slice(11, 16),
+  startsAt: formatTimeInputValue(event.startsAt),
+  assemblyAt: event.assemblyAt ? formatTimeInputValue(event.assemblyAt) : '',
   durationMinutes: durationBetweenIsoMinutes(event.startsAt, event.endsAt),
   location: venueOptions.includes(event.location as VenueName) ? (event.location as VenueName) : event.type === 'TOUR' ? 'Выезд' : 'БЗ',
   participantIds: event.participants.map((item) => item.participantId),
@@ -273,8 +265,6 @@ const mapEventToForm = (event: EventRecord): ScheduleFormState => ({
         ? 'CAST_2'
         : 'AUTO',
   description: event.description ?? '',
-  repeatMode: 'NONE',
-  repeatCount: 2,
 });
 
 const computeConflictMap = (events: EventRecord[]) => {
@@ -345,7 +335,6 @@ export function ControlScheduleWorkspace() {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventActionLoading, setEventActionLoading] = useState<'cancel' | 'delete' | null>(null);
   const [noteExpanded, setNoteExpanded] = useState(false);
-  const [repeatExpanded, setRepeatExpanded] = useState(false);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
   const [conflicts, setConflicts] = useState<ConflictCheckResult | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
@@ -503,7 +492,8 @@ export function ControlScheduleWorkspace() {
       return;
     }
 
-    const startsAtIso = toIso(form.date, form.startsAt);
+    const startsAtIso =
+      form.location === 'Выезд' && form.assemblyAt ? toIso(form.date, form.assemblyAt) : toIso(form.date, form.startsAt);
     const abortController = new AbortController();
     const timeout = window.setTimeout(() => {
       setCheckingConflicts(true);
@@ -527,7 +517,18 @@ export function ControlScheduleWorkspace() {
       window.clearTimeout(timeout);
       setCheckingConflicts(false);
     };
-  }, [accessToken, activeOrganizationId, computedEndsAtIso, editingEventId, form.date, form.participantIds, form.startsAt, modalOpen]);
+  }, [
+    accessToken,
+    activeOrganizationId,
+    computedEndsAtIso,
+    editingEventId,
+    form.assemblyAt,
+    form.date,
+    form.location,
+    form.participantIds,
+    form.startsAt,
+    modalOpen,
+  ]);
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(cursorDate);
@@ -571,7 +572,6 @@ export function ControlScheduleWorkspace() {
     setConflicts(null);
     setForm(initialFormState);
     setNoteExpanded(false);
-    setRepeatExpanded(false);
   };
 
   const openCreateModal = (date: Date) => {
@@ -583,7 +583,6 @@ export function ControlScheduleWorkspace() {
     });
     setConflicts(null);
     setNoteExpanded(false);
-    setRepeatExpanded(false);
     setModalOpen(true);
   };
 
@@ -593,7 +592,6 @@ export function ControlScheduleWorkspace() {
     setCursorDate(startOfDay(new Date(event.startsAt)));
     setConflicts(null);
     setNoteExpanded(Boolean(event.description));
-    setRepeatExpanded(false);
     setModalOpen(true);
   };
 
@@ -650,6 +648,7 @@ export function ControlScheduleWorkspace() {
       status,
       startsAt: startsAtIso,
       endsAt: endsAtIso,
+      assemblyAt: payloadType === 'TOUR' && form.assemblyAt ? toIso(dateValue, form.assemblyAt) : undefined,
       location: form.location,
       description: form.description.trim() || undefined,
       templateId: form.kind === 'PERFORMANCE' ? form.playId || undefined : undefined,
@@ -706,7 +705,7 @@ export function ControlScheduleWorkspace() {
         <span className="chip-title">{event.title}</span>
         {renderConflictBadge(event)}
       </span>
-      <span className="chip-time">{formatEventTimeRange(event)}</span>
+      <span className="chip-time">{formatEventScheduleLabel(event)}</span>
       <span className="chip-meta">{event.participants.length} {pluralize(event.participants.length, 'участник', 'участника', 'участников')}</span>
       {event.status === 'DRAFT' ? <span className="control-schedule-event-chip__draft">черновик</span> : null}
     </button>
@@ -735,27 +734,17 @@ export function ControlScheduleWorkspace() {
         return;
       }
 
-      const repeatDates = buildRepeatDates(form.date, form.repeatMode, form.repeatCount);
-      const createdEvents: EventRecord[] = [];
+      const created = await operationsApi.createEvent({
+        organizationId: activeOrganizationId,
+        accessToken,
+        payload: buildBasePayload(form.date, intent === 'DRAFT' ? 'DRAFT' : 'PLANNED'),
+      });
 
-      for (const dateValue of repeatDates) {
-        const created = await operationsApi.createEvent({
-          organizationId: activeOrganizationId,
-          accessToken,
-          payload: buildBasePayload(dateValue, intent === 'DRAFT' ? 'DRAFT' : 'PLANNED'),
-        });
-        createdEvents.push(created);
-      }
-
-      upsertManyEvents(createdEvents);
+      upsertEvent(created);
       setNoticeText(
         intent === 'DRAFT'
-          ? createdEvents.length > 1
-            ? `Сохранено ${createdEvents.length} черновиков.`
-            : `Черновик «${createdEvents[0]?.title ?? 'событие'}» сохранен.`
-          : createdEvents.length > 1
-            ? `Опубликовано ${createdEvents.length} ${pluralize(createdEvents.length, 'событие', 'события', 'событий')}.`
-            : `Событие «${createdEvents[0]?.title ?? 'событие'}» опубликовано.`,
+          ? `Черновик «${created.title}» сохранен.`
+          : `Событие «${created.title}» опубликовано.`,
       );
       closeModal();
     } catch (error) {
@@ -767,7 +756,6 @@ export function ControlScheduleWorkspace() {
 
   const handleDuplicate = () => {
     setEditingEventId(null);
-    setRepeatExpanded(false);
     setNoticeText('Подготовили копию события. Теперь можно сохранить ее как новый слот.');
   };
 
@@ -1082,6 +1070,17 @@ export function ControlScheduleWorkspace() {
               />
             </div>
 
+            {form.location === 'Выезд' ? (
+              <div className="control-schedule-modal__field">
+                <Input
+                  label="Сбор"
+                  type="time"
+                  value={form.assemblyAt}
+                  onChange={(event) => setForm((current) => ({ ...current, assemblyAt: event.target.value }))}
+                />
+              </div>
+            ) : null}
+
             <div className="control-schedule-modal__field">
               <Input
                 label="Продолжительность, мин"
@@ -1125,8 +1124,8 @@ export function ControlScheduleWorkspace() {
                 </div>
                 {form.location === 'Выезд' ? (
                   <div>
-                    <span>Категория</span>
-                    <strong>Выезд / гастроли</strong>
+                    <span>Сбор</span>
+                    <strong>{form.assemblyAt || 'Не указан'}</strong>
                   </div>
                 ) : null}
               </div>
@@ -1253,53 +1252,6 @@ export function ControlScheduleWorkspace() {
               />
             ) : null}
           </div>
-
-          {!editingEventId ? (
-            <div className="control-schedule-modal__section">
-              <button
-                type="button"
-                className="control-schedule-modal__disclosure"
-                onClick={() => setRepeatExpanded((current) => !current)}
-              >
-                <span>Повтор</span>
-                <span>{repeatExpanded ? 'Скрыть' : repeatModeLabels[form.repeatMode]}</span>
-              </button>
-              {repeatExpanded ? (
-                <div className="control-schedule-modal__grid control-schedule-modal__grid--repeat">
-                  <div className="control-schedule-modal__field">
-                    <Select
-                      label="Повторять"
-                      value={form.repeatMode}
-                      onChange={(event) => setForm((current) => ({ ...current, repeatMode: event.target.value as RepeatMode }))}
-                    >
-                      {(Object.keys(repeatModeLabels) as RepeatMode[]).map((option) => (
-                        <option key={option} value={option}>
-                          {repeatModeLabels[option]}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                  <div className="control-schedule-modal__field">
-                    <Input
-                      label="Сколько раз"
-                      type="number"
-                      min={2}
-                      max={12}
-                      step={1}
-                      value={String(form.repeatCount)}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          repeatCount: Math.min(12, Math.max(2, Number(event.target.value) || 2)),
-                        }))
-                      }
-                      disabled={form.repeatMode === 'NONE'}
-                    />
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
 
           <div className="control-schedule-modal__section control-schedule-modal__section--status">
             {checkingConflicts ? (

@@ -34,6 +34,7 @@ type CalendarComposerState = {
   title: string;
   date: string;
   startsAt: string;
+  assemblyAt: string;
   durationMinutes: number;
   location: VenueName;
   participantIds: string[];
@@ -155,6 +156,11 @@ const defaultDurationByKind: Record<CalendarComposerKind, number> = {
 const getEventTimeRange = (event: EventRecord) =>
   `${timeFormat.format(new Date(event.startsAt))} — ${timeFormat.format(new Date(event.endsAt))}`;
 
+const getEventScheduleRange = (event: Pick<EventRecord, 'startsAt' | 'endsAt' | 'assemblyAt'>) => {
+  const performanceTime = `${timeFormat.format(new Date(event.startsAt))} — ${timeFormat.format(new Date(event.endsAt))}`;
+  return event.assemblyAt ? `Сбор ${timeFormat.format(new Date(event.assemblyAt))} · ${performanceTime}` : performanceTime;
+};
+
 const classifyTheatreLane = (event: EventRecord): TheatreLane => {
   if (event.type === 'PERFORMANCE') {
     return 'PERFORMANCE';
@@ -239,6 +245,11 @@ const formatDurationLabel = (minutes: number) => {
 
 const durationBetweenIsoMinutes = (startsAt: string, endsAt: string) =>
   Math.max(15, Math.round((new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000));
+
+const formatTimeInputValue = (iso: string) => {
+  const date = new Date(iso);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
 
 const isAlternateRoleName = (name: string) => {
   const normalized = name.trim().toLowerCase();
@@ -512,7 +523,8 @@ export function CalendarWorkspace() {
     playId: event.templateId ?? '',
     title: event.type === 'PERFORMANCE' ? event.template?.name ?? event.title : event.title,
     date: formatDateInput(new Date(event.startsAt)),
-    startsAt: timeFormat.format(new Date(event.startsAt)),
+    startsAt: formatTimeInputValue(event.startsAt),
+    assemblyAt: event.assemblyAt ? formatTimeInputValue(event.assemblyAt) : '',
     durationMinutes: durationBetweenIsoMinutes(event.startsAt, event.endsAt),
     location: isVenueName(event.location) ? event.location : defaultLocationForLane(classifyTheatreLane(event)),
     participantIds: event.participants.map((item) => item.participantId),
@@ -530,6 +542,7 @@ export function CalendarWorkspace() {
       title: defaultTitleForLane(lane),
       date: formatDateInput(date),
       startsAt: defaultStartTimeForDate(date),
+      assemblyAt: '',
       durationMinutes: defaultDurationByKind[kind],
       location: defaultLocationForLane(lane),
       participantIds: [],
@@ -628,6 +641,7 @@ export function CalendarWorkspace() {
         status: 'PLANNED' as const,
         startsAt: startsAtIso,
         endsAt: endsAtIso,
+        assemblyAt: composerState.kind === 'TOUR' && composerState.assemblyAt ? toIso(composerState.date, composerState.assemblyAt) : undefined,
         location: composerState.location,
         description: composerState.description.trim() || undefined,
         templateId: composerState.kind === 'PERFORMANCE' ? composerState.playId : undefined,
@@ -740,7 +754,7 @@ export function CalendarWorkspace() {
           setSelectedEventId(event.id);
         }}
       >
-        <span className="chip-time">{timeFormat.format(new Date(event.startsAt))}</span>
+        <span className="chip-time">{getEventScheduleRange(event)}</span>
         <span className="chip-title">{event.title}</span>
         <span className="chip-meta">
           {typeLabel[event.type]}
@@ -753,7 +767,7 @@ export function CalendarWorkspace() {
 
   const renderTheatreEvent = (event: EventRecord) => {
     const venue = isVenueName(event.location) ? event.location : null;
-    const timeRange = getEventTimeRange(event);
+    const timeRange = getEventScheduleRange(event);
 
     return (
       <button
@@ -1127,6 +1141,18 @@ export function CalendarWorkspace() {
                   )
                 }
               />
+              {composerState.kind === 'TOUR' ? (
+                <Input
+                  label="Сбор"
+                  type="time"
+                  value={composerState.assemblyAt}
+                  onChange={(event) =>
+                    setComposerState((current) =>
+                      current ? { ...current, assemblyAt: event.target.value } : current,
+                    )
+                  }
+                />
+              ) : null}
               {composerState.kind === 'PERFORMANCE' ? (
                 <div className="calendar-composer__summary">
                   <span>Длительность</span>
@@ -1154,8 +1180,12 @@ export function CalendarWorkspace() {
             </div>
 
             <div className="calendar-composer__summary calendar-composer__summary--wide">
-              <span>Закончится</span>
-              <strong>{composerEndsAtLabel ?? '—'}</strong>
+              <span>{composerState.kind === 'TOUR' ? 'Сбор и окончание' : 'Закончится'}</span>
+              <strong>
+                {composerState.kind === 'TOUR' && composerState.assemblyAt
+                  ? `${composerState.assemblyAt} · ${composerEndsAtLabel ?? '—'}`
+                  : composerEndsAtLabel ?? '—'}
+              </strong>
             </div>
 
             <div className="resource-form-grid resource-form-grid--double">
@@ -1233,7 +1263,7 @@ export function CalendarWorkspace() {
         open={Boolean(selectedEvent)}
         onClose={() => setSelectedEventId(null)}
         title={selectedEvent?.title ?? 'Событие'}
-        description={selectedEvent ? `${typeLabel[selectedEvent.type]} · ${getEventTimeRange(selectedEvent)}` : undefined}
+        description={selectedEvent ? `${typeLabel[selectedEvent.type]} · ${getEventScheduleRange(selectedEvent)}` : undefined}
         size="lg"
         footer={
           selectedEvent && canOpenControlPanel ? (

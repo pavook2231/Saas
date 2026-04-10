@@ -560,6 +560,7 @@ model Event {
   status          EventStatus @default(PLANNED)
   startsAt        DateTime
   endsAt          DateTime
+  assemblyAt      DateTime?
   durationMinutes Int
   timezone        String      @default("UTC")
   location        String?

@@ -93,6 +93,7 @@ export type EventRecord = {
   status: EventStatus;
   startsAt: string;
   endsAt: string;
+  assemblyAt: string | null;
   durationMinutes: number;
   timezone: string | null;
   location: string | null;
@@ -222,6 +223,7 @@ export type CreateEventPayload = {
   status?: EventStatus;
   startsAt: string;
   endsAt: string;
+  assemblyAt?: string;
   timezone?: string;
   location?: string;
   isAllDay?: boolean;
@@ -246,6 +248,7 @@ export type UpdateEventPayload = {
   status?: EventStatus;
   startsAt?: string;
   endsAt?: string;
+  assemblyAt?: string | null;
   timezone?: string;
   location?: string;
   isAllDay?: boolean;

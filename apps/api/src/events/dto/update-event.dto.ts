@@ -13,6 +13,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -45,6 +46,11 @@ export class UpdateEventDto {
   @IsOptional()
   @IsDateString()
   endsAt?: string;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsDateString()
+  assemblyAt?: string | null;
 
   @IsOptional()
   @IsString()

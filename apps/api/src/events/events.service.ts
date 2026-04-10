@@ -117,6 +117,7 @@ const eventSelect = {
   status: true,
   startsAt: true,
   endsAt: true,
+  assemblyAt: true,
   durationMinutes: true,
   timezone: true,
   location: true,
@@ -890,6 +891,7 @@ export class EventsService {
     const title = this.requireTrimmedText(dto.title, 'title', 2);
     const range = this.parseDateRange(dto.startsAt, dto.endsAt);
     const eventType = dto.type ?? EventType.EVENT;
+    const assemblyAt = this.parseAssemblyAt(dto.assemblyAt, range.startsAt, eventType);
 
     const templateId = dto.templateId ?? null;
     if (templateId) {
@@ -932,7 +934,7 @@ export class EventsService {
     if (participants.length > 0) {
       const conflicts = await this.detectConflicts({
         organizationId,
-        startsAt: range.startsAt,
+        startsAt: assemblyAt ?? range.startsAt,
         endsAt: range.endsAt,
         participantIds: participants.map((item) => item.participantId),
       });
@@ -956,6 +958,7 @@ export class EventsService {
           status: dto.status ?? EventStatus.PLANNED,
           startsAt: range.startsAt,
           endsAt: range.endsAt,
+          assemblyAt,
           durationMinutes: range.durationMinutes,
           timezone: this.trimOrNull(dto.timezone) ?? 'UTC',
           location: this.trimOrNull(dto.location),
@@ -1074,6 +1077,7 @@ export class EventsService {
         status: true,
         startsAt: true,
         endsAt: true,
+        assemblyAt: true,
         location: true,
         performanceCastNumber: true,
         performanceCastLocked: true,
@@ -1099,6 +1103,14 @@ export class EventsService {
       dto.endsAt ?? existing.endsAt.toISOString(),
     );
     const nextType = dto.type ?? existing.type;
+    const assemblyAt =
+      dto.assemblyAt !== undefined || dto.startsAt !== undefined || dto.type !== undefined
+        ? this.parseAssemblyAt(
+            dto.assemblyAt ?? existing.assemblyAt?.toISOString() ?? null,
+            range.startsAt,
+            nextType,
+          )
+        : existing.assemblyAt;
 
     const title =
       dto.title !== undefined ? this.requireTrimmedText(dto.title, 'title', 2) : undefined;
@@ -1173,7 +1185,7 @@ export class EventsService {
     if (participantIdsToCheck.length > 0) {
       const conflicts = await this.detectConflicts({
         organizationId,
-        startsAt: range.startsAt,
+        startsAt: assemblyAt ?? range.startsAt,
         endsAt: range.endsAt,
         participantIds: participantIdsToCheck,
         excludeEventId: existing.id,
@@ -1201,6 +1213,10 @@ export class EventsService {
           status: dto.status,
           startsAt: dto.startsAt !== undefined ? range.startsAt : undefined,
           endsAt: dto.endsAt !== undefined ? range.endsAt : undefined,
+          assemblyAt:
+            dto.assemblyAt !== undefined || dto.startsAt !== undefined || dto.type !== undefined
+              ? assemblyAt
+              : undefined,
           durationMinutes:
             dto.startsAt !== undefined || dto.endsAt !== undefined
               ? range.durationMinutes
@@ -1728,12 +1744,22 @@ export class EventsService {
             status: {
               not: EventStatus.CANCELLED,
             },
-            startsAt: {
-              lt: params.endsAt,
-            },
             endsAt: {
               gt: params.startsAt,
             },
+            OR: [
+              {
+                startsAt: {
+                  lt: params.endsAt,
+                },
+              },
+              {
+                assemblyAt: {
+                  not: null,
+                  lt: params.endsAt,
+                },
+              },
+            ],
             ...(params.excludeEventId ? { id: { not: params.excludeEventId } } : {}),
           },
         },
@@ -1746,6 +1772,7 @@ export class EventsService {
               title: true,
               startsAt: true,
               endsAt: true,
+              assemblyAt: true,
               status: true,
             },
           },
@@ -1792,7 +1819,7 @@ export class EventsService {
       participantConflicts.push({
         type: 'EVENT',
         relatedId: conflict.eventId,
-        startsAt: conflict.event.startsAt.toISOString(),
+        startsAt: (conflict.event.assemblyAt ?? conflict.event.startsAt).toISOString(),
         endsAt: conflict.event.endsAt.toISOString(),
         status: conflict.event.status,
         title: conflict.event.title,
@@ -2850,6 +2877,32 @@ export class EventsService {
       endsAt,
       durationMinutes: Math.ceil(durationMs / (60 * 1000)),
     };
+  }
+
+  private parseAssemblyAt(
+    assemblyAtIso: string | null | undefined,
+    startsAt: Date,
+    eventType: EventType,
+  ) {
+    if (eventType !== EventType.TOUR) {
+      return null;
+    }
+
+    if (!assemblyAtIso) {
+      return null;
+    }
+
+    const assemblyAt = new Date(assemblyAtIso);
+
+    if (Number.isNaN(assemblyAt.getTime())) {
+      throw new BadRequestException('РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ РІСЂРµРјСЏ СЃР±РѕСЂР°');
+    }
+
+    if (assemblyAt.getTime() > startsAt.getTime()) {
+      throw new BadRequestException('Р’СЂРµРјСЏ СЃР±РѕСЂР° РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РїРѕР·Р¶Рµ РЅР°С‡Р°Р»Р° СЃРїРµРєС‚Р°РєР»СЏ');
+    }
+
+    return assemblyAt;
   }
 
   private deduplicateUuids(values: string[]): string[] {

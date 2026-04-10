@@ -125,6 +125,7 @@ export function AppShell({ children }: PropsWithChildren) {
       <AppSidebar
         collapsed={sidebarCollapsed}
         onToggleCollapse={handleToggleSidebar}
+        collapseButtonMode="toggle"
         pathname={pathname}
         userName={userDisplayName}
         userEmail={user?.email ?? ''}
@@ -170,7 +171,8 @@ export function AppShell({ children }: PropsWithChildren) {
         <div className="app-mobile-sidebar__panel">
           <AppSidebar
             collapsed={false}
-            onToggleCollapse={() => undefined}
+            onToggleCollapse={() => setMenuOpen(false)}
+            collapseButtonMode="close"
             pathname={pathname}
             userName={userDisplayName}
             userEmail={user?.email ?? ''}

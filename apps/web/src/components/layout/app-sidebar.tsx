@@ -29,6 +29,7 @@ type NavItem = {
 type AppSidebarProps = {
   collapsed: boolean;
   onToggleCollapse: () => void;
+  collapseButtonMode?: 'toggle' | 'close' | 'hidden';
   pathname: string;
   userName: string;
   userEmail: string;
@@ -57,6 +58,7 @@ const controlNav: NavItem = {
 export function AppSidebar({
   collapsed,
   onToggleCollapse,
+  collapseButtonMode = 'toggle',
   pathname,
   userName,
   userEmail,
@@ -74,6 +76,13 @@ export function AppSidebar({
     ...baseNav,
     ...(activeOrganizationId && canAccessControlPanel(activeRole as never) ? [controlNav] : []),
   ];
+  const showCollapseButton = collapseButtonMode !== 'hidden';
+  const collapseButtonLabel =
+    collapseButtonMode === 'close'
+      ? 'Закрыть меню'
+      : collapsed
+        ? 'Развернуть меню'
+        : 'Свернуть меню';
 
   return (
     <aside className={cn('app-sidebar', collapsed && 'is-collapsed')}>
@@ -88,21 +97,25 @@ export function AppSidebar({
           ) : null}
         </div>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="app-sidebar__collapse"
-          onClick={onToggleCollapse}
-          aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
-          title={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
-        >
-          {collapsed ? (
-            <ChevronRightIcon width={16} height={16} />
-          ) : (
-            <ChevronLeftIcon width={16} height={16} />
-          )}
-        </Button>
+        {showCollapseButton ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="app-sidebar__collapse"
+            onClick={onToggleCollapse}
+            aria-label={collapseButtonLabel}
+            title={collapseButtonLabel}
+          >
+            {collapseButtonMode === 'close' ? (
+              <ChevronLeftIcon width={16} height={16} />
+            ) : collapsed ? (
+              <ChevronRightIcon width={16} height={16} />
+            ) : (
+              <ChevronLeftIcon width={16} height={16} />
+            )}
+          </Button>
+        ) : null}
       </div>
 
       <Card tone="subtle" className="app-sidebar__org-card">

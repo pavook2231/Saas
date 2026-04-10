@@ -92,6 +92,7 @@ export const notificationsApi = {
       endpoint: string;
       userAgent?: string;
       deviceLabel?: string;
+      clientDeviceId?: string;
       keys: {
         p256dh: string;
         auth: string;
@@ -115,6 +116,7 @@ export const notificationsApi = {
         endpoint: params.endpoint,
         userAgent: params.userAgent,
         deviceLabel: params.deviceLabel,
+        clientDeviceId: params.clientDeviceId,
         keys: params.keys,
       },
     });
@@ -123,6 +125,7 @@ export const notificationsApi = {
   unregisterWebPushSubscription(
     params: AuthenticatedRequest & {
       endpoint: string;
+      clientDeviceId?: string;
     },
   ) {
     return apiRequest<{ success: true; disabledCount: number }>({
@@ -131,6 +134,7 @@ export const notificationsApi = {
       path: '/notifications/push/web/unsubscribe',
       body: {
         endpoint: params.endpoint,
+        clientDeviceId: params.clientDeviceId,
       },
     });
   },

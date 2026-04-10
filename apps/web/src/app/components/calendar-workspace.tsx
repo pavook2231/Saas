@@ -40,6 +40,8 @@ type CalendarComposerState = {
   description: string;
 };
 
+const alternateRoleSuffixPattern = /\s+\(дубль\)$/i;
+
 const weekDayLabels = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
 
 const monthTitleFormat = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' });
@@ -224,6 +226,14 @@ const formatDurationLabel = (minutes: number) => {
   return `${restMinutes} мин`;
 };
 
+const isAlternateRoleName = (name: string) => {
+  const normalized = name.trim().toLowerCase();
+  return normalized === 'дубль' || alternateRoleSuffixPattern.test(name.trim());
+};
+
+const templateHasAlternateCast = (template: TemplateRecord | null) =>
+  Boolean(template?.roles.some((role) => isAlternateRoleName(role.name)));
+
 const mapPlayParticipants = (play: TemplateRecord) =>
   Array.from(new Set(play.roles.flatMap((role) => role.assignments.map((assignment) => assignment.participantId))));
 
@@ -336,6 +346,10 @@ export function CalendarWorkspace() {
   const composerSelectedPlay = useMemo(
     () => templates.find((template) => template.id === composerState?.playId) ?? null,
     [composerState?.playId, templates],
+  );
+  const composerSelectedPlayHasAlternateCast = useMemo(
+    () => templateHasAlternateCast(composerSelectedPlay),
+    [composerSelectedPlay],
   );
 
   const composerDurationMinutes = useMemo(() => {
@@ -506,7 +520,7 @@ export function CalendarWorkspace() {
             title: kind === 'EVENT' && current.lane === 'TOUR' ? 'Гастроли' : kind === 'PERFORMANCE' ? '' : current.title,
             durationMinutes: kind === 'PERFORMANCE' ? current.durationMinutes : defaultDurationByKind[kind],
             location: kind === 'REHEARSAL' ? 'Реп зал' : current.location,
-            participantIds: kind === 'PERFORMANCE' ? current.participantIds : current.participantIds,
+            participantIds: kind === 'PERFORMANCE' ? [] : current.participantIds,
           }
         : current,
     );
@@ -522,7 +536,10 @@ export function CalendarWorkspace() {
             playId,
             title: play?.name ?? '',
             location: isVenueName(play?.location) ? play.location : current.location,
-            participantIds: play ? mapPlayParticipants(play) : current.participantIds,
+            participantIds:
+              play && !templateHasAlternateCast(play)
+                ? mapPlayParticipants(play)
+                : [],
           }
         : current,
     );
@@ -566,10 +583,13 @@ export function CalendarWorkspace() {
           location: composerState.location,
           description: composerState.description.trim() || undefined,
           templateId: composerState.kind === 'PERFORMANCE' ? composerState.playId : undefined,
-          participants: composerState.participantIds.map((participantId) => ({
-            participantId,
-            isRequired: true,
-          })),
+          participants:
+            composerState.kind === 'PERFORMANCE'
+              ? undefined
+              : composerState.participantIds.map((participantId) => ({
+                  participantId,
+                  isRequired: true,
+                })),
         },
       });
 
@@ -1049,17 +1069,40 @@ export function CalendarWorkspace() {
               </Select>
             </div>
 
-            <ParticipantPicker
-              participants={participants}
-              value={composerState.participantIds}
-              onChange={(participantIds) =>
-                setComposerState((current) =>
-                  current ? { ...current, participantIds } : current,
-                )
-              }
-              label="Участники"
-              searchPlaceholder="Найти по имени"
-            />
+            {composerState.kind === 'PERFORMANCE' ? (
+              <Card tone="subtle" className="resource-inline-panel">
+                <CardContent className="resource-inline-panel__content">
+                  <div className="resource-inline-info">
+                    <strong>
+                      {composerSelectedPlay
+                        ? composerSelectedPlayHasAlternateCast
+                          ? 'Состав подставится автоматически по дню'
+                          : 'Состав подтянется из карточки спектакля'
+                        : 'Сначала выберите спектакль'}
+                    </strong>
+                    <span>
+                      {composerSelectedPlay
+                        ? composerSelectedPlayHasAlternateCast
+                          ? 'Если в этот день уже есть показы этого спектакля, вся дата будет выровнена на один состав.'
+                          : `${mapPlayParticipants(composerSelectedPlay).length} участников будут добавлены автоматически.`
+                        : 'После выбора спектакля длительность, площадка и участники подставятся автоматически.'}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <ParticipantPicker
+                participants={participants}
+                value={composerState.participantIds}
+                onChange={(participantIds) =>
+                  setComposerState((current) =>
+                    current ? { ...current, participantIds } : current,
+                  )
+                }
+                label="Участники"
+                searchPlaceholder="Найти по имени"
+              />
+            )}
 
             <label className="ui-field-group">
               <span className="ui-field-group__label">Примечание</span>

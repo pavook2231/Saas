@@ -42,6 +42,8 @@ type EventFormState = {
   participantIds: string[];
 };
 
+const alternateRoleSuffixPattern = /\s+\(дубль\)$/i;
+
 const eventTypeLabels: Record<EventType, string> = {
   PERFORMANCE: 'Спектакль',
   REHEARSAL: 'Репетиция',
@@ -115,6 +117,26 @@ const rangeForApi = (form: EventFormState) => {
   };
 };
 
+const isAlternateRoleName = (name: string) => {
+  const normalized = name.trim().toLowerCase();
+  return normalized === 'дубль' || alternateRoleSuffixPattern.test(name.trim());
+};
+
+const templateHasAlternateCast = (template: TemplateRecord | null) =>
+  Boolean(template?.roles.some((role) => isAlternateRoleName(role.name)));
+
+const templateDefaultParticipantIds = (template: TemplateRecord | null) => {
+  if (!template) {
+    return [];
+  }
+
+  if (template.type === 'PERFORMANCE' && templateHasAlternateCast(template)) {
+    return [];
+  }
+
+  return Array.from(templateParticipantsMap(template).keys());
+};
+
 const templateParticipantsMap = (template: TemplateRecord | null) => {
   const map = new Map<
     string,
@@ -154,7 +176,7 @@ const applyTemplateToForm = (form: EventFormState, template: TemplateRecord): Ev
   title: template.name,
   type: template.type,
   durationMinutes: template.durationMinutes,
-  participantIds: Array.from(templateParticipantsMap(template).keys()),
+  participantIds: templateDefaultParticipantIds(template),
 });
 
 export function EventsWorkspace() {
@@ -311,6 +333,10 @@ export function EventsWorkspace() {
     () => templateParticipantsMap(selectedTemplate),
     [selectedTemplate],
   );
+  const selectedTemplateHasAlternateCast = useMemo(
+    () => templateHasAlternateCast(selectedTemplate),
+    [selectedTemplate],
+  );
 
   const visibleEvents = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -461,15 +487,18 @@ export function EventsWorkspace() {
           location: form.location.trim() || undefined,
           templateId: form.templateId || undefined,
           ignoreConflicts,
-          participants: form.participantIds.map((participantId) => {
-            const templateMeta = selectedTemplateAssignments.get(participantId);
+          participants:
+            selectedTemplate?.type === 'PERFORMANCE'
+              ? undefined
+              : form.participantIds.map((participantId) => {
+                  const templateMeta = selectedTemplateAssignments.get(participantId);
 
-            return {
-              participantId,
-              templateRoleId: templateMeta?.templateRoleId,
-              roleName: templateMeta?.roleName,
-            };
-          }),
+                  return {
+                    participantId,
+                    templateRoleId: templateMeta?.templateRoleId,
+                    roleName: templateMeta?.roleName,
+                  };
+                }),
         },
       });
 
@@ -814,13 +843,32 @@ export function EventsWorkspace() {
                 />
               </div>
 
-              <ParticipantPicker
-                participants={participants}
-                recentIds={recentParticipantIds}
-                value={form.participantIds}
-                onChange={(participantIds) => setForm((current) => ({ ...current, participantIds }))}
-                label="Участники"
-              />
+              {selectedTemplate?.type === 'PERFORMANCE' ? (
+                <Card tone="subtle" className="resource-inline-panel">
+                  <CardContent className="resource-inline-panel__content">
+                    <div className="resource-inline-info">
+                      <strong>
+                        {selectedTemplateHasAlternateCast
+                          ? 'Состав выберется автоматически по дню'
+                          : 'Состав подтянется из шаблона спектакля'}
+                      </strong>
+                      <span>
+                        {selectedTemplateHasAlternateCast
+                          ? 'Для спектакля с дублем система сама выберет 1 или 2 состав при создании события.'
+                          : `${templateDefaultParticipantIds(selectedTemplate).length} участников будут добавлены автоматически.`}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <ParticipantPicker
+                  participants={participants}
+                  recentIds={recentParticipantIds}
+                  value={form.participantIds}
+                  onChange={(participantIds) => setForm((current) => ({ ...current, participantIds }))}
+                  label="Участники"
+                />
+              )}
             </div>
           ) : null}
 
@@ -860,7 +908,9 @@ export function EventsWorkspace() {
                   <strong>Подтянуто из шаблона</strong>
                   <span>
                     {selectedTemplate.name} · {selectedTemplate.durationMinutes} мин ·{' '}
-                    {Array.from(selectedTemplateAssignments.keys()).length} участников
+                    {selectedTemplateHasAlternateCast && selectedTemplate.type === 'PERFORMANCE'
+                      ? 'автосостав по дню'
+                      : `${Array.from(selectedTemplateAssignments.keys()).length} участников`}
                   </span>
                 </div>
               </CardContent>

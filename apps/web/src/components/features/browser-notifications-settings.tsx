@@ -165,6 +165,7 @@ export function BrowserNotificationsSettings({
     try {
       if (nextValue) {
         const runtimeConfig = (await loadConfig()) ?? config;
+        const clientDeviceId = browserPush.getClientDeviceId() ?? undefined;
 
         if (!runtimeConfig?.enabled || !runtimeConfig.publicKey) {
           throw new Error('На сервере пока не настроены браузерные push-уведомления.');
@@ -180,6 +181,7 @@ export function BrowserNotificationsSettings({
           endpoint: subscription.endpoint,
           userAgent: subscription.userAgent,
           deviceLabel: subscription.deviceLabel,
+          clientDeviceId,
           keys: subscription.keys,
         });
 
@@ -192,6 +194,7 @@ export function BrowserNotificationsSettings({
           await notificationsApi.unregisterWebPushSubscription({
             accessToken,
             endpoint,
+            clientDeviceId: browserPush.getClientDeviceId() ?? undefined,
           });
         }
 

@@ -904,6 +904,17 @@ export class EventsService {
       recalculateAutomatically: true,
     });
 
+    if (
+      dto.participants !== undefined &&
+      eventType === EventType.PERFORMANCE &&
+      templateId &&
+      resolvedCast.hasAlternateCast
+    ) {
+      throw new BadRequestException(
+        'Для спектакля с дублем состав выбирается автоматически или через переключение состава дня.',
+      );
+    }
+
     const participants =
       dto.participants !== undefined
         ? await this.normalizeEventParticipants(organizationId, templateId, dto.participants)
@@ -1122,6 +1133,17 @@ export class EventsService {
       existingCastNumber: existing.performanceCastNumber,
       existingCastLocked: existing.performanceCastLocked,
     });
+
+    if (
+      dto.participants !== undefined &&
+      nextType === EventType.PERFORMANCE &&
+      templateId &&
+      resolvedCast.hasAlternateCast
+    ) {
+      throw new BadRequestException(
+        'Для спектакля с дублем состав выбирается автоматически или через переключение состава дня.',
+      );
+    }
 
     const participantsPayload =
       dto.participants !== undefined
@@ -1362,6 +1384,16 @@ export class EventsService {
 
     if (!event) {
       throw new NotFoundException('Событие не найдено');
+    }
+
+    if (event.type === EventType.PERFORMANCE && event.templateId) {
+      const templateRoles = await this.loadTemplateRoles(organizationId, event.templateId);
+
+      if (this.hasAlternateCastRoles(templateRoles)) {
+        throw new BadRequestException(
+          'Для спектакля с дублем состав нужно переключать по дню, а не редактировать участников вручную.',
+        );
+      }
     }
 
     const participants = await this.normalizeEventParticipants(
@@ -1749,6 +1781,15 @@ export class EventsService {
 
     const names = new Set<string>();
     const participantAssignments = new Map<string, string>();
+    const groupedRoles = new Map<
+      string,
+      {
+        mainAssignedCount: number;
+        alternateAssignedCount: number;
+        hasMain: boolean;
+        hasAlternate: boolean;
+      }
+    >();
 
     for (const role of normalizedRoles) {
       const key = role.name.toLowerCase();
@@ -1758,6 +1799,24 @@ export class EventsService {
       }
 
       names.add(key);
+
+      const groupedRoleKey = getBaseCastRoleName(role.name).toLowerCase();
+      const groupedRole = groupedRoles.get(groupedRoleKey) ?? {
+        mainAssignedCount: 0,
+        alternateAssignedCount: 0,
+        hasMain: false,
+        hasAlternate: false,
+      };
+
+      if (isAlternateCastRoleName(role.name)) {
+        groupedRole.hasAlternate = true;
+        groupedRole.alternateAssignedCount = role.participantIds.length;
+      } else {
+        groupedRole.hasMain = true;
+        groupedRole.mainAssignedCount = role.participantIds.length;
+      }
+
+      groupedRoles.set(groupedRoleKey, groupedRole);
 
       for (const participantId of role.participantIds) {
         const assignedRole = participantAssignments.get(participantId);
@@ -1769,6 +1828,26 @@ export class EventsService {
         }
 
         participantAssignments.set(participantId, role.name);
+      }
+    }
+
+    const hasAnyAlternateCast = Array.from(groupedRoles.values()).some(
+      (role) => role.hasAlternate,
+    );
+
+    if (hasAnyAlternateCast) {
+      for (const [roleName, role] of groupedRoles.entries()) {
+        if (!role.hasMain || !role.hasAlternate) {
+          throw new BadRequestException(
+            `Для роли '${roleName}' нужно указать и 1, и 2 состав`,
+          );
+        }
+
+        if (role.mainAssignedCount === 0 || role.alternateAssignedCount === 0) {
+          throw new BadRequestException(
+            `Для роли '${roleName}' нужно назначить участников в оба состава`,
+          );
+        }
       }
     }
 

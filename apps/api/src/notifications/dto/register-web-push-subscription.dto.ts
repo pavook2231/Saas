@@ -36,6 +36,11 @@ export class RegisterWebPushSubscriptionDto {
   @MaxLength(128)
   deviceLabel?: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  clientDeviceId?: string;
+
   @IsObject()
   @ValidateNested()
   @Type(() => WebPushKeysDto)

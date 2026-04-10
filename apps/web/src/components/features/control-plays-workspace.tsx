@@ -265,15 +265,32 @@ export function ControlPlaysWorkspace() {
   const durationMinutes = useMemo(() => parseDurationMinutes(form.durationText), [form.durationText]);
 
   const formErrors = useMemo(() => {
-    const hasRoleName = form.roles.some((role) => role.name.trim().length > 0);
-    const hasPrimaryCast = form.roles.some((role) => role.primaryParticipantIds.length > 0);
+    const hasInvalidRole = form.roles.some((role) => {
+      if (role.name.trim().length === 0) {
+        return true;
+      }
+
+      if (role.primaryParticipantIds.length === 0) {
+        return true;
+      }
+
+      if (form.hasAlternateCast && role.alternateParticipantIds.length === 0) {
+        return true;
+      }
+
+      return false;
+    });
 
     return {
       name: form.name.trim().length >= 2 ? '' : 'Укажите название спектакля.',
       duration: durationMinutes && durationMinutes > 0 ? '' : 'Введите длительность в минутах или формате ЧЧ:ММ.',
-      cast: hasRoleName && hasPrimaryCast ? '' : 'Добавьте хотя бы одну роль и выберите основной состав.',
+      cast: !hasInvalidRole
+        ? ''
+        : form.hasAlternateCast
+          ? 'Для каждой роли заполните название, 1 состав и 2 состав.'
+          : 'Для каждой роли заполните название и основной состав.',
     };
-  }, [durationMinutes, form.name, form.roles]);
+  }, [durationMinutes, form.hasAlternateCast, form.name, form.roles]);
 
   const filteredPlays = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();

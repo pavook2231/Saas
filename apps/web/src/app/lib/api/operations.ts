@@ -4,10 +4,10 @@ export type EventType = 'PERFORMANCE' | 'REHEARSAL' | 'EVENT' | 'CUSTOM';
 export type EventStatus = 'DRAFT' | 'PLANNED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
 export type EventAttendanceStatus =
   | 'INVITED'
-  | 'CONFIRMED'
+  | 'ACCEPTED'
   | 'DECLINED'
-  | 'CHECKED_IN'
-  | 'CHECKED_OUT';
+  | 'ATTENDED'
+  | 'ABSENT';
 
 export type ParticipantRecord = {
   id: string;
@@ -144,7 +144,12 @@ export type ConflictCheckResult = {
     eventConflicts: number;
     availabilityConflicts: number;
   };
-  suggestion: string | null;
+  suggestion:
+    | {
+        recommendedStartsAt: string;
+        recommendedEndsAt: string;
+      }
+    | null;
 };
 
 export type CreateParticipantPayload = {

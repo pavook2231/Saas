@@ -167,6 +167,23 @@ export class NotificationsService {
   ) {
     const endpoint = dto.endpoint.trim();
     const endpointHash = this.dataEncryptionService.hashDeterministic(endpoint);
+    const clientDeviceId = this.trimOrNull(dto.clientDeviceId);
+
+    if (clientDeviceId) {
+      await this.prisma.webPushSubscription.updateMany({
+        where: {
+          userId,
+          clientDeviceId,
+          endpointHash: {
+            not: endpointHash,
+          },
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+        },
+      });
+    }
 
     const subscription = await this.prisma.webPushSubscription.upsert({
       where: {
@@ -179,6 +196,7 @@ export class NotificationsService {
         auth: this.dataEncryptionService.encrypt(dto.keys.auth, `web-push:${userId}`),
         userAgent: this.trimOrNull(dto.userAgent),
         deviceLabel: this.trimOrNull(dto.deviceLabel),
+        clientDeviceId,
         isActive: true,
         lastSeenAt: new Date(),
       },
@@ -190,6 +208,7 @@ export class NotificationsService {
         auth: this.dataEncryptionService.encrypt(dto.keys.auth, `web-push:${userId}`),
         userAgent: this.trimOrNull(dto.userAgent),
         deviceLabel: this.trimOrNull(dto.deviceLabel),
+        clientDeviceId,
         isActive: true,
         lastSeenAt: new Date(),
       },
@@ -215,12 +234,24 @@ export class NotificationsService {
     dto: UnregisterWebPushSubscriptionDto,
   ) {
     const endpointHash = this.dataEncryptionService.hashDeterministic(dto.endpoint.trim());
+    const clientDeviceId = this.trimOrNull(dto.clientDeviceId);
 
     const updated = await this.prisma.webPushSubscription.updateMany({
       where: {
         userId,
-        endpointHash,
         isActive: true,
+        OR: [
+          {
+            endpointHash,
+          },
+          ...(clientDeviceId
+            ? [
+                {
+                  clientDeviceId,
+                },
+              ]
+            : []),
+        ],
       },
       data: {
         isActive: false,

@@ -863,6 +863,7 @@ model WebPushSubscription {
   auth         String
   userAgent    String?
   deviceLabel  String?
+  clientDeviceId String?
   isActive     Boolean  @default(true)
   lastSeenAt   DateTime?
   createdAt    DateTime @default(now())
@@ -871,6 +872,7 @@ model WebPushSubscription {
   user User @relation("UserWebPushSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isActive, updatedAt])
+  @@index([userId, clientDeviceId, isActive, updatedAt])
 }
 
 model SecurityRateLimit {

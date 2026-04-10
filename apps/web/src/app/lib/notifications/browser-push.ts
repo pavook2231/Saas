@@ -9,6 +9,7 @@ export type BrowserPushSubscriptionPayload = {
 };
 
 const SERVICE_WORKER_URL = '/sw.js';
+const PUSH_DEVICE_ID_STORAGE_KEY = 'saas.push.device-id';
 
 const urlBase64ToUint8Array = (base64String: string) => {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -39,6 +40,25 @@ export const browserPush = {
     }
 
     return Notification.permission;
+  },
+
+  getClientDeviceId() {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const existing = window.localStorage.getItem(PUSH_DEVICE_ID_STORAGE_KEY)?.trim();
+    if (existing) {
+      return existing;
+    }
+
+    const next =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    window.localStorage.setItem(PUSH_DEVICE_ID_STORAGE_KEY, next);
+    return next;
   },
 
   async ensureServiceWorker() {

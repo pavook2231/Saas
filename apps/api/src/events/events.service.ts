@@ -1638,23 +1638,19 @@ export class EventsService {
       select: eventSelect,
     });
 
-    const shouldNotifyWholeWeek = this.isCurrentWeekEvent(start);
-
-    if (shouldNotifyWholeWeek) {
-      await this.notifyWeekSchedulePublishedSafe({
-        organizationId,
-        actorUserId,
-        startsAt: start,
-        publishedCount: publishedEvents.length,
-      });
-    }
+    const notified = await this.notifyWeekSchedulePublishedSafe({
+      organizationId,
+      actorUserId,
+      startsAt: start,
+      publishedCount: publishedEvents.length,
+    });
 
     return {
       publishedEvents,
       publishedCount: publishedEvents.length,
       weekStart: start.toISOString(),
       weekEnd: weekEnd.toISOString(),
-      notified: shouldNotifyWholeWeek,
+      notified,
     };
   }
 
@@ -2794,7 +2790,7 @@ export class EventsService {
     const userIds = await this.listOrganizationScheduleRecipientUserIds(input.organizationId);
 
     if (userIds.length === 0) {
-      return;
+      return false;
     }
 
     try {
@@ -2811,10 +2807,12 @@ export class EventsService {
         },
         userIds,
       });
+      return true;
     } catch (error) {
       this.logger.warn(
         `Failed to send weekly schedule notification for organization=${input.organizationId}: ${(error as Error).message}`,
       );
+      return false;
     }
   }
 

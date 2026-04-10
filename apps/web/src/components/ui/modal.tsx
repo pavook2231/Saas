@@ -13,6 +13,7 @@ type ModalProps = PropsWithChildren<{
   onClose: () => void;
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg';
+  panelClassName?: string;
 }>;
 
 export function Modal({
@@ -22,6 +23,7 @@ export function Modal({
   onClose,
   footer,
   size = 'md',
+  panelClassName,
   children,
 }: ModalProps) {
   const prefersReducedMotion = useReducedMotion();
@@ -60,7 +62,7 @@ export function Modal({
             transition={{ duration: 0.18 }}
           />
           <motion.div
-            className={cn('ui-modal__panel', `ui-modal__panel--${size}`)}
+            className={cn('ui-modal__panel', `ui-modal__panel--${size}`, panelClassName)}
             initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}

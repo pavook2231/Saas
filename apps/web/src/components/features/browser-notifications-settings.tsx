@@ -29,6 +29,37 @@ const detectDeviceLabel = () => {
     : 'Браузер';
 };
 
+const BellIcon = ({ enabled }: { enabled: boolean }) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path
+      d="M12 3.75a4.5 4.5 0 0 0-4.5 4.5v1.01c0 .8-.22 1.58-.63 2.26l-1.24 2.07A2.25 2.25 0 0 0 7.56 17h8.88a2.25 2.25 0 0 0 1.93-3.41l-1.24-2.07a4.37 4.37 0 0 1-.63-2.26V8.25a4.5 4.5 0 0 0-4.5-4.5Z"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    />
+    <path
+      d="M9.75 18.25a2.25 2.25 0 0 0 4.5 0"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    />
+    {!enabled ? (
+      <path
+        d="M6 5.75 18 17.75"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    ) : null}
+  </svg>
+);
+
 const formatLastSeenAt = (value: string | null | undefined) => {
   if (!value) {
     return '—';
@@ -55,6 +86,8 @@ export function BrowserNotificationsSettings({
   const [permission, setPermission] = useState(browserPush.getPermission());
 
   const supported = browserPush.isSupported();
+  const hasActiveSubscription = subscriptions.some((item) => item.isActive);
+  const isEnabled = enabled || hasActiveSubscription;
 
   const loadConfig = useCallback(async () => {
     if (!accessToken) {
@@ -85,14 +118,11 @@ export function BrowserNotificationsSettings({
     try {
       const items = await notificationsApi.listWebPushSubscriptions({ accessToken });
       setSubscriptions(items);
-
-      if (items.some((item) => item.isActive) && !enabled) {
-        onEnabledChange(true);
-      }
+      onEnabledChange(items.some((item) => item.isActive));
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Не удалось загрузить push-подписки');
     }
-  }, [accessToken, enabled, onEnabledChange, onError]);
+  }, [accessToken, onEnabledChange, onError]);
 
   useEffect(() => {
     void loadSubscriptions();
@@ -109,7 +139,7 @@ export function BrowserNotificationsSettings({
     }
 
     if (!supported) {
-      onError('Браузер не поддерживает push-уведомления');
+      onError('Этот браузер не поддерживает push-уведомления');
       return;
     }
 
@@ -139,7 +169,7 @@ export function BrowserNotificationsSettings({
         setPermission(browserPush.getPermission());
         onEnabledChange(true);
         await loadSubscriptions();
-        onNotice('Браузерные уведомления включены');
+        onNotice('Push-уведомления включены');
       } else {
         const endpoint = await browserPush.unsubscribe();
 
@@ -153,10 +183,10 @@ export function BrowserNotificationsSettings({
         setPermission(browserPush.getPermission());
         onEnabledChange(false);
         await loadSubscriptions();
-        onNotice('Браузерные уведомления отключены');
+        onNotice('Push-уведомления выключены');
       }
     } catch (error) {
-      onError(error instanceof Error ? error.message : 'Не удалось обновить browser push');
+      onError(error instanceof Error ? error.message : 'Не удалось обновить push-уведомления');
     } finally {
       setLoading(false);
     }
@@ -175,29 +205,60 @@ export function BrowserNotificationsSettings({
       return 'Разрешение на уведомления заблокировано в браузере';
     }
 
-    if (subscriptions.some((item) => item.isActive)) {
+    if (hasActiveSubscription) {
       return 'Push-уведомления подключены';
     }
 
     return 'Push-уведомления пока не подключены';
-  }, [config, permission, subscriptions, supported]);
+  }, [config, hasActiveSubscription, permission, supported]);
+
+  const toggleHint = useMemo(() => {
+    if (!accessToken) {
+      return 'Нужна активная сессия';
+    }
+
+    if (!supported) {
+      return 'Недоступно в этом браузере';
+    }
+
+    if (config && (!config.enabled || !config.publicKey)) {
+      return 'Сервер push еще не настроен';
+    }
+
+    if (permission === 'denied') {
+      return 'Разрешение заблокировано в браузере';
+    }
+
+    return isEnabled ? 'Нажмите, чтобы выключить' : 'Нажмите, чтобы включить';
+  }, [accessToken, config, isEnabled, permission, supported]);
+
+  const canToggle =
+    Boolean(accessToken) &&
+    supported &&
+    permission !== 'denied' &&
+    !(config && (!config.enabled || !config.publicKey));
 
   return (
     <div className="account-browser-push">
       <div className="account-browser-push__header">
-        <label className="checkbox-row account-browser-push__toggle">
-          <input
-            type="checkbox"
-            checked={enabled}
-            disabled={loading || !accessToken}
-            onChange={(event) => void handleToggle(event.target.checked)}
-          />
-          <span>
-            <strong>Push-уведомления</strong>
-            <small>Изменения расписания и напоминания в браузере</small>
+        <button
+          type="button"
+          className={`account-browser-push__switch ${isEnabled ? 'is-enabled' : 'is-disabled'}`}
+          onClick={() => void handleToggle(!isEnabled)}
+          disabled={loading || !canToggle}
+          role="switch"
+          aria-checked={isEnabled}
+          aria-label={isEnabled ? 'Выключить push-уведомления' : 'Включить push-уведомления'}
+        >
+          <span className={`account-browser-push__bell ${isEnabled ? 'is-enabled' : 'is-disabled'}`}>
+            <BellIcon enabled={isEnabled} />
           </span>
-        </label>
-        <Badge variant={enabled ? 'success' : 'neutral'}>{stateLabel}</Badge>
+          <span className="account-browser-push__switch-copy">
+            <strong>{isEnabled ? 'Уведомления включены' : 'Уведомления выключены'}</strong>
+            <small>{loading ? 'Сохраняем...' : toggleHint}</small>
+          </span>
+        </button>
+        <Badge variant={isEnabled ? 'success' : 'error'}>{stateLabel}</Badge>
       </div>
 
       <div className="account-browser-push__meta">
@@ -226,7 +287,7 @@ export function BrowserNotificationsSettings({
         </div>
       ) : null}
 
-      {enabled ? (
+      {isEnabled ? (
         <div className="account-browser-push__actions">
           <Button
             type="button"

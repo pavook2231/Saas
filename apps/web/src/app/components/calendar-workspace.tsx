@@ -4,17 +4,41 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-import { operationsApi, participantDisplayName, type EventRecord, type ParticipantRecord } from '@/app/lib/api/operations';
+import {
+  operationsApi,
+  participantDisplayName,
+  type EventRecord,
+  type EventType,
+  type ParticipantRecord,
+  type TemplateRecord,
+} from '@/app/lib/api/operations';
+import { ParticipantPicker } from '@/components/features/participant-picker';
 import { WorkspaceOrgEmpty } from '@/components/features/workspace-org-empty';
 import { useActiveWorkspace } from '@/components/features/use-active-workspace';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { Select } from '@/components/ui/select';
 import { canAccessControlPanel } from '@/lib/organization-access';
-import { isVenueName, venueLabelMap, venueToneClass, type VenueName } from '@/lib/venues';
+import { isVenueName, venueLabelMap, venueOptions, venueToneClass, type VenueName } from '@/lib/venues';
 
 type ViewMode = 'week' | 'month';
 type TheatreLane = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'OTHER';
+type CalendarComposerKind = 'PERFORMANCE' | 'REHEARSAL' | 'EVENT';
+type CalendarComposerState = {
+  lane: TheatreLane | null;
+  kind: CalendarComposerKind;
+  playId: string;
+  title: string;
+  date: string;
+  startsAt: string;
+  durationMinutes: number;
+  location: VenueName;
+  participantIds: string[];
+  description: string;
+};
 
 const weekDayLabels = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
 
@@ -104,6 +128,20 @@ const theatreLaneMeta: Array<{
   },
 ];
 
+const composerKindLabels: Record<CalendarComposerKind, string> = {
+  PERFORMANCE: 'Спектакль',
+  REHEARSAL: 'Репетиция',
+  EVENT: 'Событие',
+};
+
+const composerDurationOptions = [30, 45, 60, 90, 120, 150, 180];
+
+const defaultDurationByKind: Record<CalendarComposerKind, number> = {
+  PERFORMANCE: 120,
+  REHEARSAL: 120,
+  EVENT: 90,
+};
+
 const getEventTimeRange = (event: EventRecord) =>
   `${timeFormat.format(new Date(event.startsAt))} — ${timeFormat.format(new Date(event.endsAt))}`;
 
@@ -124,22 +162,87 @@ const classifyTheatreLane = (event: EventRecord): TheatreLane => {
   return 'OTHER';
 };
 
+const mapLaneToComposerKind = (lane: TheatreLane | null): CalendarComposerKind => {
+  if (lane === 'PERFORMANCE') {
+    return 'PERFORMANCE';
+  }
+
+  if (lane === 'REHEARSAL') {
+    return 'REHEARSAL';
+  }
+
+  return 'EVENT';
+};
+
+const defaultLocationForLane = (lane: TheatreLane | null): VenueName =>
+  lane === 'REHEARSAL' ? 'Реп зал' : 'БЗ';
+
+const defaultTitleForLane = (lane: TheatreLane | null) => (lane === 'TOUR' ? 'Гастроли' : '');
+
+const defaultStartTimeForDate = (date: Date) => {
+  if (isSameDay(date, new Date())) {
+    const clone = new Date();
+    clone.setMinutes(clone.getMinutes() + 30);
+    clone.setSeconds(0, 0);
+    clone.setMinutes(clone.getMinutes() >= 30 ? 30 : 0);
+    return `${String(clone.getHours()).padStart(2, '0')}:${String(clone.getMinutes()).padStart(2, '0')}`;
+  }
+
+  return '12:00';
+};
+
+const toIso = (date: string, time: string) => {
+  const [year, month, day] = date.split('-').map(Number);
+  const [hours, minutes] = time.split(':').map(Number);
+  return new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
+};
+
+const plusMinutesIso = (iso: string, minutes: number) => {
+  const clone = new Date(iso);
+  clone.setMinutes(clone.getMinutes() + minutes);
+  return clone.toISOString();
+};
+
+const formatDurationLabel = (minutes: number) => {
+  const safeMinutes = Math.max(0, minutes);
+  const hours = Math.floor(safeMinutes / 60);
+  const restMinutes = safeMinutes % 60;
+
+  if (hours > 0 && restMinutes > 0) {
+    return `${hours} ч ${restMinutes} мин`;
+  }
+
+  if (hours > 0) {
+    return `${hours} ч`;
+  }
+
+  return `${restMinutes} мин`;
+};
+
+const mapPlayParticipants = (play: TemplateRecord) =>
+  Array.from(new Set(play.roles.flatMap((role) => role.assignments.map((assignment) => assignment.participantId))));
+
 export function CalendarWorkspace() {
   const searchParams = useSearchParams();
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [cursorDate, setCursorDate] = useState<Date>(() => startOfDay(new Date()));
   const [events, setEvents] = useState<EventRecord[]>([]);
+  const [templates, setTemplates] = useState<TemplateRecord[]>([]);
   const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [composerState, setComposerState] = useState<CalendarComposerState | null>(null);
+  const [composerSaving, setComposerSaving] = useState(false);
+  const [composerErrorText, setComposerErrorText] = useState<string | null>(null);
 
   const canOpenControlPanel = canAccessControlPanel(activeRole);
 
   const loadCalendar = useCallback(async () => {
     if (!accessToken || !activeOrganizationId) {
       setEvents([]);
+      setTemplates([]);
       setParticipants([]);
       setLoading(false);
       return;
@@ -148,7 +251,7 @@ export function CalendarWorkspace() {
     setLoading(true);
 
     try {
-      const [eventsResponse, participantsResponse] = await Promise.all([
+      const [eventsResponse, participantsResponse, templatesResponse] = await Promise.all([
         operationsApi.listEvents({
           organizationId: activeOrganizationId,
           accessToken,
@@ -161,17 +264,27 @@ export function CalendarWorkspace() {
           accessToken,
           limit: 300,
         }),
+        canOpenControlPanel
+          ? operationsApi.listTemplates({
+              organizationId: activeOrganizationId,
+              accessToken,
+              limit: 150,
+              type: 'PERFORMANCE',
+              isActive: true,
+            })
+          : Promise.resolve([] as TemplateRecord[]),
       ]);
 
       setEvents(eventsResponse);
       setParticipants(participantsResponse);
+      setTemplates(templatesResponse);
       setErrorText(null);
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось загрузить расписание.');
     } finally {
       setLoading(false);
     }
-  }, [accessToken, activeOrganizationId, cursorDate]);
+  }, [accessToken, activeOrganizationId, canOpenControlPanel, cursorDate]);
 
   useEffect(() => {
     void loadCalendar();
@@ -214,6 +327,30 @@ export function CalendarWorkspace() {
         : [],
     [participantsById, selectedEvent],
   );
+
+  const composerSelectedPlay = useMemo(
+    () => templates.find((template) => template.id === composerState?.playId) ?? null,
+    [composerState?.playId, templates],
+  );
+
+  const composerDurationMinutes = useMemo(() => {
+    if (!composerState) {
+      return defaultDurationByKind.EVENT;
+    }
+
+    return composerState.kind === 'PERFORMANCE'
+      ? composerSelectedPlay?.durationMinutes ?? defaultDurationByKind.PERFORMANCE
+      : composerState.durationMinutes;
+  }, [composerSelectedPlay, composerState]);
+
+  const composerEndsAtLabel = useMemo(() => {
+    if (!composerState?.date || !composerState.startsAt) {
+      return null;
+    }
+
+    const startsAtIso = toIso(composerState.date, composerState.startsAt);
+    return timeFormat.format(new Date(plusMinutesIso(startsAtIso, composerDurationMinutes)));
+  }, [composerDurationMinutes, composerState?.date, composerState?.startsAt]);
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(cursorDate);
@@ -285,6 +422,125 @@ export function CalendarWorkspace() {
 
   const navigate = (direction: number) => {
     setCursorDate((current) => addDays(current, viewMode === 'month' ? direction * 28 : direction * 7));
+  };
+
+  const openComposer = (date: Date, lane: TheatreLane | null = null) => {
+    const kind = mapLaneToComposerKind(lane);
+
+    setComposerState({
+      lane,
+      kind,
+      playId: '',
+      title: defaultTitleForLane(lane),
+      date: formatDateInput(date),
+      startsAt: defaultStartTimeForDate(date),
+      durationMinutes: defaultDurationByKind[kind],
+      location: defaultLocationForLane(lane),
+      participantIds: [],
+      description: '',
+    });
+    setComposerErrorText(null);
+  };
+
+  const closeComposer = () => {
+    if (composerSaving) {
+      return;
+    }
+
+    setComposerState(null);
+    setComposerErrorText(null);
+  };
+
+  const handleComposerKindChange = (kind: CalendarComposerKind) => {
+    setComposerState((current) =>
+      current
+        ? {
+            ...current,
+            kind,
+            playId: kind === 'PERFORMANCE' ? current.playId : '',
+            title: kind === 'EVENT' && current.lane === 'TOUR' ? 'Гастроли' : kind === 'PERFORMANCE' ? '' : current.title,
+            durationMinutes: kind === 'PERFORMANCE' ? current.durationMinutes : defaultDurationByKind[kind],
+            location: kind === 'REHEARSAL' ? 'Реп зал' : current.location,
+            participantIds: kind === 'PERFORMANCE' ? current.participantIds : current.participantIds,
+          }
+        : current,
+    );
+  };
+
+  const handleComposerPlayChange = (playId: string) => {
+    const play = templates.find((template) => template.id === playId);
+
+    setComposerState((current) =>
+      current
+        ? {
+            ...current,
+            playId,
+            title: play?.name ?? '',
+            location: isVenueName(play?.location) ? play.location : current.location,
+            participantIds: play ? mapPlayParticipants(play) : current.participantIds,
+          }
+        : current,
+    );
+  };
+
+  const handleComposerSave = async () => {
+    if (!composerState || !accessToken || !activeOrganizationId) {
+      return;
+    }
+
+    setComposerSaving(true);
+    setComposerErrorText(null);
+
+    try {
+      const startsAtIso = toIso(composerState.date, composerState.startsAt);
+      const endsAtIso = plusMinutesIso(startsAtIso, composerDurationMinutes);
+      const payloadType: EventType =
+        composerState.kind === 'EVENT' ? 'EVENT' : composerState.kind;
+      const title =
+        composerState.kind === 'PERFORMANCE'
+          ? composerSelectedPlay?.name ?? ''
+          : composerState.title.trim();
+
+      if (composerState.kind === 'PERFORMANCE' && !composerState.playId) {
+        throw new Error('Выберите спектакль.');
+      }
+
+      if (!title) {
+        throw new Error('Укажите название события.');
+      }
+
+      const created = await operationsApi.createEvent({
+        organizationId: activeOrganizationId,
+        accessToken,
+        payload: {
+          title,
+          type: payloadType,
+          status: 'PLANNED',
+          startsAt: startsAtIso,
+          endsAt: endsAtIso,
+          location: composerState.location,
+          description: composerState.description.trim() || undefined,
+          templateId: composerState.kind === 'PERFORMANCE' ? composerState.playId : undefined,
+          participants: composerState.participantIds.map((participantId) => ({
+            participantId,
+            isRequired: true,
+          })),
+        },
+      });
+
+      setEvents((current) =>
+        [...current, created].sort(
+          (left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
+        ),
+      );
+      setSelectedEventId(created.id);
+      setCursorDate(startOfDay(new Date(created.startsAt)));
+      setComposerState(null);
+    } catch (error) {
+      setComposerErrorText(error instanceof Error ? error.message : 'Не удалось создать событие.');
+    } finally {
+      setComposerSaving(false);
+    }
   };
 
   const renderEventChip = (event: EventRecord) => {
@@ -410,7 +666,20 @@ export function CalendarWorkspace() {
                 <article key={key} className={`month-cell${isOutside ? ' outside' : ''}${isToday ? ' today' : ''}`}>
                   <div className="month-cell-header">
                     <span>{day.getDate()}</span>
-                    {isToday ? <small>Сегодня</small> : null}
+                    <div className="month-cell-header__actions">
+                      {isToday ? <small>Сегодня</small> : null}
+                      {canOpenControlPanel ? (
+                        <button
+                          type="button"
+                          className="month-cell-add"
+                          onClick={() => openComposer(day)}
+                          aria-label={`Добавить событие на ${weekdayLongFormat.format(day)}`}
+                          title="Добавить событие"
+                        >
+                          +
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="month-events">
                     {items.slice(0, 3).map((item) => renderEventChip(item))}
@@ -460,9 +729,20 @@ export function CalendarWorkspace() {
                               {items.map((event) => renderTheatreEvent(event))}
                             </div>
                           ) : (
-                            <div className="theatre-week-table__empty">
-                              —
-                            </div>
+                            canOpenControlPanel ? (
+                              <button
+                                type="button"
+                                className="theatre-week-table__empty-slot"
+                                onClick={() => openComposer(day, lane.id)}
+                              >
+                                <span>+</span>
+                                <small>Добавить</small>
+                              </button>
+                            ) : (
+                              <div className="theatre-week-table__empty">
+                                —
+                              </div>
+                            )
                           )}
                         </div>
                       );
@@ -492,6 +772,17 @@ export function CalendarWorkspace() {
                     <span>{weekDayNumberFormat.format(day)}</span>
                   </div>
                   <div className="theatre-day-card__header-meta">
+                    {canOpenControlPanel ? (
+                      <button
+                        type="button"
+                        className="theatre-day-card__add"
+                        onClick={() => openComposer(day)}
+                        aria-label={`Добавить событие на ${weekdayLongFormat.format(day)}`}
+                        title="Добавить событие"
+                      >
+                        +
+                      </button>
+                    ) : null}
                     {totalDayEvents > 0 ? <span className="theatre-day-card__count">{totalDayEvents}</span> : null}
                     {isToday ? <Badge variant="primary">Сегодня</Badge> : null}
                   </div>
@@ -515,7 +806,14 @@ export function CalendarWorkspace() {
                     ))}
                   </div>
                 ) : (
-                  <div className="theatre-day-card__empty">Нет событий</div>
+                  <div className="theatre-day-card__empty">
+                    <span>Нет событий</span>
+                    {canOpenControlPanel ? (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => openComposer(day)}>
+                        Добавить событие
+                      </Button>
+                    ) : null}
+                  </div>
                 )}
               </article>
             );
@@ -523,6 +821,173 @@ export function CalendarWorkspace() {
         </section>
         </>
       ) : null}
+
+      <Modal
+        open={Boolean(composerState)}
+        onClose={closeComposer}
+        title="Составить расписание"
+        description={
+          composerState
+            ? `Новый слот на ${weekdayLongFormat.format(new Date(`${composerState.date}T00:00:00`))}`
+            : undefined
+        }
+        size="lg"
+        footer={
+          composerState ? (
+            <>
+              <Button type="button" variant="ghost" onClick={closeComposer} disabled={composerSaving}>
+                Отмена
+              </Button>
+              <Button type="button" onClick={() => void handleComposerSave()} loading={composerSaving}>
+                Добавить в расписание
+              </Button>
+            </>
+          ) : undefined
+        }
+      >
+        {composerState ? (
+          <div className="calendar-composer">
+            {composerErrorText ? <p className="finance-error">{composerErrorText}</p> : null}
+
+            <div className="resource-form-grid resource-form-grid--double">
+              <Select
+                label="Тип события"
+                value={composerState.kind}
+                onChange={(event) => handleComposerKindChange(event.target.value as CalendarComposerKind)}
+              >
+                {Object.entries(composerKindLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+
+              {composerState.kind === 'PERFORMANCE' ? (
+                <Select
+                  label="Спектакль"
+                  value={composerState.playId}
+                  onChange={(event) => handleComposerPlayChange(event.target.value)}
+                >
+                  <option value="">Выберите спектакль</option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  label="Название"
+                  value={composerState.title}
+                  onChange={(event) =>
+                    setComposerState((current) =>
+                      current ? { ...current, title: event.target.value } : current,
+                    )
+                  }
+                  placeholder="Например, сбор труппы"
+                />
+              )}
+            </div>
+
+            <div className="resource-form-grid resource-form-grid--triple calendar-composer__timing">
+              <Input
+                label="Дата"
+                type="date"
+                value={composerState.date}
+                onChange={(event) =>
+                  setComposerState((current) =>
+                    current ? { ...current, date: event.target.value } : current,
+                  )
+                }
+              />
+              <Input
+                label="Начало"
+                type="time"
+                value={composerState.startsAt}
+                onChange={(event) =>
+                  setComposerState((current) =>
+                    current ? { ...current, startsAt: event.target.value } : current,
+                  )
+                }
+              />
+              {composerState.kind === 'PERFORMANCE' ? (
+                <div className="calendar-composer__summary">
+                  <span>Длительность</span>
+                  <strong>{formatDurationLabel(composerDurationMinutes)} по спектаклю</strong>
+                </div>
+              ) : (
+                <Select
+                  label="Длительность"
+                  value={String(composerState.durationMinutes)}
+                  onChange={(event) =>
+                    setComposerState((current) =>
+                      current
+                        ? { ...current, durationMinutes: Number(event.target.value) || defaultDurationByKind.EVENT }
+                        : current,
+                    )
+                  }
+                >
+                  {composerDurationOptions.map((minutes) => (
+                    <option key={minutes} value={minutes}>
+                      {formatDurationLabel(minutes)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </div>
+
+            <div className="calendar-composer__summary calendar-composer__summary--wide">
+              <span>Закончится</span>
+              <strong>{composerEndsAtLabel ?? '—'}</strong>
+            </div>
+
+            <div className="resource-form-grid resource-form-grid--double">
+              <Select
+                label="Площадка"
+                value={composerState.location}
+                onChange={(event) =>
+                  setComposerState((current) =>
+                    current ? { ...current, location: event.target.value as VenueName } : current,
+                  )
+                }
+              >
+                {venueOptions.map((venue) => (
+                  <option key={venue} value={venue}>
+                    {venueLabelMap[venue]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <ParticipantPicker
+              participants={participants}
+              value={composerState.participantIds}
+              onChange={(participantIds) =>
+                setComposerState((current) =>
+                  current ? { ...current, participantIds } : current,
+                )
+              }
+              label="Участники"
+              searchPlaceholder="Найти по имени"
+            />
+
+            <label className="ui-field-group">
+              <span className="ui-field-group__label">Примечание</span>
+              <textarea
+                className="ui-field calendar-composer__notes"
+                value={composerState.description}
+                onChange={(event) =>
+                  setComposerState((current) =>
+                    current ? { ...current, description: event.target.value } : current,
+                  )
+                }
+                placeholder="Короткая служебная заметка"
+                rows={4}
+              />
+            </label>
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         open={Boolean(selectedEvent)}

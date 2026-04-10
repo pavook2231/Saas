@@ -1,3 +1,5 @@
+import { sanitizeInternalPath } from '@/lib/safe-url';
+
 import { apiBaseUrl } from '../api/config';
 
 import {
@@ -274,23 +276,15 @@ export const authApi = {
     return (await response.json()) as { success: true };
   },
 
-  async startOAuth(
-    provider: OAuthProviderName,
-    state: string,
-    accessToken?: string,
-  ): Promise<OAuthStartResponse> {
+  async startOAuth(provider: OAuthProviderName, state: string): Promise<OAuthStartResponse> {
+    const safeState = sanitizeInternalPath(state, '/auth/callback') ?? '/auth/callback';
     const params = new URLSearchParams();
-    params.set('state', state);
+    params.set('state', safeState);
 
     const response = await fetch(`${authBaseUrl}/${provider}?${params.toString()}`, {
       credentials: 'include',
       headers: {
         Accept: 'application/json',
-        ...(accessToken
-          ? {
-              Authorization: `Bearer ${accessToken}`,
-            }
-          : {}),
       },
     });
 

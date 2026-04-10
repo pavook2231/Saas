@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { sanitizeInternalPath } from '@/lib/safe-url';
 
 import { useAuth } from '../providers/auth-provider';
 
@@ -114,7 +115,7 @@ export default function AuthPageClient() {
 
   const nextUrl = useMemo(() => {
     const raw = searchParams.get('next');
-    return (raw && raw.startsWith('/') ? raw : '/calendar') as Route;
+    return (sanitizeInternalPath(raw, '/calendar') ?? '/calendar') as Route;
   }, [searchParams]);
 
   const pageErrorTitle = useMemo(() => {

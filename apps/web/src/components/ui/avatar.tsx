@@ -1,6 +1,7 @@
 import type { HTMLAttributes } from 'react';
 
 import { cn } from '@/lib/cn';
+import { sanitizeImageSrc } from '@/lib/safe-url';
 
 type AvatarSize = 'sm' | 'md' | 'lg';
 
@@ -20,10 +21,15 @@ const initialsFromName = (name: string) =>
 
 export function Avatar({ className, name, src, size = 'md', ...props }: AvatarProps) {
   const initials = initialsFromName(name) || name.slice(0, 2).toUpperCase();
+  const safeSrc = sanitizeImageSrc(src);
 
   return (
     <div className={cn('ui-avatar', `ui-avatar--${size}`, className)} {...props}>
-      {src ? <img src={src} alt={name} className="ui-avatar__image" /> : <span>{initials}</span>}
+      {safeSrc ? (
+        <img src={safeSrc} alt={name} className="ui-avatar__image" loading="lazy" />
+      ) : (
+        <span>{initials}</span>
+      )}
     </div>
   );
 }

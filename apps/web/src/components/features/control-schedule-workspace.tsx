@@ -30,6 +30,7 @@ import { useToastFeedback } from './use-toast-feedback';
 
 type ScheduleKind = 'PERFORMANCE' | 'REHEARSAL' | 'EVENT';
 type ScheduleRepeatMode = 'NONE' | 'DAILY' | 'WEEKLY';
+type PerformanceCastMode = 'AUTO' | 'CAST_1' | 'CAST_2';
 
 type ScheduleFormState = {
   kind: ScheduleKind;
@@ -40,6 +41,7 @@ type ScheduleFormState = {
   durationMinutes: number;
   location: VenueName;
   participantIds: string[];
+  performanceCastMode: PerformanceCastMode;
   description: string;
   repeatMode: ScheduleRepeatMode;
   repeatCount: number;
@@ -81,6 +83,9 @@ const defaultDurationByKind: Record<ScheduleKind, number> = {
 };
 
 const techCrewPattern = /(тех|звук|свет|костюм|реквиз|бутафор|монтаж|сцена|освет|гример|машинист)/i;
+const alternateRoleSuffixPattern = /\s+\(дубль\)$/i;
+const legacyMainCastRoleName = 'основной состав';
+const legacyAlternateCastRoleName = 'дубль';
 
 const todayDate = () => new Date().toISOString().slice(0, 10);
 const plusHoursTime = (hours: number) => {
@@ -98,6 +103,7 @@ const initialFormState: ScheduleFormState = {
   durationMinutes: defaultDurationByKind.EVENT,
   location: 'БЗ',
   participantIds: [],
+  performanceCastMode: 'AUTO',
   description: '',
   repeatMode: 'NONE',
   repeatCount: 2,
@@ -178,8 +184,95 @@ const formatHistoryTime = (value: string) =>
     minute: '2-digit',
   }).format(new Date(value));
 
-const mapPlayParticipants = (play: TemplateRecord) =>
-  Array.from(new Set(play.roles.flatMap((role) => role.assignments.map((assignment) => assignment.participantId))));
+const isAlternateRoleName = (name: string) => {
+  const normalized = name.trim().toLowerCase();
+  return normalized === legacyAlternateCastRoleName || alternateRoleSuffixPattern.test(name.trim());
+};
+
+const getBaseRoleName = (name: string) => {
+  const normalized = name.trim();
+  const lowered = normalized.toLowerCase();
+
+  if (lowered === legacyMainCastRoleName || lowered === legacyAlternateCastRoleName) {
+    return 'Состав';
+  }
+
+  return normalized.replace(alternateRoleSuffixPattern, '').trim() || 'Роль';
+};
+
+const playHasAlternateCast = (play: TemplateRecord | null) =>
+  Boolean(play?.roles.some((role) => isAlternateRoleName(role.name)));
+
+const mapPlayParticipants = (play: TemplateRecord, castNumber: 1 | 2 | null = null) => {
+  const grouped = new Map<
+    string,
+    {
+      primary: string[];
+      alternate: string[];
+    }
+  >();
+
+  play.roles.forEach((role) => {
+    const key = getBaseRoleName(role.name).toLowerCase();
+    const current = grouped.get(key) ?? { primary: [], alternate: [] };
+    const participantIds = role.assignments.map((assignment) => assignment.participantId);
+
+    if (isAlternateRoleName(role.name)) {
+      current.alternate = participantIds;
+    } else {
+      current.primary = participantIds;
+    }
+
+    grouped.set(key, current);
+  });
+
+  return Array.from(
+    new Set(
+      Array.from(grouped.values()).flatMap((role) => {
+        if (castNumber === 2) {
+          return role.alternate.length > 0 ? role.alternate : role.primary;
+        }
+
+        return role.primary.length > 0 ? role.primary : role.alternate;
+      }),
+    ),
+  );
+};
+
+const predictPerformanceCastNumber = (
+  items: EventRecord[],
+  templateId: string,
+  dateValue: string,
+  excludeEventId?: string | null,
+): 1 | 2 => {
+  const sameDay = items
+    .filter(
+      (event) =>
+        event.id !== excludeEventId &&
+        event.templateId === templateId &&
+        event.type === 'PERFORMANCE' &&
+        event.status !== 'CANCELLED' &&
+        event.startsAt.slice(0, 10) === dateValue,
+    )
+    .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+
+  if (sameDay[0]?.performanceCastNumber === 1 || sameDay[0]?.performanceCastNumber === 2) {
+    return sameDay[0].performanceCastNumber;
+  }
+
+  const previousEvent = items
+    .filter(
+      (event) =>
+        event.id !== excludeEventId &&
+        event.templateId === templateId &&
+        event.type === 'PERFORMANCE' &&
+        event.status !== 'CANCELLED' &&
+        event.startsAt.slice(0, 10) < dateValue,
+    )
+    .sort((left, right) => new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime())[0];
+
+  return previousEvent?.performanceCastNumber === 1 ? 2 : 1;
+};
 
 const eventKindFromType = (type: EventType): ScheduleKind => {
   if (type === 'PERFORMANCE') {
@@ -248,6 +341,12 @@ const mapEventToForm = (event: EventRecord): ScheduleFormState => ({
   durationMinutes: durationBetweenIsoMinutes(event.startsAt, event.endsAt),
   location: venueOptions.includes(event.location as VenueName) ? (event.location as VenueName) : 'БЗ',
   participantIds: event.participants.map((item) => item.participantId),
+  performanceCastMode:
+    event.type === 'PERFORMANCE' && event.performanceCastLocked && event.performanceCastNumber === 1
+      ? 'CAST_1'
+      : event.type === 'PERFORMANCE' && event.performanceCastLocked && event.performanceCastNumber === 2
+        ? 'CAST_2'
+        : 'AUTO',
   description: event.description ?? '',
   repeatMode: 'NONE',
   repeatCount: 2,
@@ -312,8 +411,8 @@ export function ControlScheduleWorkspace() {
         operationsApi.listEvents({
           organizationId: activeOrganizationId,
           accessToken,
-          from: shiftDate(todayDate(), -7),
-          limit: 80,
+          from: shiftDate(todayDate(), -60),
+          limit: 300,
           includeDrafts: true,
         }),
       ]);
@@ -351,7 +450,8 @@ export function ControlScheduleWorkspace() {
       playId: play.id,
       title: play.name,
       location: venueOptions.includes(play.location as VenueName) ? (play.location as VenueName) : current.location,
-      participantIds: mapPlayParticipants(play),
+      performanceCastMode: 'AUTO',
+      participantIds: mapPlayParticipants(play, playHasAlternateCast(play) ? 1 : null),
     }));
   }, [plays, searchParams]);
 
@@ -360,17 +460,77 @@ export function ControlScheduleWorkspace() {
     () => plays.find((play) => play.id === form.playId) ?? null,
     [form.playId, plays],
   );
+  const selectedPlayHasAlternateCast = useMemo(
+    () => playHasAlternateCast(selectedPlay),
+    [selectedPlay],
+  );
+  const effectivePerformanceCastNumber = useMemo<1 | 2 | null>(() => {
+    if (form.kind !== 'PERFORMANCE' || !selectedPlay || !selectedPlayHasAlternateCast) {
+      return null;
+    }
+
+    if (form.performanceCastMode === 'CAST_1') {
+      return 1;
+    }
+
+    if (form.performanceCastMode === 'CAST_2') {
+      return 2;
+    }
+
+    return predictPerformanceCastNumber(events, selectedPlay.id, form.date, editingEventId);
+  }, [
+    editingEventId,
+    events,
+    form.date,
+    form.kind,
+    form.performanceCastMode,
+    selectedPlay,
+    selectedPlayHasAlternateCast,
+  ]);
   const selectedParticipants = useMemo(
     () => participants.filter((participant) => form.participantIds.includes(participant.id)),
     [participants, form.participantIds],
   );
   const troupeIds = useMemo(() => participants.map((participant) => participant.id), [participants]);
-  const primaryCastIds = useMemo(() => (selectedPlay ? mapPlayParticipants(selectedPlay) : []), [selectedPlay]);
+  const primaryCastIds = useMemo(() => (selectedPlay ? mapPlayParticipants(selectedPlay, 1) : []), [selectedPlay]);
   const techCrewIds = useMemo(() => extractTechCrewIds(participants), [participants]);
   const selectedEvent = useMemo(
     () => events.find((event) => event.id === selectedEventId) ?? null,
     [events, selectedEventId],
   );
+
+  useEffect(() => {
+    if (form.kind !== 'PERFORMANCE' || !selectedPlay) {
+      return;
+    }
+
+    const nextParticipantIds = mapPlayParticipants(selectedPlay, effectivePerformanceCastNumber);
+    setForm((current) => {
+      const hasSameParticipants =
+        current.participantIds.length === nextParticipantIds.length &&
+        current.participantIds.every((participantId) => nextParticipantIds.includes(participantId));
+
+      if (
+        hasSameParticipants &&
+        current.title === selectedPlay.name &&
+        current.location ===
+          (venueOptions.includes(selectedPlay.location as VenueName)
+            ? (selectedPlay.location as VenueName)
+            : current.location)
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        title: selectedPlay.name,
+        location: venueOptions.includes(selectedPlay.location as VenueName)
+          ? (selectedPlay.location as VenueName)
+          : current.location,
+        participantIds: nextParticipantIds,
+      };
+    });
+  }, [effectivePerformanceCastNumber, form.kind, selectedPlay]);
   const computedEndsAtIso = useMemo(() => {
     if (!form.date || !form.startsAt) {
       return null;
@@ -517,11 +677,12 @@ export function ControlScheduleWorkspace() {
       ...current,
       kind,
       playId: kind === 'PERFORMANCE' ? current.playId : '',
-      title: kind === 'PERFORMANCE' ? current.title : current.title,
+      title: kind === 'PERFORMANCE' ? current.title : '',
       durationMinutes:
         kind === 'PERFORMANCE'
           ? current.durationMinutes
           : defaultDurationByKind[kind],
+      performanceCastMode: kind === 'PERFORMANCE' ? current.performanceCastMode : 'AUTO',
     }));
   };
 
@@ -533,7 +694,8 @@ export function ControlScheduleWorkspace() {
       playId,
       title: play?.name ?? '',
       location: venueOptions.includes(play?.location as VenueName) ? (play?.location as VenueName) : current.location,
-      participantIds: play ? mapPlayParticipants(play) : [],
+      performanceCastMode: 'AUTO',
+      participantIds: play ? mapPlayParticipants(play, playHasAlternateCast(play) ? 1 : null) : [],
     }));
   };
 
@@ -548,7 +710,8 @@ export function ControlScheduleWorkspace() {
       location: venueOptions.includes(selectedPlay.location as VenueName)
         ? (selectedPlay.location as VenueName)
         : current.location,
-      participantIds: mapPlayParticipants(selectedPlay),
+      performanceCastMode: 'AUTO',
+      participantIds: mapPlayParticipants(selectedPlay, playHasAlternateCast(selectedPlay) ? 1 : null),
     }));
     setNoticeText(`Состав и площадка подставлены из спектакля «${selectedPlay.name}».`);
   };
@@ -598,6 +761,14 @@ export function ControlScheduleWorkspace() {
     const title = form.kind === 'PERFORMANCE'
       ? plays.find((play) => play.id === form.playId)?.name ?? ''
       : form.title.trim();
+    const manualCastNumber =
+      form.kind === 'PERFORMANCE' && selectedPlayHasAlternateCast
+        ? form.performanceCastMode === 'CAST_1'
+          ? (1 as const)
+          : form.performanceCastMode === 'CAST_2'
+            ? (2 as const)
+            : undefined
+        : undefined;
 
     if (!title) {
       throw new Error('Укажите название события или выберите спектакль.');
@@ -612,10 +783,18 @@ export function ControlScheduleWorkspace() {
       location: form.location,
       description: form.description.trim() || undefined,
       templateId: form.kind === 'PERFORMANCE' ? form.playId || undefined : undefined,
-      participants: form.participantIds.map((participantId) => ({
-        participantId,
-        isRequired: true,
-      })),
+      performanceCastNumber: manualCastNumber,
+      useAutomaticPerformanceCast:
+        form.kind === 'PERFORMANCE' && selectedPlayHasAlternateCast && form.performanceCastMode === 'AUTO'
+          ? true
+          : undefined,
+      participants:
+        form.kind === 'PERFORMANCE'
+          ? undefined
+          : form.participantIds.map((participantId) => ({
+              participantId,
+              isRequired: true,
+            })),
     };
   };
 
@@ -900,23 +1079,59 @@ export function ControlScheduleWorkspace() {
             </div>
 
             {form.kind === 'PERFORMANCE' ? (
-              <div className="schedule-inline-actions">
-                <Select
-                  label="Спектакль"
-                  value={form.playId}
-                  onChange={(event) => handlePlayChange(event.target.value)}
-                >
-                  <option value="">Выберите спектакль</option>
-                  {playOptions.map((play) => (
-                    <option key={play.id} value={play.id}>
-                      {play.name}
-                    </option>
-                  ))}
-                </Select>
-                <Button type="button" variant="ghost" size="sm" onClick={applyPlayTemplate} disabled={!selectedPlay}>
-                  Заполнить по спектаклю
-                </Button>
-              </div>
+              <>
+                <div className="schedule-inline-actions">
+                  <Select
+                    label="Спектакль"
+                    value={form.playId}
+                    onChange={(event) => handlePlayChange(event.target.value)}
+                  >
+                    <option value="">Выберите спектакль</option>
+                    {playOptions.map((play) => (
+                      <option key={play.id} value={play.id}>
+                        {play.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Button type="button" variant="ghost" size="sm" onClick={applyPlayTemplate} disabled={!selectedPlay}>
+                    Заполнить по спектаклю
+                  </Button>
+                </div>
+
+                {selectedPlayHasAlternateCast ? (
+                  <div className="schedule-cast-switcher">
+                    <div>
+                      <strong>Состав на этот день</strong>
+                      <p>
+                        Авто-режим чередует составы по дням. Сейчас для выбранной даты сыграет{' '}
+                        {effectivePerformanceCastNumber ? `${effectivePerformanceCastNumber} состав` : 'состав определится автоматически'}.
+                      </p>
+                    </div>
+                    <div className="schedule-cast-switcher__controls">
+                      {([
+                        ['AUTO', 'Авто'],
+                        ['CAST_1', '1 состав'],
+                        ['CAST_2', '2 состав'],
+                      ] as const).map(([value, label]) => (
+                        <Button
+                          key={value}
+                          type="button"
+                          variant={form.performanceCastMode === value ? 'primary' : 'ghost'}
+                          size="sm"
+                          onClick={() =>
+                            setForm((current) => ({
+                              ...current,
+                              performanceCastMode: value,
+                            }))
+                          }
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
             ) : (
               <Input
                 label="Название"
@@ -1002,42 +1217,91 @@ export function ControlScheduleWorkspace() {
               <div className="schedule-participant-head">
                 <div>
                   <strong>Состав участников</strong>
-                  <p>{selectedParticipants.length > 0 ? `Выбрано ${selectedParticipants.length}` : 'Пока никого не выбрали'}</p>
+                  <p>
+                    {selectedParticipants.length > 0
+                      ? `Выбрано ${selectedParticipants.length}`
+                      : 'Пока никого не выбрали'}
+                  </p>
                 </div>
-                <div className="schedule-quick-groups">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => applyParticipantGroup('troupe')}>
-                    Вся труппа
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => applyParticipantGroup('cast')} disabled={primaryCastIds.length === 0}>
-                    Основной состав
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => applyParticipantGroup('tech')} disabled={techCrewIds.length === 0}>
-                    Техслужба
-                  </Button>
-                </div>
+                {form.kind !== 'PERFORMANCE' ? (
+                  <div className="schedule-quick-groups">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => applyParticipantGroup('troupe')}>
+                      Вся труппа
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => applyParticipantGroup('cast')} disabled={primaryCastIds.length === 0}>
+                      Основной состав
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => applyParticipantGroup('tech')} disabled={techCrewIds.length === 0}>
+                      Техслужба
+                    </Button>
+                  </div>
+                ) : null}
               </div>
 
-              <ParticipantPicker
-                participants={participants}
-                value={form.participantIds}
-                onChange={(participantIds) => setForm((current) => ({ ...current, participantIds }))}
-                label="Участники"
-                searchPlaceholder="Найти по имени или фамилии"
-              />
-
-              {selectedParticipants.length > 0 ? (
-                <div className="schedule-selected-participants">
-                  {selectedParticipants.map((participant) => (
-                    <div key={participant.id} className="schedule-selected-person">
-                      <Avatar size="sm" name={participantDisplayName(participant)} />
-                      <div>
-                        <strong>{participantDisplayName(participant)}</strong>
-                        <span>{participant.userId ? 'С аккаунтом' : 'Без аккаунта'}</span>
-                      </div>
+              {form.kind === 'PERFORMANCE' ? (
+                <div className="schedule-cast-preview">
+                  <div className="schedule-cast-preview__summary">
+                    <div>
+                      <strong>
+                        {selectedPlayHasAlternateCast && effectivePerformanceCastNumber
+                          ? `${effectivePerformanceCastNumber} состав`
+                          : 'Состав по спектаклю'}
+                      </strong>
+                      <p>
+                        {selectedPlayHasAlternateCast
+                          ? 'Участники подтягиваются автоматически из карточки спектакля и переключаются сразу на весь день.'
+                          : 'Участники подтягиваются автоматически из карточки спектакля.'}
+                      </p>
                     </div>
-                  ))}
+                    {selectedPlayHasAlternateCast && effectivePerformanceCastNumber ? (
+                      <Badge variant="primary">{effectivePerformanceCastNumber} состав</Badge>
+                    ) : null}
+                  </div>
+
+                  {selectedParticipants.length > 0 ? (
+                    <div className="schedule-selected-participants">
+                      {selectedParticipants.map((participant) => (
+                        <div key={participant.id} className="schedule-selected-person">
+                          <Avatar size="sm" name={participantDisplayName(participant)} />
+                          <div>
+                            <strong>{participantDisplayName(participant)}</strong>
+                            <span>{participant.userId ? 'С аккаунтом' : 'Без аккаунта'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="resource-empty-inline">
+                      <strong>Состав пока не заполнен</strong>
+                      <p>Откройте карточку спектакля и добавьте роли с участниками.</p>
+                    </div>
+                  )}
                 </div>
-              ) : null}
+              ) : (
+                <>
+                  <ParticipantPicker
+                    participants={participants}
+                    value={form.participantIds}
+                    onChange={(participantIds) => setForm((current) => ({ ...current, participantIds }))}
+                    label="Участники"
+                    searchPlaceholder="Найти по имени или фамилии"
+                  />
+
+                  {selectedParticipants.length > 0 ? (
+                    <div className="schedule-selected-participants">
+                      {selectedParticipants.map((participant) => (
+                        <div key={participant.id} className="schedule-selected-person">
+                          <Avatar size="sm" name={participantDisplayName(participant)} />
+                          <div>
+                            <strong>{participantDisplayName(participant)}</strong>
+                            <span>{participant.userId ? 'С аккаунтом' : 'Без аккаунта'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              )}
             </div>
 
             <label className="ui-field-group">
@@ -1177,6 +1441,7 @@ export function ControlScheduleWorkspace() {
                           <div className="schedule-event-card__meta">
                             {venue ? <Badge className={`venue-badge ${venueToneClass[venue]}`} title={venueLabelMap[venue]}>{venue}</Badge> : null}
                             <Badge variant="neutral">{eventTypeLabels[event.type]}</Badge>
+                            {event.performanceCastNumber ? <Badge variant="primary">{event.performanceCastNumber} состав</Badge> : null}
                             <Badge variant={statusVariant(event.status)}>{eventStatusLabels[event.status]}</Badge>
                             <span>
                               {event.participants.length > 0
@@ -1290,6 +1555,7 @@ export function ControlScheduleWorkspace() {
                             {selectedEvent.location}
                           </Badge>
                         ) : null}
+                        {selectedEvent.performanceCastNumber ? <Badge variant="primary">{selectedEvent.performanceCastNumber} состав</Badge> : null}
                         <Badge variant={statusVariant(selectedEvent.status)}>{eventStatusLabels[selectedEvent.status]}</Badge>
                       </div>
                     </div>

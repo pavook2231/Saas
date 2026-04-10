@@ -559,7 +559,9 @@ export function CalendarWorkspace() {
         <span className="chip-time">{timeFormat.format(new Date(event.startsAt))}</span>
         <span className="chip-title">{event.title}</span>
         <span className="chip-meta">
-          {typeLabel[event.type]}{venue ? ` · ${venue}` : ''}
+          {typeLabel[event.type]}
+          {event.performanceCastNumber ? ` · ${event.performanceCastNumber} состав` : ''}
+          {venue ? ` · ${venue}` : ''}
         </span>
       </button>
     );
@@ -591,6 +593,7 @@ export function CalendarWorkspace() {
               {venue}
             </Badge>
           ) : null}
+          {event.performanceCastNumber ? <Badge variant="primary">{event.performanceCastNumber} состав</Badge> : null}
           <span className="theatre-event__type">{typeLabel[event.type]}</span>
           {event.status === 'CANCELLED' ? <Badge variant="warning">Отменено</Badge> : null}
         </div>

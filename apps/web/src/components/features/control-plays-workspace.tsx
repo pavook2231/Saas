@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   operationsApi,
   participantDisplayName,
-  type EventRecord,
   type ParticipantRecord,
   type TemplateRecord,
 } from '@/app/lib/api/operations';
@@ -18,7 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Select } from '@/components/ui/select';
-import { venueOptions, venueToneClass, type VenueName } from '@/lib/venues';
+import { isVenueName, venueLabelMap, venueOptions, venueToneClass, type VenueName } from '@/lib/venues';
 
 import { ManagementShell } from './management-shell';
 import { useActiveWorkspace } from './use-active-workspace';
@@ -27,213 +26,227 @@ import { useToastFeedback } from './use-toast-feedback';
 type PlayRoleDraft = {
   id: string;
   name: string;
-  mainParticipantIds: string[];
+  primaryParticipantIds: string[];
   alternateParticipantIds: string[];
 };
 
 type PlayFormState = {
   templateId: string | null;
   name: string;
-  durationHours: string;
-  durationMinutes: string;
+  durationText: string;
   location: VenueName;
   isActive: boolean;
   hasAlternateCast: boolean;
   roles: PlayRoleDraft[];
 };
 
-type SavedPlayState = {
-  id: string;
-  name: string;
-};
-
-type PlayUsageStats = {
-  totalEvents: number;
-  upcomingEvents: number;
-  lastStartsAt: string | null;
-};
-
-type PlaySortMode = 'recent' | 'name' | 'duration' | 'usage';
 type PlayStatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
-type PlayAlternateFilter = 'ALL' | 'WITH' | 'WITHOUT';
 
-const durationPresets = [60, 90, 120, 150, 180];
-const rolePresetTemplates = [
-  { id: 'general', label: 'Общий состав', roles: ['Состав'] },
-  { id: 'main-ensemble', label: 'Главные роли и ансамбль', roles: ['Главные роли', 'Ансамбль'] },
-  { id: 'cast-tech', label: 'Актеры и техслужба', roles: ['Актеры', 'Техслужба'] },
-];
-const altSuffix = ' (дубль)';
+type GroupedRoleSummary = {
+  name: string;
+  primary: string[];
+  alternate: string[];
+};
+
+const alternateRoleSuffixPattern = /\s+\(дубль\)$/i;
+const legacyMainCastRoleName = 'основной состав';
+const legacyAlternateCastRoleName = 'дубль';
 
 const createDraftId = () => Math.random().toString(36).slice(2, 10);
 
-const createRoleDraft = (name = 'Состав'): PlayRoleDraft => ({
+const createRoleDraft = (name = ''): PlayRoleDraft => ({
   id: createDraftId(),
   name,
-  mainParticipantIds: [],
+  primaryParticipantIds: [],
   alternateParticipantIds: [],
 });
 
 const initialFormState = (): PlayFormState => ({
   templateId: null,
   name: '',
-  durationHours: '2',
-  durationMinutes: '0',
+  durationText: '02:00',
   location: 'БЗ',
   isActive: true,
   hasAlternateCast: false,
-  roles: [createRoleDraft()],
+  roles: [createRoleDraft('Главные роли')],
 });
 
-const isAlternateRoleName = (name: string) => name.trim().toLowerCase().endsWith(altSuffix);
-const baseRoleName = (name: string) => name.trim().replace(/\s+\(дубль\)$/i, '').trim() || 'Роль';
+const isAlternateRoleName = (name: string) => {
+  const normalized = name.trim().toLowerCase();
+  return normalized === legacyAlternateCastRoleName || alternateRoleSuffixPattern.test(name.trim());
+};
 
-const toDurationParts = (totalMinutes: number) => ({
-  durationHours: String(Math.floor(totalMinutes / 60)),
-  durationMinutes: String(totalMinutes % 60),
-});
+const getBaseRoleName = (name: string) => {
+  const normalized = name.trim();
+  const lowered = normalized.toLowerCase();
+
+  if (lowered === legacyMainCastRoleName || lowered === legacyAlternateCastRoleName) {
+    return 'Состав';
+  }
+
+  return normalized.replace(alternateRoleSuffixPattern, '').trim() || 'Роль';
+};
 
 const formatDurationLabel = (totalMinutes: number) => {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes} мин`;
-  if (minutes === 0) return `${hours} ч`;
-  return `${hours} ч ${minutes} мин`;
+
+  if (hours > 0 && minutes > 0) return `${hours} ч ${minutes} мин`;
+  if (hours > 0) return `${hours} ч`;
+  return `${minutes} мин`;
 };
 
-const formatShortDate = (value: string | null) => {
-  if (!value) return 'еще не ставился';
-  return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short' }).format(new Date(value));
+const formatDurationInput = (totalMinutes: number) => {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+const parseDurationMinutes = (value: string) => {
+  const normalized = value.trim();
+
+  if (!normalized) return null;
+
+  if (/^\d+$/.test(normalized)) {
+    const minutes = Number(normalized);
+    return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+  }
+
+  const match = normalized.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || minutes > 59) return null;
+
+  const totalMinutes = hours * 60 + minutes;
+  return totalMinutes > 0 ? totalMinutes : null;
+};
+
+const groupTemplateRoles = (
+  template: TemplateRecord,
+  participantNames: Map<string, string>,
+): GroupedRoleSummary[] => {
+  const grouped = new Map<string, GroupedRoleSummary>();
+  const legacyMain = template.roles.find((role) => role.name.trim().toLowerCase() === legacyMainCastRoleName);
+  const legacyAlternate = template.roles.find((role) => role.name.trim().toLowerCase() === legacyAlternateCastRoleName);
+
+  if (legacyMain || legacyAlternate) {
+    grouped.set('Состав', {
+      name: 'Состав',
+      primary: legacyMain?.assignments.map((assignment) => participantNames.get(assignment.participantId) ?? 'Участник') ?? [],
+      alternate: legacyAlternate?.assignments.map((assignment) => participantNames.get(assignment.participantId) ?? 'Участник') ?? [],
+    });
+  }
+
+  template.roles.forEach((role) => {
+    if (
+      role.name.trim().toLowerCase() === legacyMainCastRoleName ||
+      role.name.trim().toLowerCase() === legacyAlternateCastRoleName
+    ) {
+      return;
+    }
+
+    const roleName = getBaseRoleName(role.name);
+    const current = grouped.get(roleName) ?? { name: roleName, primary: [], alternate: [] };
+    const selectedNames = role.assignments.map((assignment) => participantNames.get(assignment.participantId) ?? 'Участник');
+
+    if (isAlternateRoleName(role.name)) {
+      current.alternate = selectedNames;
+    } else {
+      current.primary = selectedNames;
+    }
+
+    grouped.set(roleName, current);
+  });
+
+  return Array.from(grouped.values());
 };
 
 const buildFormFromTemplate = (template: TemplateRecord): PlayFormState => {
   const grouped = new Map<string, PlayRoleDraft>();
-  const legacyMain = template.roles.find((role) => role.name.trim() === 'Основной состав');
-  const legacyAlternate = template.roles.find((role) => role.name.trim() === 'Дубль');
+  const legacyMain = template.roles.find((role) => role.name.trim().toLowerCase() === legacyMainCastRoleName);
+  const legacyAlternate = template.roles.find((role) => role.name.trim().toLowerCase() === legacyAlternateCastRoleName);
 
   if (legacyMain || legacyAlternate) {
     grouped.set('Состав', {
       id: createDraftId(),
       name: 'Состав',
-      mainParticipantIds: legacyMain?.assignments.map((assignment) => assignment.participantId) ?? [],
+      primaryParticipantIds: legacyMain?.assignments.map((assignment) => assignment.participantId) ?? [],
       alternateParticipantIds: legacyAlternate?.assignments.map((assignment) => assignment.participantId) ?? [],
     });
   }
 
   template.roles.forEach((role) => {
-    if (role.name.trim() === 'Основной состав' || role.name.trim() === 'Дубль') return;
-    const name = baseRoleName(role.name);
-    const current = grouped.get(name) ?? createRoleDraft(name);
+    if (
+      role.name.trim().toLowerCase() === legacyMainCastRoleName ||
+      role.name.trim().toLowerCase() === legacyAlternateCastRoleName
+    ) {
+      return;
+    }
+
+    const roleName = getBaseRoleName(role.name);
+    const current = grouped.get(roleName) ?? createRoleDraft(roleName);
+
     if (isAlternateRoleName(role.name)) {
       current.alternateParticipantIds = role.assignments.map((assignment) => assignment.participantId);
     } else {
-      current.mainParticipantIds = role.assignments.map((assignment) => assignment.participantId);
+      current.primaryParticipantIds = role.assignments.map((assignment) => assignment.participantId);
     }
-    grouped.set(name, current);
+
+    grouped.set(roleName, current);
   });
 
   const roles = Array.from(grouped.values());
-  const duration = toDurationParts(template.durationMinutes);
 
   return {
     templateId: template.id,
     name: template.name,
-    durationHours: duration.durationHours,
-    durationMinutes: duration.durationMinutes,
-    location: template.location && venueOptions.includes(template.location as VenueName) ? (template.location as VenueName) : 'БЗ',
+    durationText: formatDurationInput(template.durationMinutes),
+    location: isVenueName(template.location) ? template.location : 'БЗ',
     isActive: template.isActive,
     hasAlternateCast: roles.some((role) => role.alternateParticipantIds.length > 0),
-    roles: roles.length > 0 ? roles : [createRoleDraft()],
+    roles: roles.length > 0 ? roles : [createRoleDraft('Главные роли')],
   };
 };
 
 const rolesToPayload = (roles: PlayRoleDraft[], hasAlternateCast: boolean) =>
-  roles
-    .flatMap((role, index) => {
-      const normalizedName = role.name.trim() || `Роль ${index + 1}`;
-      const entries = [
-        {
-          name: normalizedName,
-          requiredCount: Math.max(role.mainParticipantIds.length, 1),
-          sortOrder: index * 2 + 1,
-          participantIds: role.mainParticipantIds,
-        },
-      ];
+  roles.flatMap((role, index) => {
+    const name = role.name.trim() || `Роль ${index + 1}`;
+    const payload = [
+      {
+        name,
+        requiredCount: Math.max(role.primaryParticipantIds.length, 1),
+        sortOrder: index * 2 + 1,
+        participantIds: role.primaryParticipantIds,
+      },
+    ];
 
-      if (hasAlternateCast && role.alternateParticipantIds.length > 0) {
-        entries.push({
-          name: `${normalizedName}${altSuffix}`,
-          requiredCount: Math.max(role.alternateParticipantIds.length, 1),
-          sortOrder: index * 2 + 2,
-          participantIds: role.alternateParticipantIds,
-        });
-      }
-
-      return entries;
-    })
-    .filter((role) => role.participantIds.length > 0 || role.name.trim().length > 0);
-
-const normalizeMinutes = (value: string) => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return Math.min(parsed, 59);
-};
-
-const normalizeHours = (value: string) => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return Math.min(parsed, 12);
-};
-
-const getPlayUsageStats = (events: EventRecord[]) => {
-  const stats = new Map<string, PlayUsageStats>();
-  const now = Date.now();
-
-  for (const event of events) {
-    if (!event.templateId) continue;
-    const current = stats.get(event.templateId) ?? { totalEvents: 0, upcomingEvents: 0, lastStartsAt: null };
-    current.totalEvents += 1;
-    if (new Date(event.startsAt).getTime() >= now) current.upcomingEvents += 1;
-    if (!current.lastStartsAt || new Date(event.startsAt) > new Date(current.lastStartsAt)) {
-      current.lastStartsAt = event.startsAt;
+    if (hasAlternateCast) {
+      payload.push({
+        name: `${name} (дубль)`,
+        requiredCount: Math.max(role.alternateParticipantIds.length, 1),
+        sortOrder: index * 2 + 2,
+        participantIds: role.alternateParticipantIds,
+      });
     }
-    stats.set(event.templateId, current);
-  }
 
-  return stats;
-};
+    return payload;
+  });
 
-const matchPlaySearch = (template: TemplateRecord, query: string, participantsById: Map<string, string>) => {
-  if (!query) return true;
-  const normalized = query.toLowerCase();
-  const cast = template.roles
-    .flatMap((role) => role.assignments.map((assignment) => participantsById.get(assignment.participantId) ?? ''))
-    .join(' ')
-    .toLowerCase();
-
-  return (
-    template.name.toLowerCase().includes(normalized) ||
-    (template.location ?? '').toLowerCase().includes(normalized) ||
-    cast.includes(normalized)
-  );
-};
+const templateHasAlternateCast = (template: TemplateRecord) =>
+  template.roles.some((role) => isAlternateRoleName(role.name));
 
 export function ControlPlaysWorkspace() {
   const { accessToken, activeOrganizationId } = useActiveWorkspace();
   const [plays, setPlays] = useState<TemplateRecord[]>([]);
   const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
-  const [events, setEvents] = useState<EventRecord[]>([]);
   const [form, setForm] = useState<PlayFormState>(initialFormState);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedPlayId, setSelectedPlayId] = useState<string | null>(null);
-  const [castModalTemplate, setCastModalTemplate] = useState<TemplateRecord | null>(null);
-  const [savedPlay, setSavedPlay] = useState<SavedPlayState | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortMode, setSortMode] = useState<PlaySortMode>('recent');
-  const [venueFilter, setVenueFilter] = useState<'ALL' | VenueName>('ALL');
   const [statusFilter, setStatusFilter] = useState<PlayStatusFilter>('ALL');
-  const [alternateFilter, setAlternateFilter] = useState<PlayAlternateFilter>('ALL');
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -244,35 +257,49 @@ export function ControlPlaysWorkspace() {
     errorTitle: 'Спектакли',
   });
 
-  const participantSummary = useMemo(
+  const participantNames = useMemo(
     () => new Map(participants.map((participant) => [participant.id, participantDisplayName(participant)])),
     [participants],
   );
 
-  const usageStats = useMemo(() => getPlayUsageStats(events), [events]);
-  const totalDurationMinutes = useMemo(() => normalizeHours(form.durationHours) * 60 + normalizeMinutes(form.durationMinutes), [form.durationHours, form.durationMinutes]);
-  const totalSelectedParticipants = useMemo(
-    () => form.roles.reduce((count, role) => count + new Set([...role.mainParticipantIds, ...(form.hasAlternateCast ? role.alternateParticipantIds : [])]).size, 0),
-    [form.hasAlternateCast, form.roles],
-  );
+  const durationMinutes = useMemo(() => parseDurationMinutes(form.durationText), [form.durationText]);
 
   const formErrors = useMemo(() => {
-    const hasNamedRoles = form.roles.some((role) => role.name.trim().length > 0);
-    const hasMainCast = form.roles.some((role) => role.mainParticipantIds.length > 0);
+    const hasRoleName = form.roles.some((role) => role.name.trim().length > 0);
+    const hasPrimaryCast = form.roles.some((role) => role.primaryParticipantIds.length > 0);
+
     return {
       name: form.name.trim().length >= 2 ? '' : 'Укажите название спектакля.',
-      duration: totalDurationMinutes > 0 ? '' : 'Укажите длительность спектакля.',
-      cast: hasNamedRoles && hasMainCast ? '' : 'Добавьте хотя бы одну роль и выберите основной состав.',
+      duration: durationMinutes && durationMinutes > 0 ? '' : 'Введите длительность в минутах или формате ЧЧ:ММ.',
+      cast: hasRoleName && hasPrimaryCast ? '' : 'Добавьте хотя бы одну роль и выберите основной состав.',
     };
-  }, [form.name, form.roles, totalDurationMinutes]);
+  }, [durationMinutes, form.name, form.roles]);
 
-  const isFormValid = useMemo(() => !formErrors.name && !formErrors.duration && !formErrors.cast, [formErrors]);
+  const filteredPlays = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return plays.filter((play) => {
+      if (statusFilter === 'ACTIVE' && !play.isActive) return false;
+      if (statusFilter === 'INACTIVE' && play.isActive) return false;
+      if (!query) return true;
+
+      const groupedRoles = groupTemplateRoles(play, participantNames)
+        .flatMap((role) => [role.name, role.primary.join(' '), role.alternate.join(' ')])
+        .join(' ')
+        .toLowerCase();
+
+      return (
+        play.name.toLowerCase().includes(query) ||
+        (play.location ?? '').toLowerCase().includes(query) ||
+        groupedRoles.includes(query)
+      );
+    });
+  }, [participantNames, plays, searchQuery, statusFilter]);
 
   const loadData = useCallback(async () => {
     if (!accessToken || !activeOrganizationId) {
       setPlays([]);
       setParticipants([]);
-      setEvents([]);
       setLoading(false);
       return;
     }
@@ -280,7 +307,7 @@ export function ControlPlaysWorkspace() {
     setLoading(true);
 
     try {
-      const [templateResponse, participantResponse, eventResponse] = await Promise.all([
+      const [templateResponse, participantResponse] = await Promise.all([
         operationsApi.listTemplates({
           organizationId: activeOrganizationId,
           accessToken,
@@ -290,20 +317,12 @@ export function ControlPlaysWorkspace() {
         operationsApi.listParticipants({
           organizationId: activeOrganizationId,
           accessToken,
-          limit: 400,
-        }),
-        operationsApi.listEvents({
-          organizationId: activeOrganizationId,
-          accessToken,
-          limit: 1000,
-          type: 'PERFORMANCE',
-          includeDrafts: true,
+          limit: 300,
         }),
       ]);
 
       setPlays(templateResponse.filter((template) => template.type === 'PERFORMANCE'));
       setParticipants(participantResponse);
-      setEvents(eventResponse.filter((event) => event.templateId !== null));
       setErrorText(null);
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось загрузить спектакли.');
@@ -316,46 +335,18 @@ export function ControlPlaysWorkspace() {
     void loadData();
   }, [loadData]);
 
-  const filteredPlays = useMemo(() => {
-    const items = plays.filter((template) => {
-      if (!matchPlaySearch(template, searchQuery.trim(), participantSummary)) return false;
-      if (venueFilter !== 'ALL' && template.location !== venueFilter) return false;
-      if (statusFilter === 'ACTIVE' && !template.isActive) return false;
-      if (statusFilter === 'INACTIVE' && template.isActive) return false;
-
-      const hasAlternate = template.roles.some((role) => isAlternateRoleName(role.name));
-      if (alternateFilter === 'WITH' && !hasAlternate) return false;
-      if (alternateFilter === 'WITHOUT' && hasAlternate) return false;
-      return true;
-    });
-
-    return items.sort((left, right) => {
-      if (sortMode === 'name') return left.name.localeCompare(right.name, 'ru');
-      if (sortMode === 'duration') return right.durationMinutes - left.durationMinutes;
-      if (sortMode === 'usage') {
-        const leftUsage = usageStats.get(left.id)?.totalEvents ?? 0;
-        const rightUsage = usageStats.get(right.id)?.totalEvents ?? 0;
-        return rightUsage - leftUsage;
-      }
-      return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
-    });
-  }, [alternateFilter, participantSummary, plays, searchQuery, sortMode, statusFilter, usageStats, venueFilter]);
-
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setForm(initialFormState());
-    setSavedPlay(null);
+  }, []);
+
+  const openCreateModal = () => {
+    resetForm();
+    setModalOpen(true);
   };
 
-  const handleDurationPreset = (minutes: number) => {
-    const next = toDurationParts(minutes);
-    setForm((current) => ({ ...current, durationHours: next.durationHours, durationMinutes: next.durationMinutes }));
-  };
-
-  const applyRolePreset = (roleNames: string[]) => {
-    setForm((current) => ({
-      ...current,
-      roles: roleNames.map((roleName) => createRoleDraft(roleName)),
-    }));
+  const openEditModal = (template: TemplateRecord) => {
+    setForm(buildFormFromTemplate(template));
+    setModalOpen(true);
   };
 
   const updateRole = (roleId: string, updater: (role: PlayRoleDraft) => PlayRoleDraft) => {
@@ -375,29 +366,32 @@ export function ControlPlaysWorkspace() {
   const removeRole = (roleId: string) => {
     setForm((current) => {
       const nextRoles = current.roles.filter((role) => role.id !== roleId);
-      return { ...current, roles: nextRoles.length > 0 ? nextRoles : [createRoleDraft()] };
+      return {
+        ...current,
+        roles: nextRoles.length > 0 ? nextRoles : [createRoleDraft('Главные роли')],
+      };
     });
   };
 
   const handleSubmit = async () => {
-    if (!accessToken || !activeOrganizationId || !isFormValid) return;
+    if (!accessToken || !activeOrganizationId || saving) return;
+    if (formErrors.name || formErrors.duration || formErrors.cast || !durationMinutes) return;
 
     setSaving(true);
     setNoticeText(null);
     setErrorText(null);
-    setSavedPlay(null);
 
     try {
       const payload = {
         name: form.name.trim(),
         type: 'PERFORMANCE' as const,
-        durationMinutes: totalDurationMinutes,
+        durationMinutes,
         location: form.location,
         isActive: form.isActive,
         roles: rolesToPayload(form.roles, form.hasAlternateCast),
       };
 
-      const result = form.templateId
+      const saved = form.templateId
         ? await operationsApi.updateTemplate({
             organizationId: activeOrganizationId,
             accessToken,
@@ -410,11 +404,10 @@ export function ControlPlaysWorkspace() {
             payload,
           });
 
-      setPlays((current) => [result, ...current.filter((item) => item.id !== result.id)]);
-      setSelectedPlayId(result.id);
-      setSavedPlay({ id: result.id, name: result.name });
-      setNoticeText(form.templateId ? `Спектакль «${result.name}» обновлен.` : `Спектакль «${result.name}» добавлен.`);
-      setForm(buildFormFromTemplate(result));
+      setPlays((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      setModalOpen(false);
+      resetForm();
+      setNoticeText(form.templateId ? `Спектакль «${saved.name}» обновлен.` : `Спектакль «${saved.name}» создан.`);
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось сохранить спектакль.');
     } finally {
@@ -422,25 +415,8 @@ export function ControlPlaysWorkspace() {
     }
   };
 
-  const handleEditPlay = (template: TemplateRecord) => {
-    setForm(buildFormFromTemplate(template));
-    setSelectedPlayId(template.id);
-    setSavedPlay(null);
-    setNoticeText(`Открыли «${template.name}» для редактирования.`);
-  };
-
-  const handleDuplicatePlay = (template: TemplateRecord) => {
-    const next = buildFormFromTemplate(template);
-    next.templateId = null;
-    next.name = `${template.name} (копия)`;
-    setForm(next);
-    setSelectedPlayId(template.id);
-    setSavedPlay(null);
-    setNoticeText(`Создали копию на основе «${template.name}».`);
-  };
-
   const handleArchivePlay = async (template: TemplateRecord) => {
-    if (!accessToken || !activeOrganizationId) return;
+    if (!accessToken || !activeOrganizationId || saving) return;
     if (!window.confirm(`Удалить спектакль «${template.name}»?`)) return;
 
     setSaving(true);
@@ -454,8 +430,6 @@ export function ControlPlaysWorkspace() {
         templateId: template.id,
       });
       setPlays((current) => current.filter((item) => item.id !== template.id));
-      if (form.templateId === template.id) setForm(initialFormState());
-      setSelectedPlayId((current) => (current === template.id ? null : current));
       setNoticeText(`Спектакль «${template.name}» удален.`);
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось удалить спектакль.');
@@ -465,342 +439,256 @@ export function ControlPlaysWorkspace() {
   };
 
   return (
-    <ManagementShell title="Спектакли" description="Добавление спектаклей, составов и быстрый переход в расписание.">
+    <ManagementShell title="Спектакли" description="Простая библиотека спектаклей, ролей и составов без лишней перегрузки.">
       {noticeText ? <p className="finance-notice">{noticeText}</p> : null}
       {errorText ? <p className="finance-error">{errorText}</p> : null}
 
-      <div className="plays-layout">
-        <Card>
-          <CardHeader>
-            <CardTitle>{form.templateId ? 'Редактировать спектакль' : 'Добавить спектакль'}</CardTitle>
-            <CardDescription>Слева — создание и состав. Справа — управление уже существующими спектаклями.</CardDescription>
-          </CardHeader>
-          <CardContent className="profile-stack">
-            {savedPlay ? (
-              <div className="plays-success-panel">
-                <div className="resource-inline-info">
-                  <strong>{savedPlay.name}</strong>
-                  <span>Сохранено. Можно сразу использовать спектакль в расписании или создать следующий.</span>
-                </div>
-                <div className="resource-card__actions">
-                  <Link className="ui-button ui-button--ghost ui-button--sm" href={`/control/schedule?playId=${savedPlay.id}` as Route}>
-                    <span className="ui-button__content">Использовать в расписании</span>
-                  </Link>
-                  <Button type="button" variant="ghost" size="sm" onClick={resetForm}>
-                    Добавить ещё
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-
+      <Card>
+        <CardHeader className="plays-page__header">
+          <div>
+            <CardTitle>Библиотека спектаклей</CardTitle>
+            <CardDescription>
+              Название, длительность, зал и составы. Если у спектакля есть дубль, в расписании можно будет чередовать 1 и 2 состав по дням.
+            </CardDescription>
+          </div>
+          <Button type="button" onClick={openCreateModal}>
+            Новый спектакль
+          </Button>
+        </CardHeader>
+        <CardContent className="profile-stack">
+          <div className="plays-toolbar">
             <Input
-              label="Название"
+              label="Поиск"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="По названию, залу или участнику"
+            />
+            <Select
+              label="Статус"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as PlayStatusFilter)}
+            >
+              <option value="ALL">Все спектакли</option>
+              <option value="ACTIVE">Только активные</option>
+              <option value="INACTIVE">Только скрытые</option>
+            </Select>
+          </div>
+
+          {loading ? (
+            <div className="plays-list plays-list--skeleton">
+              {Array.from({ length: 4 }, (_, index) => (
+                <div key={index} className="plays-card plays-card--skeleton" />
+              ))}
+            </div>
+          ) : filteredPlays.length === 0 ? (
+            <div className="resource-empty-inline plays-empty-state">
+              <strong>{plays.length === 0 ? 'Пока нет ни одного спектакля' : 'Ничего не найдено'}</strong>
+              <p>
+                {plays.length === 0
+                  ? 'Добавьте первый спектакль и сразу задайте зал, длительность и состав.'
+                  : 'Смените фильтры или поисковый запрос.'}
+              </p>
+            </div>
+          ) : (
+            <div className="plays-list">
+              {filteredPlays.map((play) => {
+                const groupedRoles = groupTemplateRoles(play, participantNames);
+                const venue = isVenueName(play.location) ? play.location : null;
+                const actorsCount = new Set(groupedRoles.flatMap((role) => [...role.primary, ...role.alternate])).size;
+
+                return (
+                  <article key={play.id} className="plays-card">
+                    <div className="plays-card__header">
+                      <div>
+                        <h3>{play.name}</h3>
+                        <p>{formatDurationLabel(play.durationMinutes)}</p>
+                      </div>
+                      <div className="plays-card__badges">
+                        {venue ? (
+                          <Badge className={`venue-badge ${venueToneClass[venue]}`} title={venueLabelMap[venue]}>
+                            {venue}
+                          </Badge>
+                        ) : null}
+                        {templateHasAlternateCast(play) ? <Badge variant="primary">1/2 состав</Badge> : null}
+                        <Badge variant={play.isActive ? 'success' : 'neutral'}>
+                          {play.isActive ? 'Активен' : 'Скрыт'}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="plays-card__summary">
+                      <span>{groupedRoles.length} ролей</span>
+                      <span>{actorsCount} участников</span>
+                    </div>
+
+                    <div className="plays-card__roles">
+                      {groupedRoles.slice(0, 4).map((role) => (
+                        <div key={`${play.id}-${role.name}`} className="plays-card__role-row">
+                          <strong>{role.name}</strong>
+                          <span>{role.primary.length > 0 ? role.primary.join(', ') : '1 состав не заполнен'}</span>
+                          {templateHasAlternateCast(play) ? (
+                            <em>{role.alternate.length > 0 ? `2 состав: ${role.alternate.join(', ')}` : '2 состав пока не заполнен'}</em>
+                          ) : null}
+                        </div>
+                      ))}
+                      {groupedRoles.length > 4 ? <span className="plays-card__more">Еще ролей: {groupedRoles.length - 4}</span> : null}
+                    </div>
+
+                    <div className="plays-card__actions">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => openEditModal(play)}>
+                        Редактировать
+                      </Button>
+                      <Link className="ui-button ui-button--ghost ui-button--sm" href={`/control/schedule?playId=${play.id}` as Route}>
+                        <span className="ui-button__content">В расписание</span>
+                      </Link>
+                      <Button type="button" variant="danger" size="sm" onClick={() => void handleArchivePlay(play)} loading={saving}>
+                        Удалить
+                      </Button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Modal
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          resetForm();
+        }}
+        title={form.templateId ? 'Редактировать спектакль' : 'Новый спектакль'}
+        description="Чистая карточка спектакля: длительность, зал и составы по ролям."
+        size="lg"
+        footer={(
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setModalOpen(false);
+                resetForm();
+              }}
+              disabled={saving}
+            >
+              Отмена
+            </Button>
+            <Button type="button" onClick={() => void handleSubmit()} loading={saving}>
+              {form.templateId ? 'Сохранить изменения' : 'Создать спектакль'}
+            </Button>
+          </>
+        )}
+      >
+        <div className="plays-editor">
+          <div className="plays-editor__grid">
+            <Input
+              label="Название спектакля"
               value={form.name}
               error={formErrors.name || undefined}
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               placeholder="Например, Синбад"
             />
+            <Input
+              label="Продолжительность"
+              value={form.durationText}
+              error={formErrors.duration || undefined}
+              hint={durationMinutes ? `Сохраним как ${formatDurationLabel(durationMinutes)}.` : 'Можно ввести 135 или 02:15.'}
+              onChange={(event) => setForm((current) => ({ ...current, durationText: event.target.value }))}
+              placeholder="02:15 или 135"
+            />
+            <Select
+              label="Зал"
+              value={form.location}
+              onChange={(event) => setForm((current) => ({ ...current, location: event.target.value as VenueName }))}
+            >
+              {venueOptions.map((venue) => (
+                <option key={venue} value={venue}>
+                  {venueLabelMap[venue]}
+                </option>
+              ))}
+            </Select>
+            <Select
+              label="Видимость"
+              value={form.isActive ? 'ACTIVE' : 'INACTIVE'}
+              onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.value === 'ACTIVE' }))}
+            >
+              <option value="ACTIVE">Активный</option>
+              <option value="INACTIVE">Скрытый</option>
+            </Select>
+          </div>
 
-            <div className="plays-form-grid">
-              <div className="plays-duration-grid">
-                <Input
-                  label="Часы"
-                  type="number"
-                  min={0}
-                  max={12}
-                  value={form.durationHours}
-                  onChange={(event) => setForm((current) => ({ ...current, durationHours: event.target.value }))}
-                />
-                <Input
-                  label="Минуты"
-                  type="number"
-                  min={0}
-                  max={59}
-                  value={form.durationMinutes}
-                  error={formErrors.duration || undefined}
-                  hint={`Итог: ${formatDurationLabel(totalDurationMinutes)}. Это время потом попадет в расписание.`}
-                  onChange={(event) => setForm((current) => ({ ...current, durationMinutes: event.target.value }))}
-                />
-              </div>
+          <label className="checkbox-row plays-editor__toggle">
+            <input
+              type="checkbox"
+              checked={form.hasAlternateCast}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  hasAlternateCast: event.target.checked,
+                }))
+              }
+            />
+            <span>Есть дубль</span>
+          </label>
 
-              <Select
-                label="Зал"
-                value={form.location}
-                onChange={(event) => setForm((current) => ({ ...current, location: event.target.value as VenueName }))}
-              >
-                {venueOptions.map((venue) => (
-                  <option key={venue} value={venue}>{venue}</option>
-                ))}
-              </Select>
+          <div className="plays-editor__hint-card">
+            <strong>Как это будет работать в расписании</strong>
+            <p>
+              Если дубль включен, составы чередуются по дням: один день играет 1 состав, следующий день со спектаклем — 2 состав. При необходимости администратор сможет вручную переключить состав на конкретный день.
+            </p>
+          </div>
+
+          <div className="plays-editor__section-head">
+            <div>
+              <strong>Состав участников</strong>
+              <p>Роль, основной исполнитель и, при необходимости, дублер.</p>
             </div>
+            <Button type="button" variant="ghost" size="sm" onClick={addRole}>
+              Добавить роль
+            </Button>
+          </div>
 
-            <div className="plays-preset-row">
-              <span className="plays-preset-row__label">Быстрая длительность</span>
-              <div className="plays-chip-row">
-                {durationPresets.map((preset) => (
-                  <button key={preset} type="button" className="plays-chip-button" onClick={() => handleDurationPreset(preset)}>
-                    {formatDurationLabel(preset)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="plays-cast-section">
-              <div className="plays-cast-section__header">
-                <div>
-                  <strong>Состав</strong>
-                  <span>Роли, основной состав и дублеры.</span>
+          <div className="plays-role-grid">
+            {form.roles.map((role, index) => (
+              <div key={role.id} className="plays-role-editor">
+                <div className="plays-role-editor__top">
+                  <Input
+                    label={`Роль ${index + 1}`}
+                    value={role.name}
+                    onChange={(event) => updateRole(role.id, (current) => ({ ...current, name: event.target.value }))}
+                    placeholder="Например, Султан"
+                  />
+                  <Button type="button" variant="ghost" size="sm" onClick={() => removeRole(role.id)}>
+                    Убрать
+                  </Button>
                 </div>
-                <Button type="button" variant="ghost" size="sm" onClick={addRole}>
-                  Добавить роль
-                </Button>
-              </div>
 
-              <div className="plays-preset-row">
-                <span className="plays-preset-row__label">Быстрые шаблоны составов</span>
-                <div className="plays-chip-row">
-                  {rolePresetTemplates.map((preset) => (
-                    <button key={preset.id} type="button" className="plays-chip-button" onClick={() => applyRolePreset(preset.roles)}>
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={form.hasAlternateCast}
-                  onChange={(event) => setForm((current) => ({ ...current, hasAlternateCast: event.target.checked }))}
+                <ParticipantPicker
+                  label={form.hasAlternateCast ? '1 состав' : 'Участники роли'}
+                  participants={participants}
+                  value={role.primaryParticipantIds}
+                  onChange={(primaryParticipantIds) => updateRole(role.id, (current) => ({ ...current, primaryParticipantIds }))}
+                  searchPlaceholder="Найти актера по имени"
                 />
-                <span>Есть дубль</span>
-              </label>
 
-              <div className="plays-role-list">
-                {form.roles.map((role, index) => {
-                  const selectedMain = role.mainParticipantIds.map((participantId) => participantSummary.get(participantId)).filter((value): value is string => Boolean(value));
-                  const selectedAlternate = role.alternateParticipantIds.map((participantId) => participantSummary.get(participantId)).filter((value): value is string => Boolean(value));
-
-                  return (
-                    <div key={role.id} className="plays-role-card">
-                      <div className="plays-role-card__header">
-                        <Input
-                          label={`Роль ${index + 1}`}
-                          value={role.name}
-                          onChange={(event) => updateRole(role.id, (current) => ({ ...current, name: event.target.value }))}
-                          placeholder="Например, Главные роли"
-                        />
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeRole(role.id)}>
-                          Убрать
-                        </Button>
-                      </div>
-
-                      <ParticipantPicker
-                        label="Основной состав"
-                        participants={participants}
-                        value={role.mainParticipantIds}
-                        onChange={(mainParticipantIds) => updateRole(role.id, (current) => ({ ...current, mainParticipantIds }))}
-                        searchPlaceholder="Поиск по имени"
-                      />
-
-                      {selectedMain.length > 0 ? (
-                        <div className="plays-selected-list">
-                          {selectedMain.map((name) => (
-                            <span key={`${role.id}-${name}`} className="plays-selected-chip">{name}</span>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {form.hasAlternateCast ? (
-                        <>
-                          <ParticipantPicker
-                            label="Дублеры"
-                            participants={participants}
-                            value={role.alternateParticipantIds}
-                            onChange={(alternateParticipantIds) => updateRole(role.id, (current) => ({ ...current, alternateParticipantIds }))}
-                            searchPlaceholder="Кто дублирует роль"
-                          />
-
-                          {selectedAlternate.length > 0 ? (
-                            <div className="plays-selected-list">
-                              {selectedAlternate.map((name) => (
-                                <span key={`${role.id}-alt-${name}`} className="plays-selected-chip plays-selected-chip--alt">{name}</span>
-                              ))}
-                            </div>
-                          ) : null}
-                        </>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {formErrors.cast ? <p className="plays-helper plays-helper--error">{formErrors.cast}</p> : null}
-            </div>
-
-            <div className="plays-form-footer">
-              <div className="plays-form-footer__meta">
-                <span>Ролей: {form.roles.length}</span>
-                <span>Выбрано участников: {totalSelectedParticipants}</span>
-              </div>
-              <div className="resource-card__actions">
-                <Button type="button" variant="ghost" onClick={resetForm}>Очистить</Button>
-                <Button type="button" onClick={() => void handleSubmit()} loading={saving} disabled={!isFormValid}>
-                  {form.templateId ? 'Сохранить изменения' : 'Добавить спектакль'}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Список спектаклей</CardTitle>
-            <CardDescription>{filteredPlays.length} из {plays.length} спектаклей</CardDescription>
-          </CardHeader>
-          <CardContent className="profile-stack">
-            <div className="plays-filter-grid">
-              <Input label="Поиск" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="По названию" />
-              <Select label="Сортировка" value={sortMode} onChange={(event) => setSortMode(event.target.value as PlaySortMode)}>
-                <option value="recent">Сначала новые</option>
-                <option value="name">По названию</option>
-                <option value="duration">По длительности</option>
-                <option value="usage">По использованию</option>
-              </Select>
-              <Select label="Зал" value={venueFilter} onChange={(event) => setVenueFilter(event.target.value as 'ALL' | VenueName)}>
-                <option value="ALL">Все залы</option>
-                {venueOptions.map((venue) => (
-                  <option key={venue} value={venue}>{venue}</option>
-                ))}
-              </Select>
-              <Select label="Статус" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as PlayStatusFilter)}>
-                <option value="ALL">Все</option>
-                <option value="ACTIVE">Активные</option>
-                <option value="INACTIVE">Скрытые</option>
-              </Select>
-              <Select label="Дубль" value={alternateFilter} onChange={(event) => setAlternateFilter(event.target.value as PlayAlternateFilter)}>
-                <option value="ALL">Все</option>
-                <option value="WITH">Только с дублем</option>
-                <option value="WITHOUT">Без дубля</option>
-              </Select>
-            </div>
-
-            {loading ? (
-              <p className="empty-state">Загружаем спектакли...</p>
-            ) : filteredPlays.length === 0 ? (
-              <div className="resource-empty-inline">
-                <strong>Ничего не найдено</strong>
-                <p>Измените фильтры или добавьте новый спектакль слева.</p>
-              </div>
-            ) : (
-              <div className="plays-list-scroll">
-                <div className="resource-card__list">
-                  {filteredPlays.map((play) => {
-                    const stats = usageStats.get(play.id) ?? { totalEvents: 0, upcomingEvents: 0, lastStartsAt: null };
-                    const venue = play.location && venueOptions.includes(play.location as VenueName) ? (play.location as VenueName) : null;
-                    const groupedRoles = play.roles.reduce<Record<string, { main: string[]; alt: string[] }>>((acc, role) => {
-                      const name = baseRoleName(role.name);
-                      const bucket = acc[name] ?? { main: [], alt: [] };
-                      const names = role.assignments.map((assignment) => participantSummary.get(assignment.participantId) ?? 'Участник');
-                      if (isAlternateRoleName(role.name)) {
-                        bucket.alt = names;
-                      } else {
-                        bucket.main = names;
-                      }
-                      acc[name] = bucket;
-                      return acc;
-                    }, {});
-
-                    return (
-                      <div key={play.id} className={`play-card${selectedPlayId === play.id ? ' is-selected' : ''}`}>
-                        <div className="play-card__header">
-                          <div className="resource-inline-info">
-                            <strong>{play.name}</strong>
-                            <span>{formatDurationLabel(play.durationMinutes)}</span>
-                          </div>
-                          <div className="resource-card__actions">
-                            {venue ? <Badge className={`venue-badge ${venueToneClass[venue]}`} title={venue}>{venue}</Badge> : null}
-                            <Badge variant={play.isActive ? 'success' : 'neutral'}>{play.isActive ? 'Активен' : 'Скрыт'}</Badge>
-                          </div>
-                        </div>
-
-                        <div className="play-card__stats">
-                          <span>В расписании: {stats.totalEvents}</span>
-                          <span>Ближайших: {stats.upcomingEvents}</span>
-                          <span>Последний показ: {formatShortDate(stats.lastStartsAt)}</span>
-                        </div>
-
-                        <div className="play-card__roles">
-                          {Object.entries(groupedRoles).map(([roleName, roleData]) => (
-                            <div key={`${play.id}-${roleName}`} className="play-card__role-row">
-                              <strong>{roleName}</strong>
-                              <span>{roleData.main.length > 0 ? roleData.main.join(', ') : 'состав не указан'}</span>
-                              {roleData.alt.length > 0 ? <span>Дубль: {roleData.alt.join(', ')}</span> : null}
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="play-card__actions">
-                          <Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedPlayId(play.id); setCastModalTemplate(play); }}>
-                            Открыть состав
-                          </Button>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => handleEditPlay(play)}>
-                            Редактировать
-                          </Button>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => handleDuplicatePlay(play)}>
-                            Дублировать
-                          </Button>
-                          <Link className="ui-button ui-button--ghost ui-button--sm" href={`/control/schedule?playId=${play.id}` as Route}>
-                            <span className="ui-button__content">В расписание</span>
-                          </Link>
-                          <Button type="button" variant="danger" size="sm" onClick={() => void handleArchivePlay(play)} loading={saving}>
-                            Удалить
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className={`plays-role-editor__alternate${form.hasAlternateCast ? ' is-visible' : ''}`}>
+                  {form.hasAlternateCast ? (
+                    <ParticipantPicker
+                      label="2 состав"
+                      participants={participants}
+                      value={role.alternateParticipantIds}
+                      onChange={(alternateParticipantIds) => updateRole(role.id, (current) => ({ ...current, alternateParticipantIds }))}
+                      searchPlaceholder="Кто играет этот же образ в дубле"
+                    />
+                  ) : null}
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            ))}
+          </div>
 
-      <Modal
-        open={Boolean(castModalTemplate)}
-        onClose={() => setCastModalTemplate(null)}
-        title={castModalTemplate?.name ?? 'Состав спектакля'}
-        description="Основной и дублерский состав по ролям."
-      >
-        <div className="profile-stack">
-          {castModalTemplate?.roles.length ? (
-            Object.entries(
-              castModalTemplate.roles.reduce<Record<string, { main: string[]; alt: string[] }>>((acc, role) => {
-                const name = baseRoleName(role.name);
-                const bucket = acc[name] ?? { main: [], alt: [] };
-                const names = role.assignments.map((assignment) => participantSummary.get(assignment.participantId) ?? 'Участник');
-                if (isAlternateRoleName(role.name)) {
-                  bucket.alt = names;
-                } else {
-                  bucket.main = names;
-                }
-                acc[name] = bucket;
-                return acc;
-              }, {}),
-            ).map(([roleName, roleData]) => (
-              <div key={roleName} className="plays-cast-modal__row">
-                <strong>{roleName}</strong>
-                <span>Основной состав: {roleData.main.length > 0 ? roleData.main.join(', ') : 'не указан'}</span>
-                {roleData.alt.length > 0 ? <span>Дубль: {roleData.alt.join(', ')}</span> : null}
-              </div>
-            ))
-          ) : (
-            <div className="resource-empty-inline">
-              <strong>Состав не заполнен</strong>
-              <p>У этого спектакля пока нет ролей и участников.</p>
-            </div>
-          )}
+          {formErrors.cast ? <p className="plays-helper plays-helper--error">{formErrors.cast}</p> : null}
         </div>
       </Modal>
     </ManagementShell>

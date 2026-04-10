@@ -5,11 +5,14 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
   Length,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -60,6 +63,17 @@ export class UpdateEventDto {
   @IsOptional()
   @IsUUID('4')
   templateId?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(2)
+  performanceCastNumber?: number | null;
+
+  @IsOptional()
+  @IsBoolean()
+  useAutomaticPerformanceCast?: boolean;
 
   @IsOptional()
   @IsBoolean()

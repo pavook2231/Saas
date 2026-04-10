@@ -503,8 +503,12 @@ export class AuthService {
       },
     });
 
-    if (existingUser?.isEmailVerified && existingUser.deletedAt === null && existingUser.isActive) {
-      throw new ConflictException('Аккаунт с таким email уже существует.');
+    if (
+      existingUser?.isEmailVerified &&
+      existingUser.deletedAt === null &&
+      existingUser.isActive
+    ) {
+      return this.toEmailCodeRequestResponse(email);
     }
 
     await this.issueEmailAuthCode(email, EmailAuthCodePurpose.REGISTER, existingUser?.id ?? null);
@@ -688,14 +692,14 @@ export class AuthService {
         : '';
 
       throw new UnauthorizedException(
-        `OAuth ${providerNameByEnum[provider]} Р·Р°РІРµСЂС€РёР»СЃСЏ РѕС€РёР±РєРѕР№ (${query.error})${suffix}`,
+        `OAuth ${providerNameByEnum[provider]} завершился ошибкой (${query.error})${suffix}`,
       );
     }
 
     const normalizedCode = this.trimOrNull(query.code);
 
     if (!normalizedCode) {
-      throw new BadRequestException('РўСЂРµР±СѓРµС‚СЃСЏ РєРѕРґ Р°РІС‚РѕСЂРёР·Р°С†РёРё OAuth');
+      throw new BadRequestException('Требуется код авторизации OAuth');
     }
 
     const statePayload = await this.verifyOAuthState(provider, query.state);
@@ -741,13 +745,13 @@ export class AuthService {
 
     if (!profile.providerUserId) {
       throw new UnauthorizedException(
-        `РџСЂРѕС„РёР»СЊ OAuth ${providerNameByEnum[provider]} РЅРµРєРѕСЂСЂРµРєС‚РµРЅ`,
+        `Профиль OAuth ${providerNameByEnum[provider]} некорректен`,
       );
     }
 
     if (statePayload.action === 'link') {
       if (!statePayload.linkUserId) {
-        throw new UnauthorizedException('РЎРѕСЃС‚РѕСЏРЅРёРµ РїСЂРёРІСЏР·РєРё OAuth РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ');
+        throw new UnauthorizedException('OAuth link state is invalid');
       }
 
       const linking = await this.linkOAuthAccountToUser(
@@ -924,7 +928,7 @@ export class AuthService {
     }
 
     const definition = OAUTH_PROVIDER_DEFINITIONS[provider];
-    const normalizedClientState = this.trimOrNull(clientState) ?? undefined;
+    const normalizedClientState = this.normalizeClientState(clientState) ?? undefined;
 
     const statePayload: OAuthStatePayload = {
       type: 'oauth_state',
@@ -949,7 +953,7 @@ export class AuthService {
     });
 
     const signedState = this.jwtService.sign(statePayload, {
-      secret: this.getConfig().jwt.accessSecret,
+      secret: this.getConfig().jwt.oauthStateSecret,
       expiresIn: OAUTH_STATE_EXPIRES_IN,
       issuer: this.getConfig().app.name,
       audience: 'oauth-state',
@@ -1002,12 +1006,12 @@ export class AuthService {
     state?: string,
   ): Promise<OAuthStatePayload> {
     if (!state) {
-      throw new BadRequestException('РўСЂРµР±СѓРµС‚СЃСЏ СЃРѕСЃС‚РѕСЏРЅРёРµ OAuth');
+      throw new BadRequestException('Требуется OAuth state');
     }
 
     try {
       const payload = this.jwtService.verify<OAuthStatePayload>(state, {
-        secret: this.getConfig().jwt.accessSecret,
+        secret: this.getConfig().jwt.oauthStateSecret,
         issuer: this.getConfig().app.name,
         audience: 'oauth-state',
       });
@@ -1017,11 +1021,11 @@ export class AuthService {
         payload.provider !== provider ||
         (payload.action !== 'login' && payload.action !== 'link')
       ) {
-        throw new UnauthorizedException('РЎРѕСЃС‚РѕСЏРЅРёРµ OAuth РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ');
+        throw new UnauthorizedException('OAuth state is invalid');
       }
 
       if (payload.action === 'link' && !payload.linkUserId) {
-        throw new UnauthorizedException('РЎРѕСЃС‚РѕСЏРЅРёРµ РїСЂРёРІСЏР·РєРё OAuth РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ');
+        throw new UnauthorizedException('OAuth link state is invalid');
       }
 
       const consumed = await this.prisma.oauthState.updateMany({
@@ -1042,7 +1046,7 @@ export class AuthService {
       });
 
       if (consumed.count !== 1) {
-        throw new UnauthorizedException('РЎРѕСЃС‚РѕСЏРЅРёРµ OAuth РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ');
+        throw new UnauthorizedException('OAuth state is invalid');
       }
 
       return payload;
@@ -1051,7 +1055,7 @@ export class AuthService {
         throw error;
       }
 
-      throw new UnauthorizedException('РЎРѕСЃС‚РѕСЏРЅРёРµ OAuth РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ');
+      throw new UnauthorizedException('OAuth state is invalid');
     }
   }
 
@@ -2169,6 +2173,27 @@ export class AuthService {
 
     const normalized = value.trim();
     return normalized.length > 0 ? normalized : null;
+  }
+
+  private normalizeClientState(value?: string | null): string | null {
+    const normalized = this.trimOrNull(value);
+
+    if (!normalized || !normalized.startsWith('/')) {
+      return null;
+    }
+
+    try {
+      const guardOrigin = 'https://app.local';
+      const url = new URL(normalized, guardOrigin);
+
+      if (url.origin !== guardOrigin) {
+        return null;
+      }
+
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return null;
+    }
   }
 
   private hashToken(token: string): string {

@@ -4989,3 +4989,245 @@ textarea.ui-field {
     padding-inline: 8px;
   }
 }
+
+.plays-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.plays-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 14px;
+}
+
+.plays-list {
+  display: grid;
+  gap: 14px;
+}
+
+.plays-list--skeleton {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.plays-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid rgba(219, 227, 239, 0.92);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.05);
+}
+
+.plays-card--skeleton {
+  min-height: 180px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.9));
+}
+
+.plays-card__header,
+.plays-card__actions,
+.plays-editor__section-head,
+.schedule-cast-switcher,
+.schedule-cast-preview__summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plays-card__header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.15;
+}
+
+.plays-card__header p,
+.plays-card__summary,
+.plays-card__more,
+.plays-editor__hint-card p,
+.schedule-cast-switcher p,
+.schedule-cast-preview__summary p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.plays-card__badges,
+.schedule-cast-switcher__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.plays-card__summary {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.84rem;
+}
+
+.plays-card__roles {
+  display: grid;
+  gap: 10px;
+}
+
+.plays-card__role-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.plays-card__role-row strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.plays-card__role-row span,
+.plays-card__role-row em {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.plays-card__role-row em {
+  font-style: normal;
+}
+
+.plays-card__actions {
+  flex-wrap: wrap;
+}
+
+.plays-empty-state {
+  min-height: 220px;
+  place-items: center;
+}
+
+.plays-editor {
+  display: grid;
+  gap: 18px;
+}
+
+.plays-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.plays-editor__toggle {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(219, 227, 239, 0.92);
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.plays-editor__hint-card,
+.schedule-cast-switcher,
+.schedule-cast-preview {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid rgba(219, 227, 239, 0.92);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.95));
+}
+
+.plays-editor__hint-card strong,
+.schedule-cast-switcher strong,
+.schedule-cast-preview__summary strong {
+  color: var(--text);
+}
+
+.plays-role-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.plays-role-editor {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(219, 227, 239, 0.92);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.plays-role-editor__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.plays-role-editor__alternate {
+  display: grid;
+}
+
+.plays-role-editor__alternate:not(.is-visible) {
+  display: none;
+}
+
+.schedule-cast-switcher {
+  gap: 12px;
+}
+
+.schedule-cast-preview {
+  gap: 14px;
+}
+
+.schedule-cast-preview__summary {
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .plays-toolbar,
+  .plays-editor__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plays-page__header,
+  .plays-card__header,
+  .plays-card__actions,
+  .plays-editor__section-head,
+  .schedule-cast-switcher,
+  .schedule-cast-preview__summary {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .plays-role-editor__top {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .plays-card {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .plays-card__summary {
+    gap: 10px;
+    font-size: 0.8rem;
+  }
+
+  .plays-card__role-row,
+  .plays-editor__hint-card,
+  .schedule-cast-switcher,
+  .schedule-cast-preview {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .plays-card__actions .ui-button,
+  .schedule-cast-switcher__controls .ui-button {
+    width: 100%;
+  }
+}

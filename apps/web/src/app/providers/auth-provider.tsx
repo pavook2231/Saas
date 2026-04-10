@@ -10,6 +10,8 @@ import {
   useState,
 } from 'react';
 
+import { sanitizeInternalPath } from '@/lib/safe-url';
+
 import { authApi } from '../lib/auth/api';
 import { authStorage } from '../lib/auth/storage';
 import {
@@ -232,10 +234,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const startOAuth = useCallback(
     async (provider: OAuthProviderName, returnTo = '/auth/callback') => {
-      const response = await authApi.startOAuth(provider, returnTo, session?.accessToken ?? undefined);
+      const safeReturnTo = sanitizeInternalPath(returnTo, '/auth/callback') ?? '/auth/callback';
+      const response = await authApi.startOAuth(provider, safeReturnTo);
       window.location.assign(response.authorizationUrl);
     },
-    [session?.accessToken],
+    [],
   );
 
   useEffect(() => {

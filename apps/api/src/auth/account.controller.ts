@@ -1,5 +1,7 @@
 import { Body, Controller, Patch, Post, UseGuards } from '@nestjs/common';
 
+import { RateLimit } from '../security/decorators/rate-limit.decorator';
+
 import { AccessTokenPayload, MeResponse } from './auth.types';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -21,6 +23,7 @@ export class AccountController {
   }
 
   @Post('password')
+  @RateLimit({ bucket: 'auth' })
   async changePassword(
     @CurrentUser() user: AccessTokenPayload,
     @Body() dto: ChangePasswordDto,

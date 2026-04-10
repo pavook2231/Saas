@@ -5,6 +5,8 @@ import type { Route } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
+import { sanitizeInternalPath } from '@/lib/safe-url';
+
 import { useAuth } from '../../providers/auth-provider';
 
 export default function OAuthCallbackClient() {
@@ -15,7 +17,7 @@ export default function OAuthCallbackClient() {
 
   const nextUrl = useMemo(() => {
     const raw = searchParams.get('next');
-    return (raw && raw.startsWith('/') ? raw : '/calendar') as Route;
+    return (sanitizeInternalPath(raw, '/calendar') ?? '/calendar') as Route;
   }, [searchParams]);
 
   const csrfToken = searchParams.get('csrfToken') ?? undefined;
@@ -37,9 +39,7 @@ export default function OAuthCallbackClient() {
         }
       } catch (error) {
         if (!cancelled) {
-          setErrorText(
-            error instanceof Error ? error.message : 'Не удалось завершить OAuth вход',
-          );
+          setErrorText(error instanceof Error ? error.message : 'Не удалось завершить OAuth-вход');
         }
       }
     };

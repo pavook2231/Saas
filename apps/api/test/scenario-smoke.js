@@ -393,16 +393,92 @@ class InMemoryPrisma {
   assert.equal(prisma.state.memberships.find((m) => m.organizationId === organization.id && m.userId === assistantAuth.user.id).status, MembershipStatus.LEFT);
   results.push('7. user can leave organization');
 
-  const previousPeriodEvent = await eventsService.createEvent(organization.id, adminAuth.user.id, { title: 'April 24 Performance', type: EventType.PERFORMANCE, startsAt: '2026-04-24T10:00:00.000Z', endsAt: '2026-04-24T11:00:00.000Z', participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }] });
-  const mainEvent = await eventsService.createEvent(organization.id, adminAuth.user.id, { title: 'April 26 Performance', type: EventType.PERFORMANCE, startsAt: '2026-04-26T18:00:00.000Z', endsAt: '2026-04-26T19:30:00.000Z', participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }] });
-  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.EVENT_ASSIGNED).length, 2);
+  const getWeekEventRange = (dayOffset, hour, minute, durationMinutes) => {
+    const monday = new Date();
+    monday.setHours(12, 0, 0, 0);
+
+    const day = monday.getDay();
+    const mondayShift = day === 0 ? -6 : 1 - day;
+    monday.setDate(monday.getDate() + mondayShift + dayOffset);
+
+    const startsAt = new Date(monday);
+    startsAt.setHours(hour, minute, 0, 0);
+
+    const endsAt = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
+
+    return {
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+    };
+  };
+
+  const nextWeekEventRange = getWeekEventRange(8, 10, 0, 60);
+  await eventsService.createEvent(organization.id, adminAuth.user.id, {
+    title: 'Next Week Performance',
+    type: EventType.PERFORMANCE,
+    startsAt: nextWeekEventRange.startsAt,
+    endsAt: nextWeekEventRange.endsAt,
+    participants: [
+      {
+        participantId: invitedParticipant.id,
+        attendanceStatus: EventAttendanceStatus.ACCEPTED,
+        isRequired: true,
+      },
+    ],
+  });
+  assert.equal(prisma.state.notifications.length, 0);
+
+  const firstCurrentWeekEventRange = getWeekEventRange(4, 10, 0, 60);
+  await eventsService.createEvent(organization.id, adminAuth.user.id, {
+    title: 'Current Week Performance',
+    type: EventType.PERFORMANCE,
+    startsAt: firstCurrentWeekEventRange.startsAt,
+    endsAt: firstCurrentWeekEventRange.endsAt,
+    participants: [
+      {
+        participantId: invitedParticipant.id,
+        attendanceStatus: EventAttendanceStatus.ACCEPTED,
+        isRequired: true,
+      },
+    ],
+  });
+  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.SYSTEM).length, 1);
+  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.EVENT_ASSIGNED).length, 0);
+
+  const mainEventRange = getWeekEventRange(6, 18, 0, 90);
+  const mainEvent = await eventsService.createEvent(organization.id, adminAuth.user.id, {
+    title: 'Current Week Performance Follow-up',
+    type: EventType.PERFORMANCE,
+    startsAt: mainEventRange.startsAt,
+    endsAt: mainEventRange.endsAt,
+    participants: [
+      {
+        participantId: invitedParticipant.id,
+        attendanceStatus: EventAttendanceStatus.ACCEPTED,
+        isRequired: true,
+      },
+    ],
+  });
+  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.SYSTEM).length, 1);
+  assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.EVENT_ASSIGNED).length, 1);
   const updatedEvent = await eventsService.updateEvent(organization.id, mainEvent.id, adminAuth.user.id, { title: 'April 26 Performance Updated' });
   assert.equal(updatedEvent.title, 'April 26 Performance Updated');
   assert.equal(prisma.state.notifications.filter((n) => n.type === NotificationType.EVENT_UPDATED && n.eventId === mainEvent.id).length, 1);
   assert.equal(notificationsGateway.emissions.some((item) => item.event === 'notifications:new'), true);
   results.push('8. create/update event -> notifications');
 
-  await assert.rejects(() => eventsService.createEvent(organization.id, adminAuth.user.id, { title: 'Conflict Event', type: EventType.REHEARSAL, startsAt: '2026-04-26T18:30:00.000Z', endsAt: '2026-04-26T20:00:00.000Z', participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }] }), (error) => error instanceof ConflictException);
+  const conflictStartsAt = new Date(mainEventRange.startsAt);
+  conflictStartsAt.setMinutes(conflictStartsAt.getMinutes() + 30);
+  const conflictEndsAt = new Date(mainEventRange.startsAt);
+  conflictEndsAt.setHours(conflictEndsAt.getHours() + 2);
+
+  await assert.rejects(() => eventsService.createEvent(organization.id, adminAuth.user.id, {
+    title: 'Conflict Event',
+    type: EventType.REHEARSAL,
+    startsAt: conflictStartsAt.toISOString(),
+    endsAt: conflictEndsAt.toISOString(),
+    participants: [{ participantId: invitedParticipant.id, attendanceStatus: EventAttendanceStatus.ACCEPTED, isRequired: true }],
+  }), (error) => error instanceof ConflictException);
   results.push('9. overlapping event conflict is detected');
 
   console.log('Scenario smoke passed:');

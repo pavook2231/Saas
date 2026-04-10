@@ -24,7 +24,6 @@ import {
   LinkedOAuthAccount,
   MeResponse,
   OAuthAuthorizationStartResponse,
-  OAuthCallbackResult,
   providerByName,
   providerNameByEnum,
   RequestMeta,
@@ -253,11 +252,7 @@ export class AuthController {
   ): Promise<OAuthAuthorizationStartResponse> {
     return await this.attachOAuthStateCookie(
       response,
-      this.authService.getAuthorizationUrlForLink(
-        OAuthProvider.VK,
-        user.sub,
-        query.state,
-      ),
+      this.authService.getAuthorizationUrlForLink(OAuthProvider.VK, user.sub, query.state),
     );
   }
 
@@ -320,23 +315,39 @@ export class AuthController {
         ? this.authCookieService.getOAuthState(req) ?? query.state ?? undefined
         : query.state;
 
-    this.authCookieService.assertOAuthState(req, resolvedState);
-    const result = await this.authService.handleOAuthCallback(
-      provider,
-      {
-        ...query,
-        state: resolvedState,
-      },
-      this.extractRequestMeta(req),
-    );
-    this.authCookieService.clearOAuthStateCookie(response);
+    try {
+      this.authCookieService.assertOAuthState(req, resolvedState);
+      const result = await this.authService.handleOAuthCallback(
+        provider,
+        {
+          ...query,
+          state: resolvedState,
+        },
+        this.extractRequestMeta(req),
+      );
 
-    if (result.mode === 'login') {
-      const payload = this.attachSessionCookies(response, result);
+      if (result.mode === 'login') {
+        const payload = this.attachSessionCookies(response, result);
+        const redirectUrl = this.buildOAuthRedirectUrl(result.clientState, {
+          provider,
+          mode: 'login',
+          csrfToken: payload.csrfToken,
+        });
+
+        if (redirectUrl) {
+          response.redirect(302, redirectUrl);
+          return;
+        }
+
+        response.json(payload);
+        return;
+      }
+
       const redirectUrl = this.buildOAuthRedirectUrl(result.clientState, {
         provider,
-        mode: 'login',
-        csrfToken: payload.csrfToken,
+        mode: 'link',
+        linked: result.linked,
+        alreadyLinked: result.alreadyLinked,
       });
 
       if (redirectUrl) {
@@ -344,23 +355,10 @@ export class AuthController {
         return;
       }
 
-      response.json(payload);
-      return;
+      response.json(result);
+    } finally {
+      this.authCookieService.clearOAuthStateCookie(response);
     }
-
-    const redirectUrl = this.buildOAuthRedirectUrl(result.clientState, {
-      provider,
-      mode: 'link',
-      linked: result.linked,
-      alreadyLinked: result.alreadyLinked,
-    });
-
-    if (redirectUrl) {
-      response.redirect(302, redirectUrl);
-      return;
-    }
-
-    response.json(result);
   }
 
   private resolveProvider(providerName: string): OAuthProvider {

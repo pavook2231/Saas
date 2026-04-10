@@ -35,6 +35,26 @@ import { UpdateEventDto } from './dto/update-event.dto';
 import { UpdateParticipantDto } from './dto/update-participant.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 
+const alternateCastSuffixPattern = /\s+\(дубль\)$/i;
+const legacyMainCastRoleName = 'основной состав';
+const legacyAlternateCastRoleName = 'дубль';
+
+const isAlternateCastRoleName = (name: string) => {
+  const normalized = name.trim().toLowerCase();
+  return normalized === legacyAlternateCastRoleName || alternateCastSuffixPattern.test(name.trim());
+};
+
+const getBaseCastRoleName = (name: string) => {
+  const normalized = name.trim();
+  const lowered = normalized.toLowerCase();
+
+  if (lowered === legacyMainCastRoleName || lowered === legacyAlternateCastRoleName) {
+    return 'Состав';
+  }
+
+  return normalized.replace(alternateCastSuffixPattern, '').trim() || 'Роль';
+};
+
 const participantSelect = {
   id: true,
   organizationId: true,
@@ -99,18 +119,20 @@ const eventSelect = {
   durationMinutes: true,
   timezone: true,
   location: true,
+  performanceCastNumber: true,
+  performanceCastLocked: true,
   isAllDay: true,
   createdAt: true,
   updatedAt: true,
-    template: {
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        location: true,
-        durationMinutes: true,
-        isActive: true,
-      },
+  template: {
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      location: true,
+      durationMinutes: true,
+      isActive: true,
+    },
   },
   participants: {
     orderBy: [{ createdAt: 'asc' }],
@@ -173,6 +195,22 @@ type NormalizedEventParticipantInput = {
   attendanceStatus: EventAttendanceStatus;
   isRequired: boolean;
   notes: string | null;
+};
+
+type TemplateRoleRecord = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  assignments: Array<{
+    participantId: string;
+  }>;
+};
+
+type ResolvedPerformanceCast = {
+  castNumber: 1 | 2 | null;
+  castLocked: boolean;
+  templateRoles: TemplateRoleRecord[];
+  hasAlternateCast: boolean;
 };
 
 type ConflictItem = {
@@ -849,17 +887,33 @@ export class EventsService {
   async createEvent(organizationId: string, actorUserId: string, dto: CreateEventDto) {
     const title = this.requireTrimmedText(dto.title, 'title', 2);
     const range = this.parseDateRange(dto.startsAt, dto.endsAt);
+    const eventType = dto.type ?? EventType.EVENT;
 
     const templateId = dto.templateId ?? null;
     if (templateId) {
       await this.ensureTemplateExists(organizationId, templateId);
     }
 
+    const resolvedCast = await this.resolvePerformanceCast({
+      organizationId,
+      type: eventType,
+      templateId,
+      startsAt: range.startsAt,
+      requestedCastNumber: dto.performanceCastNumber ?? null,
+      useAutomatic: dto.useAutomaticPerformanceCast,
+      recalculateAutomatically: true,
+    });
+
     const participants =
       dto.participants !== undefined
         ? await this.normalizeEventParticipants(organizationId, templateId, dto.participants)
         : templateId
-          ? await this.buildParticipantsFromTemplate(organizationId, templateId)
+          ? await this.buildParticipantsFromTemplate(
+              organizationId,
+              templateId,
+              resolvedCast.castNumber,
+              resolvedCast.templateRoles,
+            )
           : [];
 
     if (participants.length > 0) {
@@ -885,13 +939,15 @@ export class EventsService {
           templateId,
           title,
           description: this.trimOrNull(dto.description),
-          type: dto.type ?? EventType.EVENT,
+          type: eventType,
           status: dto.status ?? EventStatus.PLANNED,
           startsAt: range.startsAt,
           endsAt: range.endsAt,
           durationMinutes: range.durationMinutes,
           timezone: this.trimOrNull(dto.timezone) ?? 'UTC',
           location: this.trimOrNull(dto.location),
+          performanceCastNumber: resolvedCast.castNumber,
+          performanceCastLocked: resolvedCast.castLocked,
           isAllDay: dto.isAllDay ?? false,
           createdByUserId: actorUserId,
           updatedByUserId: actorUserId,
@@ -902,7 +958,23 @@ export class EventsService {
         },
       });
 
-      if (participants.length > 0) {
+      const shouldSyncPerformanceDay =
+        eventType === EventType.PERFORMANCE &&
+        templateId !== null &&
+        resolvedCast.hasAlternateCast &&
+        resolvedCast.castNumber !== null;
+
+      if (shouldSyncPerformanceDay) {
+        await this.syncPerformanceCastForDay(tx, {
+          organizationId,
+          templateId,
+          startsAt: range.startsAt,
+          castNumber: resolvedCast.castNumber as 1 | 2,
+          castLocked: resolvedCast.castLocked,
+          actorUserId,
+          templateRoles: resolvedCast.templateRoles,
+        });
+      } else if (participants.length > 0) {
         await tx.eventParticipant.createMany({
           data: participants.map((participant) => ({
             eventId: event.id,
@@ -990,6 +1062,8 @@ export class EventsService {
         startsAt: true,
         endsAt: true,
         location: true,
+        performanceCastNumber: true,
+        performanceCastLocked: true,
         participants: {
           select: {
             participantId: true,
@@ -1011,6 +1085,7 @@ export class EventsService {
       dto.startsAt ?? existing.startsAt.toISOString(),
       dto.endsAt ?? existing.endsAt.toISOString(),
     );
+    const nextType = dto.type ?? existing.type;
 
     const title =
       dto.title !== undefined ? this.requireTrimmedText(dto.title, 'title', 2) : undefined;
@@ -1021,11 +1096,50 @@ export class EventsService {
       await this.ensureTemplateExists(organizationId, templateId);
     }
 
+    const startsAtChanged =
+      dto.startsAt !== undefined &&
+      range.startsAt.getTime() !== existing.startsAt.getTime();
+    const templateChanged =
+      dto.templateId !== undefined && templateId !== existing.templateId;
+    const typeChanged = dto.type !== undefined && nextType !== existing.type;
+    const castSelectionChanged =
+      dto.performanceCastNumber !== undefined || dto.useAutomaticPerformanceCast === true;
+
+    const resolvedCast = await this.resolvePerformanceCast({
+      organizationId,
+      type: nextType,
+      templateId,
+      startsAt: range.startsAt,
+      excludeEventId: existing.id,
+      requestedCastNumber: dto.performanceCastNumber ?? null,
+      useAutomatic: dto.useAutomaticPerformanceCast,
+      recalculateAutomatically:
+        startsAtChanged ||
+        templateChanged ||
+        typeChanged ||
+        castSelectionChanged ||
+        existing.performanceCastNumber === null,
+      existingCastNumber: existing.performanceCastNumber,
+      existingCastLocked: existing.performanceCastLocked,
+    });
+
     const participantsPayload =
       dto.participants !== undefined
         ? await this.normalizeEventParticipants(organizationId, templateId, dto.participants)
-        : dto.templateId !== undefined && dto.templateId !== existing.templateId
-          ? await this.buildParticipantsFromTemplate(organizationId, templateId)
+        : nextType === EventType.PERFORMANCE &&
+            templateId &&
+            (templateChanged ||
+              startsAtChanged ||
+              typeChanged ||
+              castSelectionChanged ||
+              existing.performanceCastNumber !== resolvedCast.castNumber ||
+              existing.performanceCastLocked !== resolvedCast.castLocked)
+          ? await this.buildParticipantsFromTemplate(
+              organizationId,
+              templateId,
+              resolvedCast.castNumber,
+              resolvedCast.templateRoles,
+            )
           : null;
 
     const participantIdsToCheck =
@@ -1049,10 +1163,6 @@ export class EventsService {
       }
     }
 
-    const startsAtChanged =
-      dto.startsAt !== undefined &&
-      range.startsAt.getTime() !== existing.startsAt.getTime();
-
     await this.prisma.$transaction(async (tx) => {
       await tx.event.update({
         where: {
@@ -1073,6 +1183,8 @@ export class EventsService {
               : undefined,
           timezone: dto.timezone !== undefined ? this.trimOrNull(dto.timezone) ?? 'UTC' : undefined,
           location: dto.location !== undefined ? this.trimOrNull(dto.location) : undefined,
+          performanceCastNumber: resolvedCast.castNumber,
+          performanceCastLocked: resolvedCast.castLocked,
           isAllDay: dto.isAllDay,
           updatedByUserId: actorUserId,
         },
@@ -1086,7 +1198,23 @@ export class EventsService {
         });
       }
 
-      if (participantsPayload) {
+      const shouldSyncPerformanceDay =
+        nextType === EventType.PERFORMANCE &&
+        templateId !== null &&
+        resolvedCast.hasAlternateCast &&
+        resolvedCast.castNumber !== null;
+
+      if (shouldSyncPerformanceDay) {
+        await this.syncPerformanceCastForDay(tx, {
+          organizationId,
+          templateId,
+          startsAt: range.startsAt,
+          castNumber: resolvedCast.castNumber as 1 | 2,
+          castLocked: resolvedCast.castLocked,
+          actorUserId,
+          templateRoles: resolvedCast.templateRoles,
+        });
+      } else if (participantsPayload) {
         await tx.eventParticipant.deleteMany({
           where: {
             eventId: existing.id,
@@ -1691,12 +1819,24 @@ export class EventsService {
   private async buildParticipantsFromTemplate(
     organizationId: string,
     templateId: string | null,
+    castNumber: 1 | 2 | null = null,
+    templateRoles?: TemplateRoleRecord[],
   ): Promise<NormalizedEventParticipantInput[]> {
     if (!templateId) {
       return [];
     }
 
-    const roles = await this.prisma.templateRole.findMany({
+    const roles =
+      templateRoles ?? (await this.loadTemplateRoles(organizationId, templateId));
+
+    return this.buildParticipantsFromTemplateRoles(organizationId, roles, castNumber);
+  }
+
+  private async loadTemplateRoles(
+    organizationId: string,
+    templateId: string,
+  ): Promise<TemplateRoleRecord[]> {
+    return this.prisma.templateRole.findMany({
       where: {
         templateId,
         template: {
@@ -1708,6 +1848,7 @@ export class EventsService {
       select: {
         id: true,
         name: true,
+        sortOrder: true,
         assignments: {
           orderBy: [{ createdAt: 'asc' }],
           select: {
@@ -1716,22 +1857,61 @@ export class EventsService {
         },
       },
     });
+  }
+
+  private hasAlternateCastRoles(roles: TemplateRoleRecord[]) {
+    return roles.some((role) => isAlternateCastRoleName(role.name));
+  }
+
+  private buildParticipantsFromTemplateRoles(
+    organizationId: string,
+    roles: TemplateRoleRecord[],
+    castNumber: 1 | 2 | null,
+  ): Promise<NormalizedEventParticipantInput[]> {
+    const groupedRoles = new Map<
+      string,
+      {
+        main: TemplateRoleRecord | null;
+        alternate: TemplateRoleRecord | null;
+      }
+    >();
+
+    for (const role of roles) {
+      const key = getBaseCastRoleName(role.name).toLowerCase();
+      const current = groupedRoles.get(key) ?? { main: null, alternate: null };
+
+      if (isAlternateCastRoleName(role.name)) {
+        current.alternate = role;
+      } else {
+        current.main = role;
+      }
+
+      groupedRoles.set(key, current);
+    }
 
     const participants: NormalizedEventParticipantInput[] = [];
     const seen = new Set<string>();
 
-    for (const role of roles) {
-      for (const assignment of role.assignments) {
+    for (const [roleKey, roleSet] of groupedRoles.entries()) {
+      const selectedRole =
+        castNumber === 2
+          ? roleSet.alternate ?? roleSet.main
+          : roleSet.main ?? roleSet.alternate;
+
+      if (!selectedRole) {
+        continue;
+      }
+
+      for (const assignment of selectedRole.assignments) {
         if (seen.has(assignment.participantId)) {
           continue;
         }
 
         seen.add(assignment.participantId);
-
         participants.push({
           participantId: assignment.participantId,
-          templateRoleId: role.id,
-          roleName: role.name,
+          templateRoleId: selectedRole.id,
+          roleName: getBaseCastRoleName(selectedRole.name) || roleKey,
           attendanceStatus: EventAttendanceStatus.INVITED,
           isRequired: true,
           notes: null,
@@ -1739,12 +1919,10 @@ export class EventsService {
       }
     }
 
-    await this.ensureParticipantsExist(
+    return this.ensureParticipantsExist(
       organizationId,
       participants.map((participant) => participant.participantId),
-    );
-
-    return participants;
+    ).then(() => participants);
   }
 
   private async normalizeEventParticipants(
@@ -1821,6 +1999,230 @@ export class EventsService {
     }
 
     return result;
+  }
+
+  private getDayBounds(anchor: Date) {
+    const start = new Date(anchor);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    return {
+      start,
+      end,
+    };
+  }
+
+  private async resolvePerformanceCast(params: {
+    organizationId: string;
+    type: EventType;
+    templateId: string | null;
+    startsAt: Date;
+    excludeEventId?: string;
+    requestedCastNumber?: number | null;
+    useAutomatic?: boolean;
+    recalculateAutomatically?: boolean;
+    existingCastNumber?: number | null;
+    existingCastLocked?: boolean;
+  }): Promise<ResolvedPerformanceCast> {
+    if (params.type !== EventType.PERFORMANCE || !params.templateId) {
+      return {
+        castNumber: null,
+        castLocked: false,
+        templateRoles: [],
+        hasAlternateCast: false,
+      };
+    }
+
+    const templateRoles = await this.loadTemplateRoles(
+      params.organizationId,
+      params.templateId,
+    );
+    const hasAlternateCast = this.hasAlternateCastRoles(templateRoles);
+
+    if (!hasAlternateCast) {
+      return {
+        castNumber: null,
+        castLocked: false,
+        templateRoles,
+        hasAlternateCast: false,
+      };
+    }
+
+    if (params.requestedCastNumber === 1 || params.requestedCastNumber === 2) {
+      return {
+        castNumber: params.requestedCastNumber,
+        castLocked: true,
+        templateRoles,
+        hasAlternateCast: true,
+      };
+    }
+
+    if (
+      params.useAutomatic !== true &&
+      params.existingCastLocked &&
+      (params.existingCastNumber === 1 || params.existingCastNumber === 2)
+    ) {
+      return {
+        castNumber: params.existingCastNumber as 1 | 2,
+        castLocked: true,
+        templateRoles,
+        hasAlternateCast: true,
+      };
+    }
+
+    if (
+      !params.recalculateAutomatically &&
+      params.useAutomatic !== true &&
+      (params.existingCastNumber === 1 || params.existingCastNumber === 2)
+    ) {
+      return {
+        castNumber: params.existingCastNumber as 1 | 2,
+        castLocked: params.existingCastLocked ?? false,
+        templateRoles,
+        hasAlternateCast: true,
+      };
+    }
+
+    const automaticCast = await this.resolveAutomaticPerformanceCast({
+      organizationId: params.organizationId,
+      templateId: params.templateId,
+      startsAt: params.startsAt,
+      excludeEventId: params.excludeEventId,
+    });
+
+    return {
+      castNumber: automaticCast,
+      castLocked: false,
+      templateRoles,
+      hasAlternateCast: true,
+    };
+  }
+
+  private async resolveAutomaticPerformanceCast(params: {
+    organizationId: string;
+    templateId: string;
+    startsAt: Date;
+    excludeEventId?: string;
+  }): Promise<1 | 2> {
+    const { start, end } = this.getDayBounds(params.startsAt);
+
+    const sameDayEvent = await this.prisma.event.findFirst({
+      where: {
+        organizationId: params.organizationId,
+        templateId: params.templateId,
+        type: EventType.PERFORMANCE,
+        deletedAt: null,
+        startsAt: {
+          gte: start,
+          lt: end,
+        },
+        status: {
+          not: EventStatus.CANCELLED,
+        },
+        ...(params.excludeEventId ? { id: { not: params.excludeEventId } } : {}),
+      },
+      orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        performanceCastNumber: true,
+      },
+    });
+
+    if (sameDayEvent?.performanceCastNumber === 1 || sameDayEvent?.performanceCastNumber === 2) {
+      return sameDayEvent.performanceCastNumber;
+    }
+
+    const previousEvent = await this.prisma.event.findFirst({
+      where: {
+        organizationId: params.organizationId,
+        templateId: params.templateId,
+        type: EventType.PERFORMANCE,
+        deletedAt: null,
+        startsAt: {
+          lt: start,
+        },
+        status: {
+          not: EventStatus.CANCELLED,
+        },
+        ...(params.excludeEventId ? { id: { not: params.excludeEventId } } : {}),
+      },
+      orderBy: [{ startsAt: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        performanceCastNumber: true,
+      },
+    });
+
+    return previousEvent?.performanceCastNumber === 1 ? 2 : 1;
+  }
+
+  private async syncPerformanceCastForDay(
+    tx: Prisma.TransactionClient,
+    params: {
+      organizationId: string;
+      templateId: string;
+      startsAt: Date;
+      castNumber: 1 | 2;
+      castLocked: boolean;
+      actorUserId: string;
+      templateRoles: TemplateRoleRecord[];
+    },
+  ) {
+    const { start, end } = this.getDayBounds(params.startsAt);
+    const participants = await this.buildParticipantsFromTemplateRoles(
+      params.organizationId,
+      params.templateRoles,
+      params.castNumber,
+    );
+
+    const sameDayEvents = await tx.event.findMany({
+      where: {
+        organizationId: params.organizationId,
+        templateId: params.templateId,
+        type: EventType.PERFORMANCE,
+        deletedAt: null,
+        startsAt: {
+          gte: start,
+          lt: end,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    for (const event of sameDayEvents) {
+      await tx.event.update({
+        where: {
+          id: event.id,
+        },
+        data: {
+          performanceCastNumber: params.castNumber,
+          performanceCastLocked: params.castLocked,
+          updatedByUserId: params.actorUserId,
+        },
+      });
+
+      await tx.eventParticipant.deleteMany({
+        where: {
+          eventId: event.id,
+        },
+      });
+
+      if (participants.length > 0) {
+        await tx.eventParticipant.createMany({
+          data: participants.map((participant) => ({
+            eventId: event.id,
+            participantId: participant.participantId,
+            templateRoleId: participant.templateRoleId,
+            roleName: participant.roleName,
+            attendanceStatus: participant.attendanceStatus,
+            isRequired: participant.isRequired,
+            notes: participant.notes,
+          })),
+        });
+      }
+    }
   }
 
   private async ensureTemplateExists(organizationId: string, templateId: string) {
@@ -1997,7 +2399,25 @@ export class EventsService {
       },
     });
 
-    return this.mergeUserIds(memberships.map((membership) => membership.userId));
+    const linkedParticipants = await this.prisma.participant.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        userId: {
+          not: null,
+        },
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    return this.mergeUserIds(
+      memberships.map((membership) => membership.userId),
+      linkedParticipants
+        .map((participant) => participant.userId)
+        .filter((userId): userId is string => typeof userId === 'string' && userId.length > 0),
+    );
   }
 
   private async hasPublishedWeekSchedule(

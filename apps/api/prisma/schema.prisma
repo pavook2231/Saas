@@ -562,6 +562,8 @@ model Event {
   durationMinutes Int
   timezone        String      @default("UTC")
   location        String?
+  performanceCastNumber Int?
+  performanceCastLocked Boolean @default(false)
   isAllDay        Boolean     @default(false)
   createdByUserId String?     @db.Uuid
   updatedByUserId String?     @db.Uuid
@@ -584,6 +586,7 @@ model Event {
   @@index([organizationId, status, startsAt])
   @@index([organizationId, deletedAt])
   @@index([templateId])
+  @@index([templateId, startsAt, performanceCastNumber])
 }
 
 model EventParticipant {

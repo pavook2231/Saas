@@ -4,7 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { randomBytes } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { Request, Response } from 'express';
 
 import { AppConfig } from '../../config/app.config';
@@ -79,8 +79,8 @@ export class AuthCookieService {
   assertOAuthState(request: Request, state?: string): void {
     const cookieState = this.getOAuthState(request);
 
-    if (!state || !cookieState || cookieState !== state) {
-      throw new UnauthorizedException('Проверка cookie-состояния OAuth не пройдена');
+    if (!state || !cookieState || !this.secureEquals(cookieState, state)) {
+      throw new UnauthorizedException('Проверка OAuth state по cookie не пройдена');
     }
   }
 
@@ -126,7 +126,11 @@ export class AuthCookieService {
       ? headerCandidate[0]
       : headerCandidate;
 
-    if (!cookieToken || typeof headerToken !== 'string' || headerToken !== cookieToken) {
+    if (
+      !cookieToken ||
+      typeof headerToken !== 'string' ||
+      !this.secureEquals(cookieToken, headerToken)
+    ) {
       throw new UnauthorizedException('Проверка CSRF не пройдена');
     }
 
@@ -144,6 +148,17 @@ export class AuthCookieService {
 
   issueCsrfToken(): string {
     return randomBytes(32).toString('base64url');
+  }
+
+  private secureEquals(left: string, right: string): boolean {
+    const leftBuffer = Buffer.from(left);
+    const rightBuffer = Buffer.from(right);
+
+    if (leftBuffer.length !== rightBuffer.length) {
+      return false;
+    }
+
+    return timingSafeEqual(leftBuffer, rightBuffer);
   }
 
   private getRefreshCookieOptions(expires?: Date) {
@@ -255,7 +270,7 @@ export class AuthCookieService {
     const config = this.configService.get<AppConfig>('appConfig');
 
     if (!config) {
-      throw new UnauthorizedException('Конфигурация приложения отсутствует');
+      throw new UnauthorizedException('Конфигурация приложения недоступна');
     }
 
     return {

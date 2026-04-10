@@ -96,6 +96,8 @@ export type EventRecord = {
   durationMinutes: number;
   timezone: string | null;
   location: string | null;
+  performanceCastNumber: 1 | 2 | null;
+  performanceCastLocked: boolean;
   isAllDay: boolean;
   createdAt: string;
   updatedAt: string;
@@ -211,6 +213,8 @@ export type CreateEventPayload = {
   location?: string;
   isAllDay?: boolean;
   templateId?: string;
+  performanceCastNumber?: 1 | 2;
+  useAutomaticPerformanceCast?: boolean;
   ignoreConflicts?: boolean;
   participants?: Array<{
     participantId: string;
@@ -233,6 +237,8 @@ export type UpdateEventPayload = {
   location?: string;
   isAllDay?: boolean;
   templateId?: string | null;
+  performanceCastNumber?: 1 | 2 | null;
+  useAutomaticPerformanceCast?: boolean;
   ignoreConflicts?: boolean;
   participants?: Array<{
     participantId: string;
@@ -249,6 +255,14 @@ type OrganizationScopedRequest = {
   organizationId: string;
 };
 
+const normalizeLimit = (limit?: number) => {
+  if (typeof limit !== 'number' || !Number.isFinite(limit)) {
+    return undefined;
+  }
+
+  return Math.min(Math.max(Math.trunc(limit), 1), 500);
+};
+
 export const operationsApi = {
   listParticipants(
     params: OrganizationScopedRequest & {
@@ -263,7 +277,7 @@ export const operationsApi = {
       path: `/organizations/${params.organizationId}/participants`,
       searchParams: {
         search: params.search,
-        limit: params.limit,
+        limit: normalizeLimit(params.limit),
         includeDeleted: params.includeDeleted,
       },
       signal: params.signal,
@@ -309,7 +323,7 @@ export const operationsApi = {
       accessToken: params.accessToken,
       path: `/organizations/${params.organizationId}/templates`,
       searchParams: {
-        limit: params.limit,
+        limit: normalizeLimit(params.limit),
         type: params.type,
         isActive: params.isActive,
       },
@@ -380,7 +394,7 @@ export const operationsApi = {
         includeDrafts: params.includeDrafts,
         participantId: params.participantId,
         templateId: params.templateId,
-        limit: params.limit,
+        limit: normalizeLimit(params.limit),
       },
       signal: params.signal,
     });

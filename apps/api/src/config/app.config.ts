@@ -25,6 +25,7 @@ export type AppConfig = {
     accessExpiresIn: string;
     refreshSecret: string;
     refreshExpiresIn: string;
+    oauthStateSecret: string;
   };
   oauth: {
     google: OAuthProviderRuntimeConfig;
@@ -101,7 +102,7 @@ const requireNonEmpty = (value: string | undefined, envName: string): string => 
   const normalized = value?.trim();
 
   if (!normalized) {
-    throw new Error(`${envName} должен быть настроен`);
+    throw new Error(`${envName} must be configured`);
   }
 
   return normalized;
@@ -141,9 +142,10 @@ const parseSameSite = (
   return 'lax';
 };
 
-export default registerAs(
-  'appConfig',
-  (): AppConfig => ({
+export default registerAs('appConfig', (): AppConfig => {
+  const accessSecret = requireNonEmpty(process.env.JWT_ACCESS_SECRET, 'JWT_ACCESS_SECRET');
+
+  return {
     app: {
       name: 'saas-platform-api',
       port: toInt(process.env.API_PORT, 3001),
@@ -160,10 +162,11 @@ export default registerAs(
       url: process.env.REDIS_URL ?? 'redis://localhost:6379',
     },
     jwt: {
-      accessSecret: requireNonEmpty(process.env.JWT_ACCESS_SECRET, 'JWT_ACCESS_SECRET'),
+      accessSecret,
       accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? '15m',
       refreshSecret: requireNonEmpty(process.env.JWT_REFRESH_SECRET, 'JWT_REFRESH_SECRET'),
       refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '30d',
+      oauthStateSecret: process.env.JWT_OAUTH_STATE_SECRET?.trim() || accessSecret,
     },
     oauth: {
       google: {
@@ -265,5 +268,5 @@ export default registerAs(
         },
       },
     },
-  }),
-);
+  };
+});

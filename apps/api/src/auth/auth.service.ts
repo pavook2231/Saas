@@ -7,6 +7,8 @@
   Logger,
   NotFoundException,
   ServiceUnavailableException,
+  HttpException,
+  HttpStatus,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -26,14 +28,17 @@ import {
   RefreshToken,
 } from '@prisma/client';
 import { compare, hash } from 'bcryptjs';
-import { createHash, randomBytes, randomInt, randomUUID } from 'crypto';
+import { createHash, createHmac, randomBytes, randomInt, randomUUID } from 'crypto';
 import type { SignOptions } from 'jsonwebtoken';
 
 import { AppConfig, OAuthProviderRuntimeConfig } from '../config/app.config';
 import { PrismaService } from '../prisma/prisma.service';
+import { DataEncryptionService } from '../security/services/data-encryption.service';
 
 import { OAuthCallbackQueryDto } from './dto/oauth-callback-query.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { DisableTotpDto } from './dto/disable-totp.dto';
+import { EnableTotpDto } from './dto/enable-totp.dto';
 import { LoginDto } from './dto/login.dto';
 import { LoginWithEmailCodeDto } from './dto/login-with-email-code.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -42,11 +47,13 @@ import { RegisterWithEmailCodeDto } from './dto/register-with-email-code.dto';
 import { RequestEmailAuthCodeDto } from './dto/request-email-auth-code.dto';
 import { ResetPasswordWithEmailCodeDto } from './dto/reset-password-with-email-code.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { VerifyLoginTwoFactorDto } from './dto/verify-login-two-factor.dto';
 import { AuthEmailService } from './auth-email.service';
 import { mapOAuthProfile, OAUTH_PROVIDER_DEFINITIONS } from './oauth.providers';
 import {
   AccessTokenPayload,
   AuthResponse,
+  AuthSuccessResponse,
   EmailCodeRequestResponse,
   LinkedOAuthAccount,
   MeResponse,
@@ -61,6 +68,8 @@ import {
   RefreshTokenPayload,
   RequestMeta,
   TokenPair,
+  TotpSetupResponse,
+  TwoFactorStatusResponse,
 } from './auth.types';
 
 const OAUTH_STATE_EXPIRES_IN = '10m';
@@ -68,6 +77,15 @@ const OAUTH_FETCH_TIMEOUT_MS = 12000;
 const EMAIL_AUTH_CODE_EXPIRES_MINUTES = 10;
 const EMAIL_AUTH_CODE_LENGTH = 6;
 const EMAIL_AUTH_CODE_MAX_ATTEMPTS = 5;
+const EMAIL_AUTH_CODE_RESEND_COOLDOWN_SECONDS = 60;
+const AUTH_EMAIL_LOCK_THRESHOLD = 5;
+const AUTH_EMAIL_IP_LOCK_THRESHOLD = 3;
+const AUTH_LOCK_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_LOCK_MAX_SECONDS = 15 * 60;
+const TOTP_ISSUER = 'Theatre Internal Service';
+const TOTP_DIGITS = 6;
+const TOTP_STEP_SECONDS = 30;
+const TOTP_WINDOW_STEPS = 1;
 const PASSWORD_TIMING_RESISTANCE_HASH =
   '$2a$12$C6UzMDM.H6dfI/f/IKcEeO1Q8v1p5MNDoAuCEi0aKBslrHonghE6u';
 
@@ -78,6 +96,9 @@ const publicUserSelect = {
   firstName: true,
   lastName: true,
   avatarUrl: true,
+  totpSecret: true,
+  totpPendingSecret: true,
+  totpEnabledAt: true,
   isActive: true,
   deletedAt: true,
 } satisfies Prisma.UserSelect;
@@ -104,9 +125,10 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService<RuntimeConfig>,
     private readonly authEmailService: AuthEmailService,
+    private readonly dataEncryptionService: DataEncryptionService,
   ) {}
 
-  async register(dto: RegisterDto, requestMeta: RequestMeta): Promise<AuthResponse> {
+  async register(dto: RegisterDto, requestMeta: RequestMeta): Promise<AuthSuccessResponse> {
     const email = this.normalizeEmail(dto.email);
     this.validatePasswordStrength(dto.password);
 
@@ -177,9 +199,17 @@ export class AuthService {
     }
 
     const memberships = await this.getMembershipClaims(user.id);
+
+    if (this.requiresSensitiveRoleTwoFactor(memberships)) {
+      throw new ForbiddenException(
+        'Для чувствительных ролей вход через OAuth временно отключен до включения второго шага подтверждения.',
+      );
+    }
+
     const tokens = await this.createTokenPair(user, memberships, requestMeta);
 
     return {
+      status: 'authenticated',
       user: this.toPublicUser(user, memberships),
       tokens,
     };
@@ -187,6 +217,7 @@ export class AuthService {
 
   async login(dto: LoginDto, requestMeta: RequestMeta): Promise<AuthResponse> {
     const email = this.normalizeEmail(dto.email);
+    await this.assertAuthAttemptAllowed(email, requestMeta.ipAddress);
 
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -195,6 +226,7 @@ export class AuthService {
 
     if (!user || !user.passwordHash) {
       await compare(dto.password, PASSWORD_TIMING_RESISTANCE_HASH);
+      await this.registerFailedAuthAttempt(email, requestMeta.ipAddress);
       throw new UnauthorizedException('РќРµРІРµСЂРЅС‹Рµ СѓС‡РµС‚РЅС‹Рµ РґР°РЅРЅС‹Рµ');
     }
 
@@ -203,7 +235,27 @@ export class AuthService {
     const isValidPassword = await compare(dto.password, user.passwordHash);
 
     if (!isValidPassword) {
+      await this.registerFailedAuthAttempt(email, requestMeta.ipAddress);
       throw new UnauthorizedException('РќРµРІРµСЂРЅС‹Рµ СѓС‡РµС‚РЅС‹Рµ РґР°РЅРЅС‹Рµ');
+    }
+
+    const memberships = await this.getMembershipClaims(user.id);
+
+    if (this.hasActiveTotp(user)) {
+      return {
+        status: 'two_factor_required',
+        method: 'totp',
+      };
+    }
+
+    if (this.requiresSensitiveRoleTwoFactor(memberships)) {
+      await this.issueEmailAuthCode(email, EmailAuthCodePurpose.LOGIN_2FA, user.id);
+      return {
+        status: 'two_factor_required',
+        method: 'email_code',
+        maskedEmail: this.maskEmail(email),
+        expiresInSeconds: EMAIL_AUTH_CODE_EXPIRES_MINUTES * 60,
+      };
     }
 
     const updatedUser = await this.prisma.user.update({
@@ -217,11 +269,77 @@ export class AuthService {
     if (updatedUser.isEmailVerified) {
       await this.syncParticipantsForUser(updatedUser.id, updatedUser.email);
     }
-    const memberships = await this.getMembershipClaims(updatedUser.id);
-    const tokens = await this.createTokenPair(updatedUser, memberships, requestMeta);
+    await this.clearFailedAuthAttempts(email, requestMeta.ipAddress);
+    const freshMemberships = await this.getMembershipClaims(updatedUser.id);
+    const tokens = await this.createTokenPair(updatedUser, freshMemberships, requestMeta);
 
     return {
-      user: this.toPublicUser(updatedUser, memberships),
+      status: 'authenticated',
+      user: this.toPublicUser(updatedUser, freshMemberships),
+      tokens,
+    };
+  }
+
+  async verifyLoginTwoFactor(
+    dto: VerifyLoginTwoFactorDto,
+    requestMeta: RequestMeta,
+  ): Promise<AuthSuccessResponse> {
+    const email = this.normalizeEmail(dto.email);
+    await this.assertAuthAttemptAllowed(email, requestMeta.ipAddress);
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: userWithPasswordSelect,
+    });
+
+    if (!user || !user.passwordHash) {
+      await compare(dto.password, PASSWORD_TIMING_RESISTANCE_HASH);
+      await this.registerFailedAuthAttempt(email, requestMeta.ipAddress);
+      throw new UnauthorizedException('Неверный код или учетные данные');
+    }
+
+    this.assertUserEnabled(user);
+
+    const isValidPassword = await compare(dto.password, user.passwordHash);
+
+    if (!isValidPassword) {
+      await this.registerFailedAuthAttempt(email, requestMeta.ipAddress);
+      throw new UnauthorizedException('Неверный код или учетные данные');
+    }
+
+    const memberships = await this.getMembershipClaims(user.id);
+
+    if (!this.hasActiveTotp(user) && !this.requiresSensitiveRoleTwoFactor(memberships)) {
+      throw new BadRequestException(
+        'Дополнительное подтверждение для этой учетной записи не требуется.',
+      );
+    }
+
+    if (this.hasActiveTotp(user)) {
+      this.verifyTotpCodeOrThrow(user, dto.code);
+    } else {
+      await this.consumeEmailAuthCode(email, EmailAuthCodePurpose.LOGIN_2FA, dto.code);
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+      },
+      select: publicUserSelect,
+    });
+
+    if (updatedUser.isEmailVerified) {
+      await this.syncParticipantsForUser(updatedUser.id, updatedUser.email);
+    }
+
+    await this.clearFailedAuthAttempts(email, requestMeta.ipAddress);
+    const freshMemberships = await this.getMembershipClaims(updatedUser.id);
+    const tokens = await this.createTokenPair(updatedUser, freshMemberships, requestMeta);
+
+    return {
+      status: 'authenticated',
+      user: this.toPublicUser(updatedUser, freshMemberships),
       tokens,
     };
   }
@@ -229,7 +347,7 @@ export class AuthService {
   async refresh(
     dto: RefreshTokenDto,
     requestMeta: RequestMeta,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthSuccessResponse> {
     if (!dto.refreshToken) {
       throw new BadRequestException('РўСЂРµР±СѓРµС‚СЃСЏ refresh-С‚РѕРєРµРЅ');
     }
@@ -262,6 +380,7 @@ export class AuthService {
     const tokens = await this.createTokenPair(user, memberships, requestMeta);
 
     return {
+      status: 'authenticated',
       user: this.toPublicUser(user, memberships),
       tokens,
     };
@@ -432,6 +551,165 @@ export class AuthService {
     });
   }
 
+  async getTwoFactorStatus(userId: string): Promise<TwoFactorStatusResponse> {
+    const user = await this.getEnabledUserOrThrow(userId);
+    const memberships = await this.getMembershipClaims(user.id);
+
+    return {
+      required: this.hasActiveTotp(user) || this.requiresSensitiveRoleTwoFactor(memberships),
+      enabled: this.hasActiveTotp(user),
+      pending: this.hasPendingTotp(user),
+      method: this.hasActiveTotp(user) ? 'totp' : null,
+    };
+  }
+
+  async beginTotpSetup(userId: string, currentPassword?: string): Promise<TotpSetupResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: userWithPasswordSelect,
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Учетная запись пользователя недоступна');
+    }
+
+    this.assertUserEnabled(user);
+    await this.assertCurrentPassword(user, currentPassword);
+
+    const secret = this.generateTotpSecret();
+    const encryptedSecret = this.dataEncryptionService.encrypt(secret, `totp:${user.id}`);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        totpPendingSecret: encryptedSecret,
+      },
+    });
+
+    const issuer = TOTP_ISSUER;
+    const accountName = user.email;
+    const otpauthUrl = this.buildTotpOtpAuthUrl(issuer, accountName, secret);
+    const memberships = await this.getMembershipClaims(user.id);
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: user.id,
+        targetType: AuditTargetType.AUTH,
+        targetId: user.id,
+        action: 'auth.totp.setup-started',
+        severity: AuditSeverity.INFO,
+      },
+    });
+
+    return {
+      required: this.hasActiveTotp(user) || this.requiresSensitiveRoleTwoFactor(memberships),
+      enabled: this.hasActiveTotp(user),
+      pending: true,
+      secret,
+      manualEntryKey: secret,
+      issuer,
+      accountName,
+      otpauthUrl,
+    };
+  }
+
+  async enableTotp(userId: string, dto: EnableTotpDto): Promise<TwoFactorStatusResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: userWithPasswordSelect,
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Учетная запись пользователя недоступна');
+    }
+
+    this.assertUserEnabled(user);
+    await this.assertCurrentPassword(user, dto.currentPassword);
+
+    if (!user.totpPendingSecret) {
+      throw new BadRequestException('Сначала начните настройку TOTP.');
+    }
+
+    const secret = this.dataEncryptionService.decrypt(user.totpPendingSecret, `totp:${user.id}`);
+    this.verifyTotpCodeValueOrThrow(secret, dto.code);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          totpSecret: user.totpPendingSecret,
+          totpPendingSecret: null,
+          totpEnabledAt: new Date(),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          targetType: AuditTargetType.AUTH,
+          targetId: user.id,
+          action: 'auth.totp.enabled',
+          severity: AuditSeverity.INFO,
+        },
+      });
+    });
+
+    return {
+      required: true,
+      enabled: true,
+      pending: false,
+      method: 'totp',
+    };
+  }
+
+  async disableTotp(userId: string, dto: DisableTotpDto): Promise<TwoFactorStatusResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: userWithPasswordSelect,
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Учетная запись пользователя недоступна');
+    }
+
+    this.assertUserEnabled(user);
+    await this.assertCurrentPassword(user, dto.currentPassword);
+
+    if (!this.hasActiveTotp(user)) {
+      throw new BadRequestException('TOTP для этой учетной записи еще не включен.');
+    }
+
+    this.verifyTotpCodeOrThrow(user, dto.code);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          totpSecret: null,
+          totpPendingSecret: null,
+          totpEnabledAt: null,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          targetType: AuditTargetType.AUTH,
+          targetId: user.id,
+          action: 'auth.totp.disabled',
+          severity: AuditSeverity.WARNING,
+        },
+      });
+    });
+
+    return {
+      required: this.requiresSensitiveRoleTwoFactor(await this.getMembershipClaims(user.id)),
+      enabled: false,
+      pending: false,
+      method: null,
+    };
+  }
+
   async requestLoginEmailCode(
     dto: RequestEmailAuthCodeDto,
   ): Promise<EmailCodeRequestResponse> {
@@ -444,6 +722,14 @@ export class AuthService {
 
     if (user) {
       this.assertUserEnabled(user);
+      const memberships = await this.getMembershipClaims(user.id);
+
+      if (this.hasActiveTotp(user) || this.requiresSensitiveRoleTwoFactor(memberships)) {
+        throw new ForbiddenException(
+          'Для этой учетной записи вход по одному коду отключен. Используйте пароль и второй шаг подтверждения.',
+        );
+      }
+
       await this.issueEmailAuthCode(email, EmailAuthCodePurpose.LOGIN, user.id);
     }
 
@@ -453,7 +739,7 @@ export class AuthService {
   async loginWithEmailCode(
     dto: LoginWithEmailCodeDto,
     requestMeta: RequestMeta,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthSuccessResponse> {
     const email = this.normalizeEmail(dto.email);
     await this.consumeEmailAuthCode(email, EmailAuthCodePurpose.LOGIN, dto.code);
 
@@ -467,6 +753,13 @@ export class AuthService {
     }
 
     this.assertUserEnabled(user);
+    const memberships = await this.getMembershipClaims(user.id);
+
+    if (this.hasActiveTotp(user) || this.requiresSensitiveRoleTwoFactor(memberships)) {
+      throw new ForbiddenException(
+        'Для этой учетной записи вход по одному коду отключен. Используйте пароль и второй шаг подтверждения.',
+      );
+    }
 
     const verifiedUser = await this.prisma.user.update({
       where: { id: user.id },
@@ -479,11 +772,12 @@ export class AuthService {
 
     await this.syncParticipantsForUser(verifiedUser.id, verifiedUser.email);
 
-    const memberships = await this.getMembershipClaims(verifiedUser.id);
-    const tokens = await this.createTokenPair(verifiedUser, memberships, requestMeta);
+    const freshMemberships = await this.getMembershipClaims(verifiedUser.id);
+    const tokens = await this.createTokenPair(verifiedUser, freshMemberships, requestMeta);
 
     return {
-      user: this.toPublicUser(verifiedUser, memberships),
+      status: 'authenticated',
+      user: this.toPublicUser(verifiedUser, freshMemberships),
       tokens,
     };
   }
@@ -518,7 +812,7 @@ export class AuthService {
   async registerWithEmailCode(
     dto: RegisterWithEmailCodeDto,
     requestMeta: RequestMeta,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthSuccessResponse> {
     const email = this.normalizeEmail(dto.email);
     this.validatePasswordStrength(dto.password);
     await this.consumeEmailAuthCode(email, EmailAuthCodePurpose.REGISTER, dto.code);
@@ -576,6 +870,7 @@ export class AuthService {
     const tokens = await this.createTokenPair(user, memberships, requestMeta);
 
     return {
+      status: 'authenticated',
       user: this.toPublicUser(user, memberships),
       tokens,
     };
@@ -602,7 +897,7 @@ export class AuthService {
   async resetPasswordWithEmailCode(
     dto: ResetPasswordWithEmailCodeDto,
     requestMeta: RequestMeta,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthSuccessResponse> {
     const email = this.normalizeEmail(dto.email);
     this.validatePasswordStrength(dto.newPassword);
     await this.consumeEmailAuthCode(email, EmailAuthCodePurpose.PASSWORD_RESET, dto.code);
@@ -661,6 +956,7 @@ export class AuthService {
     const tokens = await this.createTokenPair(updatedUser, memberships, requestMeta);
 
     return {
+      status: 'authenticated',
       user: this.toPublicUser(updatedUser, memberships),
       tokens,
     };
@@ -790,6 +1086,13 @@ export class AuthService {
     }
 
     const memberships = await this.getMembershipClaims(user.id);
+
+    if (this.requiresSensitiveRoleTwoFactor(memberships)) {
+      throw new ForbiddenException(
+        'Для чувствительных ролей вход через OAuth временно отключен до включения второго шага подтверждения.',
+      );
+    }
+
     const tokens = await this.createTokenPair(user, memberships, requestMeta);
 
     return {
@@ -1626,6 +1929,9 @@ export class AuthService {
       lastName: user.lastName,
       avatarUrl: user.avatarUrl,
       memberships,
+      twoFactorEnabled: this.hasActiveTotp(user),
+      twoFactorRequired:
+        this.hasActiveTotp(user) || this.requiresSensitiveRoleTwoFactor(memberships),
     };
   }
 
@@ -2036,6 +2342,36 @@ export class AuthService {
   ): Promise<void> {
     const normalizedEmail = this.normalizeEmail(email);
     const now = new Date();
+    const resendAvailableAt = new Date(
+      now.getTime() - EMAIL_AUTH_CODE_RESEND_COOLDOWN_SECONDS * 1000,
+    );
+    const recentCode = await this.prisma.emailAuthCode.findFirst({
+      where: {
+        email: normalizedEmail,
+        purpose,
+        consumedAt: null,
+        expiresAt: {
+          gt: now,
+        },
+        createdAt: {
+          gt: resendAvailableAt,
+        },
+      },
+      select: {
+        id: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (recentCode) {
+      throw new HttpException(
+        `Повторная отправка кода будет доступна через ${EMAIL_AUTH_CODE_RESEND_COOLDOWN_SECONDS} секунд.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const code = this.generateEmailAuthCode();
     const expiresAt = new Date(now.getTime() + EMAIL_AUTH_CODE_EXPIRES_MINUTES * 60 * 1000);
 
@@ -2198,6 +2534,250 @@ export class AuthService {
 
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  private hasActiveTotp(user: {
+    totpSecret: string | null;
+    totpEnabledAt: Date | null;
+  }): boolean {
+    return Boolean(user.totpSecret && user.totpEnabledAt);
+  }
+
+  private hasPendingTotp(user: { totpPendingSecret: string | null }): boolean {
+    return Boolean(user.totpPendingSecret);
+  }
+
+  private async assertCurrentPassword(
+    user: { passwordHash?: string | null },
+    currentPassword?: string,
+  ): Promise<void> {
+    if (!user.passwordHash) {
+      return;
+    }
+
+    if (!currentPassword?.trim()) {
+      throw new BadRequestException('Введите текущий пароль.');
+    }
+
+    const matches = await compare(currentPassword, user.passwordHash);
+
+    if (!matches) {
+      throw new UnauthorizedException('Текущий пароль указан неверно.');
+    }
+  }
+
+  private verifyTotpCodeOrThrow(
+    user: { id: string; totpSecret: string | null; totpEnabledAt: Date | null },
+    code: string,
+  ): void {
+    if (!this.hasActiveTotp(user) || !user.totpSecret) {
+      throw new BadRequestException('TOTP для этой учетной записи не настроен.');
+    }
+
+    const secret = this.dataEncryptionService.decrypt(user.totpSecret, `totp:${user.id}`);
+    this.verifyTotpCodeValueOrThrow(secret, code);
+  }
+
+  private verifyTotpCodeValueOrThrow(secret: string, code: string): void {
+    const normalizedCode = code.trim();
+
+    if (!/^\d{6}$/.test(normalizedCode)) {
+      throw new UnauthorizedException('Неверный код подтверждения.');
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+
+    for (let offset = -TOTP_WINDOW_STEPS; offset <= TOTP_WINDOW_STEPS; offset += 1) {
+      const candidate = this.generateTotpCode(secret, now + offset * TOTP_STEP_SECONDS);
+
+      if (candidate === normalizedCode) {
+        return;
+      }
+    }
+
+    throw new UnauthorizedException('Неверный код подтверждения.');
+  }
+
+  private generateTotpSecret(): string {
+    return this.base32Encode(randomBytes(20));
+  }
+
+  private buildTotpOtpAuthUrl(
+    issuer: string,
+    accountName: string,
+    secret: string,
+  ): string {
+    return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(accountName)}?secret=${encodeURIComponent(secret)}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=${TOTP_DIGITS}&period=${TOTP_STEP_SECONDS}`;
+  }
+
+  private generateTotpCode(secret: string, epochSeconds: number): string {
+    const key = this.base32Decode(secret);
+    const counter = Math.floor(epochSeconds / TOTP_STEP_SECONDS);
+    const counterBuffer = Buffer.alloc(8);
+    counterBuffer.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
+    counterBuffer.writeUInt32BE(counter % 0x100000000, 4);
+    const hash = createHmac('sha1', key).update(counterBuffer).digest();
+    const offset = hash[hash.length - 1] & 0xf;
+    const binary =
+      ((hash[offset] & 0x7f) << 24) |
+      ((hash[offset + 1] & 0xff) << 16) |
+      ((hash[offset + 2] & 0xff) << 8) |
+      (hash[offset + 3] & 0xff);
+
+    return (binary % 10 ** TOTP_DIGITS).toString().padStart(TOTP_DIGITS, '0');
+  }
+
+  private base32Encode(buffer: Buffer): string {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0;
+    let value = 0;
+    let output = '';
+
+    for (const byte of buffer) {
+      value = (value << 8) | byte;
+      bits += 8;
+
+      while (bits >= 5) {
+        output += alphabet[(value >>> (bits - 5)) & 31];
+        bits -= 5;
+      }
+    }
+
+    if (bits > 0) {
+      output += alphabet[(value << (5 - bits)) & 31];
+    }
+
+    return output;
+  }
+
+  private base32Decode(value: string): Buffer {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    const normalized = value.replace(/=+$/g, '').replace(/\s+/g, '').toUpperCase();
+    let bits = 0;
+    let current = 0;
+    const bytes: number[] = [];
+
+    for (const char of normalized) {
+      const index = alphabet.indexOf(char);
+
+      if (index < 0) {
+        throw new BadRequestException('Некорректный TOTP secret.');
+      }
+
+      current = (current << 5) | index;
+      bits += 5;
+
+      if (bits >= 8) {
+        bytes.push((current >>> (bits - 8)) & 0xff);
+        bits -= 8;
+      }
+    }
+
+    return Buffer.from(bytes);
+  }
+
+  private requiresSensitiveRoleTwoFactor(memberships: MembershipClaim[]): boolean {
+    return memberships.some(
+      (membership) =>
+        membership.role === OrganizationRole.ADMIN ||
+        membership.role === OrganizationRole.DIRECTOR,
+    );
+  }
+
+  private async assertAuthAttemptAllowed(
+    email: string,
+    ipAddress?: string,
+  ): Promise<void> {
+    const keys = this.buildFailedAuthKeys(email, ipAddress);
+    const activeCounters = await this.prisma.securityRateLimit.findMany({
+      where: {
+        key: {
+          in: keys,
+        },
+        resetAt: {
+          gt: new Date(),
+        },
+      },
+      select: {
+        key: true,
+        hits: true,
+        resetAt: true,
+      },
+    });
+
+    const emailKey = this.buildSecurityCounterKey(`auth-lock:email:${email}`);
+    const emailIpKey = ipAddress?.trim()
+      ? this.buildSecurityCounterKey(`auth-lock:email-ip:${email}:${ipAddress.trim()}`)
+      : null;
+    const now = Date.now();
+
+    const retryAfterSeconds = activeCounters.reduce((maxSeconds, counter) => {
+      const threshold =
+        counter.key === emailIpKey ? AUTH_EMAIL_IP_LOCK_THRESHOLD : AUTH_EMAIL_LOCK_THRESHOLD;
+
+      if (counter.hits < threshold) {
+        return maxSeconds;
+      }
+
+      const overflow = counter.hits - threshold + 1;
+      const counterBackoff = Math.min(AUTH_LOCK_MAX_SECONDS, 15 * 2 ** (overflow - 1));
+      const remainingWindow = Math.max(1, Math.ceil((counter.resetAt.getTime() - now) / 1000));
+      return Math.max(maxSeconds, Math.min(counterBackoff, remainingWindow));
+    }, 0);
+
+    if (retryAfterSeconds > 0) {
+      throw new HttpException(
+        `Слишком много неудачных попыток входа. Попробуйте снова через ${retryAfterSeconds} сек.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
+  private async registerFailedAuthAttempt(email: string, ipAddress?: string): Promise<void> {
+    const resetAt = new Date(Date.now() + AUTH_LOCK_WINDOW_MS);
+
+    await Promise.all(
+      this.buildFailedAuthKeys(email, ipAddress).map((key) =>
+        this.prisma.securityRateLimit.upsert({
+          where: { key },
+          update: {
+            hits: {
+              increment: 1,
+            },
+            resetAt,
+          },
+          create: {
+            key,
+            hits: 1,
+            resetAt,
+          },
+        }),
+      ),
+    );
+  }
+
+  private async clearFailedAuthAttempts(email: string, ipAddress?: string): Promise<void> {
+    await this.prisma.securityRateLimit.deleteMany({
+      where: {
+        key: {
+          in: this.buildFailedAuthKeys(email, ipAddress),
+        },
+      },
+    });
+  }
+
+  private buildFailedAuthKeys(email: string, ipAddress?: string): string[] {
+    const keys = [this.buildSecurityCounterKey(`auth-lock:email:${email}`)];
+
+    if (ipAddress?.trim()) {
+      keys.push(this.buildSecurityCounterKey(`auth-lock:email-ip:${email}:${ipAddress.trim()}`));
+    }
+
+    return keys;
+  }
+
+  private buildSecurityCounterKey(value: string): string {
+    return createHash('sha256').update(value).digest('hex');
   }
 
   private hashEmailAuthCode(

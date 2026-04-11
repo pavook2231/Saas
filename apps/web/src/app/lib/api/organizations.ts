@@ -18,7 +18,6 @@ export type OrganizationSummary = {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
-  financeEnabled: boolean;
   role: OrganizationRole;
   membershipStatus: MembershipStatus;
   acceptedAt?: string | null;
@@ -33,7 +32,6 @@ export type OrganizationDetails = {
   timezone: string | null;
   createdAt: string;
   updatedAt: string;
-  financeEnabled: boolean;
   role: OrganizationRole;
   membershipStatus: MembershipStatus;
 };
@@ -138,14 +136,12 @@ export type UpdateOrganizationPayload = {
   name?: string;
   description?: string;
   timezone?: string;
-  financeEnabled?: boolean;
 };
 
 export type CreateOrganizationPayload = {
   name: string;
   description?: string;
   timezone?: string;
-  financeEnabled?: boolean;
 };
 
 export type CreateJoinRequestPayload = {

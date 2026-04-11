@@ -13,6 +13,7 @@ import {
   EventType,
   MembershipStatus,
   NotificationType,
+  OrganizationRole,
   ParticipantInviteStatus,
   Prisma,
 } from '@prisma/client';
@@ -256,6 +257,14 @@ type EventNotificationSnapshot = {
   location: string | null;
 };
 
+type ParticipantRecord = Prisma.ParticipantGetPayload<{
+  select: typeof participantSelect;
+}>;
+
+type EventRecord = Prisma.EventGetPayload<{
+  select: typeof eventSelect;
+}>;
+
 @Injectable()
 export class EventsService {
   private readonly logger = new Logger(EventsService.name);
@@ -265,8 +274,13 @@ export class EventsService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  async listParticipants(organizationId: string, query: ListParticipantsQueryDto) {
+  async listParticipants(
+    organizationId: string,
+    userId: string,
+    query: ListParticipantsQueryDto,
+  ) {
     await this.syncParticipantsFromMemberships(organizationId);
+    const membershipRole = await this.getMembershipRoleOrThrow(organizationId, userId);
 
     const where: Prisma.ParticipantWhereInput = {
       organizationId,
@@ -286,15 +300,20 @@ export class EventsService {
       ];
     }
 
-    return this.prisma.participant.findMany({
+    const participants = await this.prisma.participant.findMany({
       where,
       select: participantSelect,
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       take: query.limit ?? 200,
     });
+
+    return membershipRole === OrganizationRole.MEMBER
+      ? participants.map((participant) => this.toMemberSafeParticipant(participant))
+      : participants;
   }
 
-  async getParticipant(organizationId: string, participantId: string) {
+  async getParticipant(organizationId: string, participantId: string, userId: string) {
+    const membershipRole = await this.getMembershipRoleOrThrow(organizationId, userId);
     const participant = await this.prisma.participant.findFirst({
       where: {
         id: participantId,
@@ -307,7 +326,9 @@ export class EventsService {
       throw new NotFoundException('Участник не найден');
     }
 
-    return participant;
+    return membershipRole === OrganizationRole.MEMBER
+      ? this.toMemberSafeParticipant(participant)
+      : participant;
   }
 
   async createParticipant(
@@ -783,7 +804,12 @@ export class EventsService {
     };
   }
 
-  async listEvents(organizationId: string, query: ListEventsQueryDto) {
+  async listEvents(
+    organizationId: string,
+    userId: string,
+    query: ListEventsQueryDto,
+  ) {
+    const membershipRole = await this.getMembershipRoleOrThrow(organizationId, userId);
     const where: Prisma.EventWhereInput = {
       organizationId,
       deletedAt: null,
@@ -831,16 +857,20 @@ export class EventsService {
       ];
     }
 
-    return this.prisma.event.findMany({
+    const events = await this.prisma.event.findMany({
       where,
       select: eventSelect,
       orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
       take: query.limit ?? 300,
     });
+
+    return membershipRole === OrganizationRole.MEMBER
+      ? events.map((event) => this.toMemberSafeEvent(event))
+      : events;
   }
 
-  async listEventHistory(organizationId: string, eventId: string) {
-    await this.getEvent(organizationId, eventId);
+  async listEventHistory(organizationId: string, eventId: string, userId: string) {
+    await this.getEvent(organizationId, eventId, userId);
 
     return this.prisma.auditLog.findMany({
       where: {
@@ -870,7 +900,8 @@ export class EventsService {
     });
   }
 
-  async getEvent(organizationId: string, eventId: string) {
+  async getEvent(organizationId: string, eventId: string, userId: string) {
+    const membershipRole = await this.getMembershipRoleOrThrow(organizationId, userId);
     const event = await this.prisma.event.findFirst({
       where: {
         id: eventId,
@@ -882,6 +913,99 @@ export class EventsService {
 
     if (!event) {
       throw new NotFoundException('Событие не найдено');
+    }
+
+    return membershipRole === OrganizationRole.MEMBER
+      ? this.toMemberSafeEvent(event)
+      : event;
+  }
+
+  private async getMembershipRoleOrThrow(
+    organizationId: string,
+    userId: string,
+  ): Promise<OrganizationRole> {
+    const membership = await this.prisma.membership.findFirst({
+      where: {
+        organizationId,
+        userId,
+        status: MembershipStatus.ACTIVE,
+        organization: {
+          deletedAt: null,
+        },
+      },
+      select: {
+        role: true,
+      },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('Active organization membership not found');
+    }
+
+    return membership.role;
+  }
+
+  private toMemberSafeParticipant(participant: ParticipantRecord) {
+    return {
+      id: participant.id,
+      organizationId: participant.organizationId,
+      firstName: participant.firstName,
+      lastName: participant.lastName,
+      middleName: participant.middleName,
+      displayName: participant.displayName,
+      invitationStatus: participant.invitationStatus,
+      invitedAt: participant.invitedAt,
+      linkedAt: participant.linkedAt,
+      createdAt: participant.createdAt,
+      updatedAt: participant.updatedAt,
+      deletedAt: participant.deletedAt,
+    };
+  }
+
+  private toMemberSafeEvent(event: EventRecord) {
+    return {
+      ...event,
+      participants: event.participants.map((participant) => ({
+        ...participant,
+        participant: this.toMemberSafeParticipant(participant.participant),
+      })),
+    };
+  }
+
+  private async getParticipantRecordOrThrow(
+    organizationId: string,
+    participantId: string,
+  ): Promise<ParticipantRecord> {
+    const participant = await this.prisma.participant.findFirst({
+      where: {
+        id: participantId,
+        organizationId,
+      },
+      select: participantSelect,
+    });
+
+    if (!participant || participant.deletedAt) {
+      throw new NotFoundException('РЈС‡Р°СЃС‚РЅРёРє РЅРµ РЅР°Р№РґРµРЅ');
+    }
+
+    return participant;
+  }
+
+  private async getEventRecordOrThrow(
+    organizationId: string,
+    eventId: string,
+  ): Promise<EventRecord> {
+    const event = await this.prisma.event.findFirst({
+      where: {
+        id: eventId,
+        organizationId,
+        deletedAt: null,
+      },
+      select: eventSelect,
+    });
+
+    if (!event) {
+      throw new NotFoundException('РЎРѕР±С‹С‚РёРµ РЅРµ РЅР°Р№РґРµРЅРѕ');
     }
 
     return event;
@@ -1022,7 +1146,7 @@ export class EventsService {
       return event.id;
     });
 
-    const createdEvent = await this.getEvent(organizationId, created);
+    const createdEvent = await this.getEventRecordOrThrow(organizationId, created);
 
     if (
       createdEvent.status !== EventStatus.DRAFT &&
@@ -1272,7 +1396,7 @@ export class EventsService {
       });
     });
 
-    const updatedEvent = await this.getEvent(organizationId, existing.id);
+    const updatedEvent = await this.getEventRecordOrThrow(organizationId, existing.id);
     const existingSnapshot = this.toEventNotificationSnapshot(existing);
     const updatedSnapshot = this.toEventNotificationSnapshot(updatedEvent);
     const eventParticipantUserIds = this.extractLinkedUserIds(updatedEvent.participants);
@@ -1445,7 +1569,7 @@ export class EventsService {
       });
     });
 
-    const updatedEvent = await this.getEvent(organizationId, event.id);
+    const updatedEvent = await this.getEventRecordOrThrow(organizationId, event.id);
     if (updatedEvent.status !== EventStatus.DRAFT) {
       await this.notifyScheduleChangeSafe({
         organizationId,

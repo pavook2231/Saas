@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import {
   AuditTargetType,
-  CurrencyCode,
   EventAttendanceStatus,
   EventType,
   ManualPointsAuditAction,
@@ -19,16 +18,9 @@ import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateManualPointsDto } from './dto/create-manual-points.dto';
 import { DeleteManualPointsDto } from './dto/delete-manual-points.dto';
-import {
-  IncomeExportFormat,
-  IncomeExportQueryDto,
-} from './dto/income-export-query.dto';
 import { ListManualPointsQueryDto } from './dto/list-manual-points-query.dto';
-import { ListPointRateHistoryQueryDto } from './dto/list-point-rate-history-query.dto';
-import { PointRateQueryDto } from './dto/point-rate-query.dto';
 import { PointsPeriodQueryDto } from './dto/points-period-query.dto';
 import { RunAutoPointsForEventDto } from './dto/run-auto-points-for-event.dto';
-import { SetPointRateDto } from './dto/set-point-rate.dto';
 import { UpdateManualPointsDto } from './dto/update-manual-points.dto';
 import { UpdatePointsConfigDto } from './dto/update-points-config.dto';
 
@@ -42,8 +34,6 @@ const pointsConfigSelect = {
   performanceShortPoints: true,
   rehearsalMinutesPerPoint: true,
   autoLockDays: true,
-  pointValue: true,
-  currency: true,
   updatedByUserId: true,
   createdAt: true,
   updatedAt: true,
@@ -61,25 +51,15 @@ type PeriodRange = {
   periodEnd: Date;
 };
 
-type PointRateSource = 'HISTORY' | 'CONFIG' | 'NONE';
-
-type ResolvedPointRate = {
-  pointValue: Prisma.Decimal | null;
-  currency: CurrencyCode;
-  source: PointRateSource;
-  effectiveFrom: Date | null;
-};
-
-type IncomeParticipantReport = {
+type PeriodParticipantReport = {
   participantId: string;
   participantName: string;
   autoPoints: string;
   manualPoints: string;
   totalPoints: string;
-  amount: string | null;
 };
 
-type IncomeEntryReport = {
+type PeriodEntryReport = {
   ledgerEntryId: string;
   participantId: string;
   participantName: string;
@@ -87,30 +67,20 @@ type IncomeEntryReport = {
   eventTitle: string | null;
   type: PointsLedgerType;
   points: string;
-  pointValue: string | null;
-  currency: CurrencyCode;
-  amount: string | null;
   description: string | null;
   createdAt: string;
   periodStart: string;
   periodEnd: string;
 };
 
-type IncomeReport = {
-  rate: {
-    pointValue: string | null;
-    currency: CurrencyCode;
-    source: PointRateSource;
-    effectiveFrom: string | null;
-  };
+type PeriodSummaryReport = {
   totals: {
     autoPoints: string;
     manualPoints: string;
     totalPoints: string;
-    totalAmount: string | null;
   };
-  participants: IncomeParticipantReport[];
-  entries: IncomeEntryReport[];
+  participants: PeriodParticipantReport[];
+  entries: PeriodEntryReport[];
   entriesCount: number;
 };
 
@@ -135,7 +105,6 @@ export class PointsService {
       performanceLongMinutes: dto.performanceLongMinutes,
       rehearsalMinutesPerPoint: dto.rehearsalMinutesPerPoint,
       autoLockDays: dto.autoLockDays,
-      currency: dto.currency,
       updatedByUserId: actorUserId,
     };
 
@@ -151,10 +120,6 @@ export class PointsService {
         dto.performanceShortPoints,
         'performanceShortPoints',
       );
-    }
-
-    if (dto.pointValue !== undefined) {
-      data.pointValue = this.parseNonNegativeDecimal(dto.pointValue, 'pointValue');
     }
 
     const updatedConfig = await this.prisma.pointsConfig.update({
@@ -182,8 +147,6 @@ export class PointsService {
             performanceShortPoints: currentConfig.performanceShortPoints.toString(),
             rehearsalMinutesPerPoint: currentConfig.rehearsalMinutesPerPoint,
             autoLockDays: currentConfig.autoLockDays,
-            pointValue: currentConfig.pointValue?.toString() ?? null,
-            currency: currentConfig.currency,
           },
           after: {
             enabled: updatedConfig.enabled,
@@ -193,8 +156,6 @@ export class PointsService {
             performanceShortPoints: updatedConfig.performanceShortPoints.toString(),
             rehearsalMinutesPerPoint: updatedConfig.rehearsalMinutesPerPoint,
             autoLockDays: updatedConfig.autoLockDays,
-            pointValue: updatedConfig.pointValue?.toString() ?? null,
-            currency: updatedConfig.currency,
           },
         }),
       },
@@ -207,213 +168,137 @@ export class PointsService {
     const config = await this.ensurePointsConfig(organizationId);
     const referenceDate = this.parseReferenceDate(query.referenceDate);
     const period = this.buildPeriodRange(referenceDate, config.periodStartDay);
-    const financeEnabled = await this.isFinanceEnabledForOrganization(organizationId);
-    const rate = financeEnabled
-      ? await this.resolvePointRateForDate(organizationId, config, referenceDate)
-      : {
-          pointValue: null,
-          currency: config.currency,
-          source: 'NONE' as const,
-          effectiveFrom: null,
-        };
 
     return {
       periodStart: period.periodStart.toISOString(),
       periodEnd: period.periodEnd.toISOString(),
       referenceDate: referenceDate.toISOString(),
       periodStartDay: config.periodStartDay,
-      currency: rate.currency,
-      pointValue: rate.pointValue ? rate.pointValue.toFixed(2) : null,
-      rateSource: rate.source,
-      rateEffectiveFrom: rate.effectiveFrom?.toISOString() ?? null,
     };
   }
 
-  async getPointRate(organizationId: string, query: PointRateQueryDto) {
-    await this.ensureFinanceEnabledForOrganization(organizationId);
-    const config = await this.ensurePointsConfig(organizationId);
-    const referenceDate = this.parseReferenceDate(query.referenceDate);
-    const rate = await this.resolvePointRateForDate(organizationId, config, referenceDate);
-
-    return {
-      referenceDate: referenceDate.toISOString(),
-      pointValue: rate.pointValue ? rate.pointValue.toFixed(2) : null,
-      currency: rate.currency,
-      source: rate.source,
-      effectiveFrom: rate.effectiveFrom?.toISOString() ?? null,
-    };
-  }
-
-  async setPointRate(
+  private async buildPeriodSummary(
     organizationId: string,
-    actorUserId: string,
-    dto: SetPointRateDto,
-  ) {
-    await this.ensureFinanceEnabledForOrganization(organizationId);
-    const config = await this.ensurePointsConfig(organizationId);
-    const pointValue = this.parsePositiveDecimal(dto.pointValue, 'pointValue').toDecimalPlaces(
-      2,
-    );
-    const currency = dto.currency ?? config.currency;
-    const effectiveFrom = this.parseReferenceDate(dto.effectiveFrom);
-    const now = new Date();
-
-    const rateRecord = await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.pointRateHistory.findUnique({
-        where: {
-          organizationId_effectiveFrom: {
-            organizationId,
-            effectiveFrom,
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (existing) {
-        return tx.pointRateHistory.update({
-          where: {
-            id: existing.id,
-          },
-          data: {
-            pointValue,
-            currency,
-          },
-          select: {
-            id: true,
-            pointValue: true,
-            currency: true,
-            effectiveFrom: true,
-            createdAt: true,
-          },
-        });
-      }
-
-      return tx.pointRateHistory.create({
-        data: {
-          organizationId,
-          pointValue,
-          currency,
-          effectiveFrom,
-          createdByUserId: actorUserId,
-        },
-        select: {
-          id: true,
-          pointValue: true,
-          currency: true,
-          effectiveFrom: true,
-          createdAt: true,
-        },
-      });
-    });
-
-    if (effectiveFrom.getTime() <= now.getTime()) {
-      await this.prisma.pointsConfig.update({
-        where: {
-          organizationId,
-        },
-        data: {
-          pointValue: rateRecord.pointValue,
-          currency: rateRecord.currency,
-          updatedByUserId: actorUserId,
-        },
-      });
-    }
-
-    await this.prisma.auditLog.create({
-      data: {
+    period: PeriodRange,
+    participantId?: string,
+  ): Promise<PeriodSummaryReport> {
+    const entries = await this.prisma.pointsLedgerEntry.findMany({
+      where: {
         organizationId,
-        actorUserId,
-        targetType: AuditTargetType.FINANCE,
-        targetId: rateRecord.id,
-        action: 'points.rate.updated',
-        description: 'Point rate created or updated',
-        payload: this.toAuditPayload({
-          pointValue: rateRecord.pointValue.toFixed(2),
-          currency: rateRecord.currency,
-          effectiveFrom: rateRecord.effectiveFrom.toISOString(),
-        }),
+        participantId,
+        periodStart: period.periodStart,
+        periodEnd: period.periodEnd,
+        reversedAt: null,
       },
-    });
-
-    const refreshedConfig = await this.ensurePointsConfig(organizationId);
-    const currentRate = await this.resolvePointRateForDate(
-      organizationId,
-      refreshedConfig,
-      now,
-    );
-
-    return {
-      pointValue: rateRecord.pointValue.toFixed(2),
-      currency: rateRecord.currency,
-      effectiveFrom: rateRecord.effectiveFrom.toISOString(),
-      createdAt: rateRecord.createdAt.toISOString(),
-      currentRate: {
-        pointValue: currentRate.pointValue ? currentRate.pointValue.toFixed(2) : null,
-        currency: currentRate.currency,
-        source: currentRate.source,
-        effectiveFrom: currentRate.effectiveFrom?.toISOString() ?? null,
-      },
-    };
-  }
-
-  async listPointRateHistory(
-    organizationId: string,
-    query: ListPointRateHistoryQueryDto,
-  ) {
-    await this.ensureFinanceEnabledForOrganization(organizationId);
-    const config = await this.ensurePointsConfig(organizationId);
-    const from = query.from ? this.parseReferenceDate(query.from) : null;
-    const to = query.to ? this.parseReferenceDate(query.to) : null;
-
-    if (from && to && from.getTime() > to.getTime()) {
-      throw new BadRequestException('Параметр from не может быть позже параметра to');
-    }
-
-    const where: Prisma.PointRateHistoryWhereInput = {
-      organizationId,
-      effectiveFrom:
-        from || to
-          ? {
-              gte: from ?? undefined,
-              lte: to ?? undefined,
-            }
-          : undefined,
-    };
-
-    const rates = await this.prisma.pointRateHistory.findMany({
-      where,
       select: {
         id: true,
-        pointValue: true,
-        currency: true,
-        effectiveFrom: true,
+        participantId: true,
+        eventId: true,
+        type: true,
+        points: true,
+        description: true,
         createdAt: true,
-        createdByUserId: true,
+        periodStart: true,
+        periodEnd: true,
+        event: {
+          select: {
+            title: true,
+          },
+        },
+        participant: {
+          select: {
+            firstName: true,
+            lastName: true,
+            displayName: true,
+          },
+        },
       },
-      orderBy: [{ effectiveFrom: 'desc' }],
-      take: query.limit ?? 200,
+      orderBy: [{ createdAt: 'asc' }],
     });
 
-    const now = new Date();
-    const currentRate = await this.resolvePointRateForDate(organizationId, config, now);
+    const totals = {
+      autoPoints: new Prisma.Decimal(0),
+      manualPoints: new Prisma.Decimal(0),
+      totalPoints: new Prisma.Decimal(0),
+    };
+
+    const byParticipant = new Map<
+      string,
+      {
+        participantId: string;
+        participantName: string;
+        autoPoints: Prisma.Decimal;
+        manualPoints: Prisma.Decimal;
+        totalPoints: Prisma.Decimal;
+      }
+    >();
+
+    const entryReport: PeriodEntryReport[] = [];
+
+    for (const entry of entries) {
+      const points = new Prisma.Decimal(entry.points).toDecimalPlaces(2);
+      const isAuto = entry.type === PointsLedgerType.AUTO_EVENT;
+      const participantName =
+        entry.participant.displayName ??
+        `${entry.participant.firstName} ${entry.participant.lastName}`.trim();
+
+      totals.totalPoints = totals.totalPoints.plus(points);
+      if (isAuto) {
+        totals.autoPoints = totals.autoPoints.plus(points);
+      } else {
+        totals.manualPoints = totals.manualPoints.plus(points);
+      }
+
+      const existing = byParticipant.get(entry.participantId) ?? {
+        participantId: entry.participantId,
+        participantName,
+        autoPoints: new Prisma.Decimal(0),
+        manualPoints: new Prisma.Decimal(0),
+        totalPoints: new Prisma.Decimal(0),
+      };
+
+      existing.totalPoints = existing.totalPoints.plus(points);
+      if (isAuto) {
+        existing.autoPoints = existing.autoPoints.plus(points);
+      } else {
+        existing.manualPoints = existing.manualPoints.plus(points);
+      }
+      byParticipant.set(entry.participantId, existing);
+
+      entryReport.push({
+        ledgerEntryId: entry.id,
+        participantId: entry.participantId,
+        participantName,
+        eventId: entry.eventId,
+        eventTitle: entry.event?.title ?? null,
+        type: entry.type,
+        points: points.toFixed(2),
+        description: entry.description,
+        createdAt: entry.createdAt.toISOString(),
+        periodStart: entry.periodStart.toISOString(),
+        periodEnd: entry.periodEnd.toISOString(),
+      });
+    }
+
+    const participantReport: PeriodParticipantReport[] = Array.from(byParticipant.values())
+      .sort((left, right) => left.participantName.localeCompare(right.participantName))
+      .map((participant) => ({
+        participantId: participant.participantId,
+        participantName: participant.participantName,
+        autoPoints: participant.autoPoints.toFixed(2),
+        manualPoints: participant.manualPoints.toFixed(2),
+        totalPoints: participant.totalPoints.toFixed(2),
+      }));
 
     return {
-      currentRate: {
-        pointValue: currentRate.pointValue ? currentRate.pointValue.toFixed(2) : null,
-        currency: currentRate.currency,
-        source: currentRate.source,
-        effectiveFrom: currentRate.effectiveFrom?.toISOString() ?? null,
+      totals: {
+        autoPoints: totals.autoPoints.toFixed(2),
+        manualPoints: totals.manualPoints.toFixed(2),
+        totalPoints: totals.totalPoints.toFixed(2),
       },
-      items: rates.map((item) => ({
-        id: item.id,
-        pointValue: item.pointValue.toFixed(2),
-        currency: item.currency,
-        effectiveFrom: item.effectiveFrom.toISOString(),
-        createdAt: item.createdAt.toISOString(),
-        createdByUserId: item.createdByUserId,
-      })),
+      participants: participantReport,
+      entries: entryReport,
+      entriesCount: entries.length,
     };
   }
 
@@ -421,110 +306,17 @@ export class PointsService {
     const config = await this.ensurePointsConfig(organizationId);
     const referenceDate = this.parseReferenceDate(query.referenceDate);
     const period = this.buildPeriodRange(referenceDate, config.periodStartDay);
-    const financeEnabled = await this.isFinanceEnabledForOrganization(organizationId);
-    const report = await this.buildIncomeReport(
-      organizationId,
-      period,
-      query.participantId,
-      financeEnabled,
-    );
+    const report = await this.buildPeriodSummary(organizationId, period, query.participantId);
 
     return {
       periodStart: period.periodStart.toISOString(),
       periodEnd: period.periodEnd.toISOString(),
       referenceDate: referenceDate.toISOString(),
       periodStartDay: config.periodStartDay,
-      currency: report.rate.currency,
-      pointValue: report.rate.pointValue,
-      rateSource: report.rate.source,
-      rateEffectiveFrom: report.rate.effectiveFrom,
-      totals: report.totals,
-      participants: report.participants,
-      entriesCount: report.entriesCount,
-    };
-  }
-
-  async getPeriodIncome(organizationId: string, query: PointsPeriodQueryDto) {
-    await this.ensureFinanceEnabledForOrganization(organizationId);
-    const config = await this.ensurePointsConfig(organizationId);
-    const referenceDate = this.parseReferenceDate(query.referenceDate);
-    const period = this.buildPeriodRange(referenceDate, config.periodStartDay);
-    const report = await this.buildIncomeReport(organizationId, period, query.participantId);
-
-    return {
-      periodStart: period.periodStart.toISOString(),
-      periodEnd: period.periodEnd.toISOString(),
-      referenceDate: referenceDate.toISOString(),
-      periodStartDay: config.periodStartDay,
-      rate: report.rate,
       totals: report.totals,
       participants: report.participants,
       entriesCount: report.entriesCount,
       entries: report.entries,
-    };
-  }
-
-  async exportPeriodIncome(
-    organizationId: string,
-    actorUserId: string,
-    query: IncomeExportQueryDto,
-  ): Promise<
-    | { format: IncomeExportFormat.CSV; fileName: string; content: string }
-    | {
-        format: IncomeExportFormat.JSON;
-        fileName: string;
-        content: Record<string, unknown>;
-      }
-  > {
-    await this.ensureFinanceEnabledForOrganization(organizationId);
-    const config = await this.ensurePointsConfig(organizationId);
-    const referenceDate = this.parseReferenceDate(query.referenceDate);
-    const period = this.buildPeriodRange(referenceDate, config.periodStartDay);
-    const report = await this.buildIncomeReport(organizationId, period, query.participantId);
-    const format = query.format ?? IncomeExportFormat.CSV;
-    const fileName = this.buildIncomeExportFileName(period, format);
-
-    await this.prisma.auditLog.create({
-      data: {
-        organizationId,
-        actorUserId,
-        targetType: AuditTargetType.FINANCE,
-        targetId: null,
-        action: 'points.income.exported',
-        description: 'Income report exported',
-        payload: this.toAuditPayload({
-          format,
-          periodStart: period.periodStart.toISOString(),
-          periodEnd: period.periodEnd.toISOString(),
-          participantId: query.participantId ?? null,
-          entriesCount: report.entriesCount,
-        }),
-      },
-    });
-
-    if (format === IncomeExportFormat.JSON) {
-      return {
-        format: IncomeExportFormat.JSON,
-        fileName,
-        content: {
-          generatedAt: new Date().toISOString(),
-          periodStart: period.periodStart.toISOString(),
-          periodEnd: period.periodEnd.toISOString(),
-          referenceDate: referenceDate.toISOString(),
-          periodStartDay: config.periodStartDay,
-          rate: report.rate,
-          totals: report.totals,
-          participants: report.participants,
-          entriesCount: report.entriesCount,
-          entries: report.entries,
-        },
-      };
-    }
-
-    return {
-      format: IncomeExportFormat.CSV,
-      fileName,
-      content: this.buildIncomeCsv(report.entries),
     };
   }
 
@@ -1217,7 +1009,6 @@ export class PointsService {
         performanceShortPoints: new Prisma.Decimal(2),
         rehearsalMinutesPerPoint: 180,
         autoLockDays: 7,
-        currency: CurrencyCode.RUB,
       },
       select: pointsConfigSelect,
     });
@@ -1231,7 +1022,6 @@ export class PointsService {
       },
       select: {
         id: true,
-        settings: true,
       },
     });
 
@@ -1240,32 +1030,6 @@ export class PointsService {
     }
 
     return organization;
-  }
-
-  private async isFinanceEnabledForOrganization(
-    organizationId: string,
-  ): Promise<boolean> {
-    const organization = await this.ensureOrganizationExists(organizationId);
-    return this.getFinanceEnabledFromSettings(organization.settings);
-  }
-
-  private async ensureFinanceEnabledForOrganization(organizationId: string) {
-    const enabled = await this.isFinanceEnabledForOrganization(organizationId);
-
-    if (!enabled) {
-      throw new ConflictException('Финансовый модуль отключен для этой организации');
-    }
-  }
-
-  private getFinanceEnabledFromSettings(
-    settings: Prisma.JsonValue | null | undefined,
-  ): boolean {
-    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-      return false;
-    }
-
-    const financeEnabled = (settings as Record<string, unknown>).financeEnabled;
-    return financeEnabled === true;
   }
 
   private async ensureParticipantExists(organizationId: string, participantId: string) {
@@ -1411,298 +1175,6 @@ export class PointsService {
 
     if (Number.isNaN(parsed.getTime())) {
       throw new BadRequestException('Некорректный параметр referenceDate');
-    }
-
-    return parsed;
-  }
-
-  private async resolvePointRateForDate(
-    organizationId: string,
-    config: {
-      pointValue: Prisma.Decimal | null;
-      currency: CurrencyCode;
-    },
-    referenceDate: Date,
-  ): Promise<ResolvedPointRate> {
-    const historicalRate = await this.prisma.pointRateHistory.findFirst({
-      where: {
-        organizationId,
-        effectiveFrom: {
-          lte: referenceDate,
-        },
-      },
-      select: {
-        pointValue: true,
-        currency: true,
-        effectiveFrom: true,
-      },
-      orderBy: [{ effectiveFrom: 'desc' }],
-    });
-
-    if (historicalRate) {
-      return {
-        pointValue: new Prisma.Decimal(historicalRate.pointValue).toDecimalPlaces(2),
-        currency: historicalRate.currency,
-        source: 'HISTORY',
-        effectiveFrom: historicalRate.effectiveFrom,
-      };
-    }
-
-    if (config.pointValue) {
-      return {
-        pointValue: new Prisma.Decimal(config.pointValue).toDecimalPlaces(2),
-        currency: config.currency,
-        source: 'CONFIG',
-        effectiveFrom: null,
-      };
-    }
-
-    return {
-      pointValue: null,
-      currency: config.currency,
-      source: 'NONE',
-      effectiveFrom: null,
-    };
-  }
-
-  private async buildIncomeReport(
-    organizationId: string,
-    period: PeriodRange,
-    participantId?: string,
-    includeAmounts = true,
-  ): Promise<IncomeReport> {
-    const config = await this.ensurePointsConfig(organizationId);
-    const resolvedRate = await this.resolvePointRateForDate(
-      organizationId,
-      config,
-      period.periodStart,
-    );
-    const rate = includeAmounts
-      ? resolvedRate
-      : {
-          pointValue: null,
-          currency: resolvedRate.currency,
-          source: 'NONE' as const,
-          effectiveFrom: null,
-        };
-    const pointValue = rate.pointValue;
-
-    const entries = await this.prisma.pointsLedgerEntry.findMany({
-      where: {
-        organizationId,
-        participantId,
-        periodStart: period.periodStart,
-        periodEnd: period.periodEnd,
-        reversedAt: null,
-      },
-      select: {
-        id: true,
-        participantId: true,
-        eventId: true,
-        type: true,
-        points: true,
-        description: true,
-        createdAt: true,
-        periodStart: true,
-        periodEnd: true,
-        event: {
-          select: {
-            title: true,
-          },
-        },
-        participant: {
-          select: {
-            firstName: true,
-            lastName: true,
-            displayName: true,
-          },
-        },
-      },
-      orderBy: [{ createdAt: 'asc' }],
-    });
-
-    const totals = {
-      autoPoints: new Prisma.Decimal(0),
-      manualPoints: new Prisma.Decimal(0),
-      totalPoints: new Prisma.Decimal(0),
-    };
-
-    const byParticipant = new Map<
-      string,
-      {
-        participantId: string;
-        participantName: string;
-        autoPoints: Prisma.Decimal;
-        manualPoints: Prisma.Decimal;
-        totalPoints: Prisma.Decimal;
-      }
-    >();
-
-    const entryReport: IncomeEntryReport[] = [];
-
-    for (const entry of entries) {
-      const points = new Prisma.Decimal(entry.points).toDecimalPlaces(2);
-      const isAuto = entry.type === PointsLedgerType.AUTO_EVENT;
-      const participantName =
-        entry.participant.displayName ??
-        `${entry.participant.firstName} ${entry.participant.lastName}`.trim();
-
-      totals.totalPoints = totals.totalPoints.plus(points);
-      if (isAuto) {
-        totals.autoPoints = totals.autoPoints.plus(points);
-      } else {
-        totals.manualPoints = totals.manualPoints.plus(points);
-      }
-
-      const existing = byParticipant.get(entry.participantId) ?? {
-        participantId: entry.participantId,
-        participantName,
-        autoPoints: new Prisma.Decimal(0),
-        manualPoints: new Prisma.Decimal(0),
-        totalPoints: new Prisma.Decimal(0),
-      };
-
-      existing.totalPoints = existing.totalPoints.plus(points);
-      if (isAuto) {
-        existing.autoPoints = existing.autoPoints.plus(points);
-      } else {
-        existing.manualPoints = existing.manualPoints.plus(points);
-      }
-      byParticipant.set(entry.participantId, existing);
-
-      const amount = pointValue ? points.mul(pointValue).toDecimalPlaces(2) : null;
-
-      entryReport.push({
-        ledgerEntryId: entry.id,
-        participantId: entry.participantId,
-        participantName,
-        eventId: entry.eventId,
-        eventTitle: entry.event?.title ?? null,
-        type: entry.type,
-        points: points.toFixed(2),
-        pointValue: pointValue ? pointValue.toFixed(2) : null,
-        currency: rate.currency,
-        amount: amount ? amount.toFixed(2) : null,
-        description: entry.description,
-        createdAt: entry.createdAt.toISOString(),
-        periodStart: entry.periodStart.toISOString(),
-        periodEnd: entry.periodEnd.toISOString(),
-      });
-    }
-
-    const totalAmount = pointValue
-      ? totals.totalPoints.mul(pointValue).toDecimalPlaces(2)
-      : null;
-
-    const participantReport: IncomeParticipantReport[] = Array.from(
-      byParticipant.values(),
-    )
-      .sort((left, right) => left.participantName.localeCompare(right.participantName))
-      .map((participant) => {
-        const amount = pointValue
-          ? participant.totalPoints.mul(pointValue).toDecimalPlaces(2)
-          : null;
-
-        return {
-          participantId: participant.participantId,
-          participantName: participant.participantName,
-          autoPoints: participant.autoPoints.toFixed(2),
-          manualPoints: participant.manualPoints.toFixed(2),
-          totalPoints: participant.totalPoints.toFixed(2),
-          amount: amount ? amount.toFixed(2) : null,
-        };
-      });
-
-    return {
-      rate: {
-        pointValue: pointValue ? pointValue.toFixed(2) : null,
-        currency: rate.currency,
-        source: rate.source,
-        effectiveFrom: rate.effectiveFrom?.toISOString() ?? null,
-      },
-      totals: {
-        autoPoints: totals.autoPoints.toFixed(2),
-        manualPoints: totals.manualPoints.toFixed(2),
-        totalPoints: totals.totalPoints.toFixed(2),
-        totalAmount: totalAmount ? totalAmount.toFixed(2) : null,
-      },
-      participants: participantReport,
-      entries: entryReport,
-      entriesCount: entries.length,
-    };
-  }
-
-  private buildIncomeExportFileName(
-    period: PeriodRange,
-    format: IncomeExportFormat,
-  ): string {
-    const start = period.periodStart.toISOString().slice(0, 10).replaceAll('-', '');
-    const end = period.periodEnd.toISOString().slice(0, 10).replaceAll('-', '');
-    const extension = format === IncomeExportFormat.CSV ? 'csv' : 'json';
-
-    return `points-income-${start}-${end}.${extension}`;
-  }
-
-  private buildIncomeCsv(entries: IncomeEntryReport[]): string {
-    const headers = [
-      'period_start',
-      'period_end',
-      'ledger_entry_id',
-      'participant_id',
-      'participant_name',
-      'event_id',
-      'event_title',
-      'entry_type',
-      'points',
-      'point_value',
-      'currency',
-      'amount',
-      'description',
-      'created_at',
-    ];
-
-    const lines = [headers.join(',')];
-
-    for (const entry of entries) {
-      const cells = [
-        entry.periodStart,
-        entry.periodEnd,
-        entry.ledgerEntryId,
-        entry.participantId,
-        entry.participantName,
-        entry.eventId ?? '',
-        entry.eventTitle ?? '',
-        entry.type,
-        entry.points,
-        entry.pointValue ?? '',
-        entry.currency,
-        entry.amount ?? '',
-        entry.description ?? '',
-        entry.createdAt,
-      ].map((cell) => this.escapeCsvCell(cell));
-
-      lines.push(cells.join(','));
-    }
-
-    return lines.join('\n');
-  }
-
-  private escapeCsvCell(value: string): string {
-    const normalized = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    const formulaSafe = /^[=+\-@]/.test(normalized) ? `'${normalized}` : normalized;
-
-    if (/[",\n]/.test(formulaSafe)) {
-      return `"${formulaSafe.replace(/"/g, '""')}"`;
-    }
-
-    return formulaSafe;
-  }
-
-  private parsePositiveDecimal(value: string, field: string): Prisma.Decimal {
-    const parsed = this.parseDecimal(value, field);
-
-    if (parsed.lte(0)) {
-      throw new BadRequestException(`${field} должно быть больше 0`);
     }
 
     return parsed;

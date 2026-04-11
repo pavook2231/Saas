@@ -1,0 +1,1 @@
+ALTER TYPE "EmailAuthCodePurpose" ADD VALUE IF NOT EXISTS 'LOGIN_2FA';

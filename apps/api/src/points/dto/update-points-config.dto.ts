@@ -1,8 +1,6 @@
-import { CurrencyCode } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
-  IsEnum,
   IsInt,
   IsNumberString,
   IsOptional,
@@ -50,12 +48,4 @@ export class UpdatePointsConfigDto {
   @Min(0)
   @Max(365)
   autoLockDays?: number;
-
-  @IsOptional()
-  @IsNumberString()
-  pointValue?: string;
-
-  @IsOptional()
-  @IsEnum(CurrencyCode)
-  currency?: CurrencyCode;
 }

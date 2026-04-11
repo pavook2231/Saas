@@ -16,6 +16,7 @@ import { authApi } from '../lib/auth/api';
 import { authStorage } from '../lib/auth/storage';
 import {
   AuthResponse,
+  AuthSuccessResponse,
   AuthStatus,
   AuthUser,
   ChangePasswordPayload,
@@ -28,7 +29,12 @@ import {
   RegisterWithCodePayload,
   ResetPasswordWithCodePayload,
   StoredSession,
+  TotpSetupPayload,
+  TotpSetupResponse,
+  TotpTogglePayload,
+  TwoFactorStatus,
   UpdateProfilePayload,
+  VerifyLoginTwoFactorPayload,
 } from '../lib/auth/types';
 
 type AuthContextValue = {
@@ -36,7 +42,8 @@ type AuthContextValue = {
   user: AuthUser | null;
   accessToken: string | null;
   csrfToken: string | null;
-  login: (payload: LoginPayload) => Promise<StoredSession>;
+  login: (payload: LoginPayload) => Promise<StoredSession | AuthResponse>;
+  verifyLoginTwoFactor: (payload: VerifyLoginTwoFactorPayload) => Promise<StoredSession>;
   register: (payload: RegisterPayload) => Promise<StoredSession>;
   requestLoginCode: (payload: EmailCodeRequestPayload) => Promise<EmailCodeRequestResponse>;
   loginWithCode: (payload: LoginWithCodePayload) => Promise<StoredSession>;
@@ -54,6 +61,10 @@ type AuthContextValue = {
   logoutAll: () => Promise<void>;
   updateProfile: (payload: UpdateProfilePayload) => Promise<StoredSession>;
   changePassword: (payload: ChangePasswordPayload) => Promise<void>;
+  getTwoFactorStatus: () => Promise<TwoFactorStatus>;
+  beginTotpSetup: (payload: TotpSetupPayload) => Promise<TotpSetupResponse>;
+  enableTotp: (payload: TotpTogglePayload) => Promise<TwoFactorStatus>;
+  disableTotp: (payload: TotpTogglePayload) => Promise<TwoFactorStatus>;
   startOAuth: (provider: OAuthProviderName, returnTo?: string) => Promise<void>;
   completeOAuthLogin: (csrfTokenOverride?: string) => Promise<StoredSession>;
   refreshSession: () => Promise<StoredSession>;
@@ -61,7 +72,10 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const toStoredSession = (payload: AuthResponse): StoredSession => {
+const isAuthenticatedResponse = (payload: AuthResponse): payload is AuthSuccessResponse =>
+  payload.status === 'authenticated';
+
+const toStoredSession = (payload: AuthSuccessResponse): StoredSession => {
   if (!payload.csrfToken) {
     throw new Error('Сервер не вернул CSRF-токен для сессии');
   }
@@ -94,6 +108,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const login = useCallback(
     async (payload: LoginPayload) => {
       const response = await authApi.login(payload);
+
+      if (!isAuthenticatedResponse(response)) {
+        return response;
+      }
+
+      return applySession(toStoredSession(response));
+    },
+    [applySession],
+  );
+
+  const verifyLoginTwoFactor = useCallback(
+    async (payload: VerifyLoginTwoFactorPayload) => {
+      const response = await authApi.verifyLoginTwoFactor(payload);
+
+      if (!isAuthenticatedResponse(response)) {
+        throw new Error('Сервер не завершил подтверждение входа.');
+      }
+
       return applySession(toStoredSession(response));
     },
     [applySession],
@@ -102,6 +134,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const register = useCallback(
     async (payload: RegisterPayload) => {
       const response = await authApi.register(payload);
+
+      if (!isAuthenticatedResponse(response)) {
+        throw new Error('Сервер не завершил создание сессии.');
+      }
+
       return applySession(toStoredSession(response));
     },
     [applySession],
@@ -115,6 +152,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const loginWithCode = useCallback(
     async (payload: LoginWithCodePayload) => {
       const response = await authApi.loginWithCode(payload);
+
+      if (!isAuthenticatedResponse(response)) {
+        throw new Error('Сервер не завершил вход по коду.');
+      }
+
       return applySession(toStoredSession(response));
     },
     [applySession],
@@ -128,6 +170,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const registerWithCode = useCallback(
     async (payload: RegisterWithCodePayload) => {
       const response = await authApi.registerWithCode(payload);
+
+      if (!isAuthenticatedResponse(response)) {
+        throw new Error('Сервер не завершил регистрацию.');
+      }
+
       return applySession(toStoredSession(response));
     },
     [applySession],
@@ -141,6 +188,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const resetPasswordWithCode = useCallback(
     async (payload: ResetPasswordWithCodePayload) => {
       const response = await authApi.resetPasswordWithCode(payload);
+
+      if (!isAuthenticatedResponse(response)) {
+        throw new Error('Сервер не завершил восстановление пароля.');
+      }
+
       return applySession(toStoredSession(response));
     },
     [applySession],
@@ -149,6 +201,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const refreshFromToken = useCallback(
     async (csrfToken: string) => {
       const response = await authApi.refresh(csrfToken);
+
+      if (!isAuthenticatedResponse(response)) {
+        throw new Error('Сервер не вернул обновленную сессию.');
+      }
+
       return applySession(toStoredSession(response));
     },
     [applySession],
@@ -232,6 +289,55 @@ export function AuthProvider({ children }: PropsWithChildren) {
     [session?.accessToken],
   );
 
+  const getTwoFactorStatus = useCallback(async () => {
+    const accessToken = session?.accessToken;
+
+    if (!accessToken) {
+      throw new Error('Сессия не найдена');
+    }
+
+    return authApi.getTwoFactorStatus(accessToken);
+  }, [session?.accessToken]);
+
+  const beginTotpSetup = useCallback(
+    async (payload: TotpSetupPayload) => {
+      const accessToken = session?.accessToken;
+
+      if (!accessToken) {
+        throw new Error('Сессия не найдена');
+      }
+
+      return authApi.beginTotpSetup(accessToken, payload);
+    },
+    [session?.accessToken],
+  );
+
+  const enableTotp = useCallback(
+    async (payload: TotpTogglePayload) => {
+      const accessToken = session?.accessToken;
+
+      if (!accessToken) {
+        throw new Error('Сессия не найдена');
+      }
+
+      return authApi.enableTotp(accessToken, payload);
+    },
+    [session?.accessToken],
+  );
+
+  const disableTotp = useCallback(
+    async (payload: TotpTogglePayload) => {
+      const accessToken = session?.accessToken;
+
+      if (!accessToken) {
+        throw new Error('Сессия не найдена');
+      }
+
+      return authApi.disableTotp(accessToken, payload);
+    },
+    [session?.accessToken],
+  );
+
   const startOAuth = useCallback(
     async (provider: OAuthProviderName, returnTo = '/auth/callback') => {
       const safeReturnTo = sanitizeInternalPath(returnTo, '/auth/callback') ?? '/auth/callback';
@@ -282,6 +388,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       accessToken: session?.accessToken ?? null,
       csrfToken: session?.csrfToken ?? null,
       login,
+      verifyLoginTwoFactor,
       register,
       requestLoginCode,
       loginWithCode,
@@ -293,6 +400,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       logoutAll,
       updateProfile,
       changePassword,
+      getTwoFactorStatus,
+      beginTotpSetup,
+      enableTotp,
+      disableTotp,
       startOAuth,
       completeOAuthLogin,
       refreshSession,
@@ -300,8 +411,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     [
       completeOAuthLogin,
       changePassword,
+      getTwoFactorStatus,
+      beginTotpSetup,
+      enableTotp,
+      disableTotp,
       loginWithCode,
       login,
+      verifyLoginTwoFactor,
       logout,
       logoutAll,
       registerWithCode,

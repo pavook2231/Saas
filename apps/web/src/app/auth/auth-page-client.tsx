@@ -13,6 +13,7 @@ import { Modal } from '@/components/ui/modal';
 import { sanitizeInternalPath } from '@/lib/safe-url';
 
 import { useAuth } from '../providers/auth-provider';
+import type { TwoFactorRequiredResponse } from '../lib/auth/types';
 
 type AuthMode = 'login' | 'register';
 type OAuthProvider = 'google' | 'vk' | 'yandex';
@@ -84,6 +85,7 @@ export default function AuthPageClient() {
   const {
     status,
     login,
+    verifyLoginTwoFactor,
     startOAuth,
     requestRegisterCode,
     registerWithCode,
@@ -98,6 +100,13 @@ export default function AuthPageClient() {
   const [submitting, setSubmitting] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [loginConfirmOpen, setLoginConfirmOpen] = useState(false);
+  const [loginConfirmCode, setLoginConfirmCode] = useState('');
+  const [loginConfirmError, setLoginConfirmError] = useState<string | null>(null);
+  const [loginConfirmBusy, setLoginConfirmBusy] = useState(false);
+  const [loginConfirmResendBusy, setLoginConfirmResendBusy] = useState(false);
+  const [loginConfirmCountdown, setLoginConfirmCountdown] = useState(0);
+  const [loginChallenge, setLoginChallenge] = useState<TwoFactorRequiredResponse | null>(null);
 
   const [emailConfirmOpen, setEmailConfirmOpen] = useState(false);
   const [emailConfirmCode, setEmailConfirmCode] = useState('');
@@ -136,6 +145,18 @@ export default function AuthPageClient() {
       router.replace(nextUrl);
     }
   }, [nextUrl, router, status]);
+
+  useEffect(() => {
+    if (loginConfirmCountdown <= 0) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setLoginConfirmCountdown((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [loginConfirmCountdown]);
 
   useEffect(() => {
     if (emailConfirmCountdown <= 0) {
@@ -222,10 +243,19 @@ export default function AuthPageClient() {
         throw new Error('Пароль должен содержать минимум 8 символов');
       }
 
-      await login({
+      const result = await login({
         email: loginForm.email.trim(),
         password: loginForm.password,
       });
+
+      if ('status' in result && result.status === 'two_factor_required') {
+        setLoginChallenge(result);
+        setLoginConfirmCode('');
+        setLoginConfirmError(null);
+        setLoginConfirmCountdown(resendCooldownSeconds);
+        setLoginConfirmOpen(true);
+        return;
+      }
 
       router.replace(nextUrl);
     } catch (error) {
@@ -452,6 +482,62 @@ export default function AuthPageClient() {
     </div>
   );
 
+  const handleConfirmLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoginConfirmBusy(true);
+    setLoginConfirmError(null);
+
+    try {
+      validateCode(loginConfirmCode);
+      await verifyLoginTwoFactor({
+        email: loginForm.email.trim(),
+        password: loginForm.password,
+        code: loginConfirmCode.trim(),
+      });
+      setLoginConfirmOpen(false);
+      router.replace(nextUrl);
+    } catch (error) {
+      setLoginConfirmError(error instanceof Error ? error.message : 'Не удалось подтвердить вход');
+    } finally {
+      setLoginConfirmBusy(false);
+    }
+  };
+
+  const handleResendLoginCode = async () => {
+    if (loginChallenge?.method === 'totp') {
+      return;
+    }
+
+    setLoginConfirmResendBusy(true);
+    setLoginConfirmError(null);
+
+    try {
+      const result = await login({
+        email: loginForm.email.trim(),
+        password: loginForm.password,
+      });
+
+      if ('status' in result && result.status === 'two_factor_required') {
+        setLoginChallenge(result);
+        setLoginConfirmCountdown(resendCooldownSeconds);
+      }
+    } catch (error) {
+      setLoginConfirmError(error instanceof Error ? error.message : 'Не удалось отправить код повторно');
+    } finally {
+      setLoginConfirmResendBusy(false);
+    }
+  };
+
+  const closeLoginConfirm = () => {
+    setLoginConfirmOpen(false);
+    setLoginConfirmCode('');
+    setLoginConfirmError(null);
+    setLoginConfirmBusy(false);
+    setLoginConfirmResendBusy(false);
+    setLoginConfirmCountdown(0);
+    setLoginChallenge(null);
+  };
+
   const registerConfirmFooter = (
     <>
       <Button type="button" variant="ghost" onClick={closeRegisterConfirm}>
@@ -463,6 +549,17 @@ export default function AuthPageClient() {
         loading={emailConfirmBusy}
       >
         {emailConfirmBusy ? 'Подтверждаем...' : 'Подтвердить'}
+      </Button>
+    </>
+  );
+
+  const loginConfirmFooter = (
+    <>
+      <Button type="button" variant="ghost" onClick={closeLoginConfirm}>
+        Закрыть
+      </Button>
+      <Button type="submit" form="login-confirm-form" loading={loginConfirmBusy}>
+        {loginConfirmBusy ? 'Подтверждаем...' : 'Подтвердить вход'}
       </Button>
     </>
   );
@@ -652,6 +749,58 @@ export default function AuthPageClient() {
           </CardContent>
         </Card>
       </main>
+
+      <Modal
+        open={loginConfirmOpen}
+        onClose={closeLoginConfirm}
+        title="Подтвердите вход"
+        description={
+          loginChallenge?.method === 'totp'
+            ? 'Введите код из приложения-аутентификатора.'
+            : `Мы отправили код на ${loginChallenge?.maskedEmail ?? loginForm.email.trim()}.`
+        }
+        size="sm"
+        footer={loginConfirmFooter}
+      >
+        <form id="login-confirm-form" className="auth-form-grid" onSubmit={handleConfirmLogin}>
+          <Input
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            label={loginChallenge?.method === 'totp' ? 'Код из приложения' : 'Код из письма'}
+            placeholder="123456"
+            value={loginConfirmCode}
+            onChange={(event) => setLoginConfirmCode(event.target.value)}
+          />
+
+          <div className="auth-modal-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => void handleResendLoginCode()}
+              disabled={
+                loginChallenge?.method === 'totp' ||
+                loginConfirmCountdown > 0 ||
+                loginConfirmResendBusy
+              }
+            >
+              {loginChallenge?.method === 'totp'
+                ? 'Код генерируется в приложении'
+                : loginConfirmResendBusy
+                  ? 'Отправляем...'
+                  : 'Отправить код повторно'}
+            </Button>
+            <span className="auth-modal-hint">
+              {loginChallenge?.method === 'totp'
+                ? 'Откройте TOTP-приложение и введите текущий код'
+                : loginConfirmCountdown > 0
+                ? `Отправить повторно через ${formatCountdown(loginConfirmCountdown)}`
+                : 'Можно отправить код повторно'}
+            </span>
+          </div>
+
+          {loginConfirmError ? <p className="auth-error-banner">{loginConfirmError}</p> : null}
+        </form>
+      </Modal>
 
       <Modal
         open={emailConfirmOpen}

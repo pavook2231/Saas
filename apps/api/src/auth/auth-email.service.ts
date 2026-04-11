@@ -1,7 +1,7 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import nodemailer, { type Transporter } from 'nodemailer';
 import { EmailAuthCodePurpose } from '@prisma/client';
+import nodemailer, { type Transporter } from 'nodemailer';
 
 import { AppConfig } from '../config/app.config';
 
@@ -40,7 +40,7 @@ export class AuthEmailService {
       });
     } catch (error) {
       this.logger.error(
-        `Failed to send email auth code to ${context.email}: ${(error as Error).message}`,
+        `Failed to send email auth code to ${this.maskEmail(context.email)}: ${(error as Error).message}`,
       );
       throw new ServiceUnavailableException(
         'Не удалось отправить письмо с кодом. Попробуйте еще раз.',
@@ -63,6 +63,11 @@ export class AuthEmailService {
         title: 'Код для входа',
         subject: `${appName}: код для входа`,
         description: 'Используйте этот код, чтобы войти в аккаунт.',
+      },
+      [EmailAuthCodePurpose.LOGIN_2FA]: {
+        title: 'Код подтверждения входа',
+        subject: `${appName}: подтверждение входа`,
+        description: 'Используйте этот код как второй шаг, чтобы завершить вход.',
       },
       [EmailAuthCodePurpose.REGISTER]: {
         title: 'Код подтверждения регистрации',
@@ -140,5 +145,22 @@ export class AuthEmailService {
     }
 
     return config;
+  }
+
+  private maskEmail(email: string): string {
+    const normalized = email.trim().toLowerCase();
+    const [localPart, domainPart = ''] = normalized.split('@');
+    const [domainName, ...domainTail] = domainPart.split('.');
+
+    const maskChunk = (value: string, visible = 2): string => {
+      if (value.length <= visible) {
+        return '*'.repeat(Math.max(2, value.length));
+      }
+
+      return `${value.slice(0, visible)}${'*'.repeat(Math.max(2, value.length - visible))}`;
+    };
+
+    const maskedDomainTail = domainTail.join('.');
+    return `${maskChunk(localPart)}@${maskChunk(domainName)}${maskedDomainTail ? `.${maskedDomainTail}` : ''}`;
   }
 }

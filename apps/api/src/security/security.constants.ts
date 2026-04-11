@@ -1,6 +1,6 @@
 export const RATE_LIMIT_METADATA_KEY = 'rate-limit:config';
 
-export type RateLimitScope = 'ip' | 'user_or_ip';
+export type RateLimitScope = 'ip' | 'user_or_ip' | 'email_or_ip' | 'email_and_ip';
 
 export type RateLimitMetadata = {
   limit?: number;

@@ -59,20 +59,12 @@ CREATE TYPE "ChatScope" AS ENUM ('ORGANIZATION', 'EVENT');
 CREATE TYPE "PushProvider" AS ENUM ('FCM');
 
 -- CreateEnum
-CREATE TYPE "AuditTargetType" AS ENUM ('ORGANIZATION', 'MEMBERSHIP', 'PARTICIPANT', 'EVENT', 'TEMPLATE', 'POINTS', 'MANUAL_POINTS', 'NOTIFICATION', 'CHAT', 'FINANCE', 'AUTH', 'SETTINGS');
+CREATE TYPE "AuditTargetType" AS ENUM ('ORGANIZATION', 'MEMBERSHIP', 'PARTICIPANT', 'EVENT', 'TEMPLATE', 'POINTS', 'MANUAL_POINTS', 'NOTIFICATION', 'CHAT', 'AUTH', 'SETTINGS');
 
 -- CreateEnum
 CREATE TYPE "AuditSeverity" AS ENUM ('INFO', 'WARNING', 'CRITICAL');
 
 -- CreateEnum
-CREATE TYPE "PayrollPeriodStatus" AS ENUM ('OPEN', 'CALCULATED', 'APPROVED', 'PAID', 'CANCELLED');
-
--- CreateEnum
-CREATE TYPE "PayoutStatus" AS ENUM ('PENDING', 'PROCESSING', 'PAID', 'FAILED', 'CANCELLED');
-
--- CreateEnum
-CREATE TYPE "CurrencyCode" AS ENUM ('RUB', 'USD', 'EUR', 'KZT', 'BYN', 'UZS');
-
 -- CreateTable
 CREATE TABLE "User" (
     "id" UUID NOT NULL,
@@ -350,26 +342,11 @@ CREATE TABLE "PointsConfig" (
     "performanceShortPoints" DECIMAL(12,2) NOT NULL DEFAULT 2,
     "rehearsalMinutesPerPoint" INTEGER NOT NULL DEFAULT 180,
     "autoLockDays" INTEGER NOT NULL DEFAULT 7,
-    "pointValue" DECIMAL(12,2),
-    "currency" "CurrencyCode" NOT NULL DEFAULT 'RUB',
     "updatedByUserId" UUID,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "PointsConfig_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "PointRateHistory" (
-    "id" UUID NOT NULL,
-    "organizationId" UUID NOT NULL,
-    "effectiveFrom" TIMESTAMP(3) NOT NULL,
-    "pointValue" DECIMAL(12,2) NOT NULL,
-    "currency" "CurrencyCode" NOT NULL DEFAULT 'RUB',
-    "createdByUserId" UUID,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "PointRateHistory_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -553,82 +530,6 @@ CREATE TABLE "ChatMessage" (
 );
 
 -- CreateTable
-CREATE TABLE "PayrollPeriod" (
-    "id" UUID NOT NULL,
-    "organizationId" UUID NOT NULL,
-    "startsAt" TIMESTAMP(3) NOT NULL,
-    "endsAt" TIMESTAMP(3) NOT NULL,
-    "status" "PayrollPeriodStatus" NOT NULL DEFAULT 'OPEN',
-    "pointValue" DECIMAL(12,2) NOT NULL,
-    "currency" "CurrencyCode" NOT NULL DEFAULT 'RUB',
-    "totalAutoPoints" DECIMAL(12,2) NOT NULL DEFAULT 0,
-    "totalManualPoints" DECIMAL(12,2) NOT NULL DEFAULT 0,
-    "totalPoints" DECIMAL(12,2) NOT NULL DEFAULT 0,
-    "totalAmount" DECIMAL(14,2) NOT NULL DEFAULT 0,
-    "generatedByUserId" UUID,
-    "approvedByUserId" UUID,
-    "approvedAt" TIMESTAMP(3),
-    "paidAt" TIMESTAMP(3),
-    "notes" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "PayrollPeriod_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "PayrollLine" (
-    "id" UUID NOT NULL,
-    "organizationId" UUID NOT NULL,
-    "payrollPeriodId" UUID NOT NULL,
-    "participantId" UUID NOT NULL,
-    "autoPoints" DECIMAL(12,2) NOT NULL DEFAULT 0,
-    "manualPoints" DECIMAL(12,2) NOT NULL DEFAULT 0,
-    "correctionPoints" DECIMAL(12,2) NOT NULL DEFAULT 0,
-    "totalPoints" DECIMAL(12,2) NOT NULL,
-    "pointValue" DECIMAL(12,2) NOT NULL,
-    "amount" DECIMAL(14,2) NOT NULL,
-    "currency" "CurrencyCode" NOT NULL DEFAULT 'RUB',
-    "metadata" JSONB,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "PayrollLine_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "PayrollLinePointEntry" (
-    "id" UUID NOT NULL,
-    "payrollLineId" UUID NOT NULL,
-    "pointsLedgerEntryId" UUID NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "PayrollLinePointEntry_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "FinancePayout" (
-    "id" UUID NOT NULL,
-    "organizationId" UUID NOT NULL,
-    "payrollPeriodId" UUID,
-    "participantId" UUID NOT NULL,
-    "amount" DECIMAL(14,2) NOT NULL,
-    "currency" "CurrencyCode" NOT NULL DEFAULT 'RUB',
-    "status" "PayoutStatus" NOT NULL DEFAULT 'PENDING',
-    "paymentMethod" TEXT,
-    "reference" TEXT,
-    "externalTransactionId" TEXT,
-    "createdByUserId" UUID,
-    "processedByUserId" UUID,
-    "processedAt" TIMESTAMP(3),
-    "failedAt" TIMESTAMP(3),
-    "failureReason" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "FinancePayout_pkey" PRIMARY KEY ("id")
-);
-
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
@@ -768,12 +669,6 @@ CREATE INDEX "ParticipantAvailability_participantId_startsAt_endsAt_idx" ON "Par
 CREATE UNIQUE INDEX "PointsConfig_organizationId_key" ON "PointsConfig"("organizationId");
 
 -- CreateIndex
-CREATE INDEX "PointRateHistory_organizationId_effectiveFrom_idx" ON "PointRateHistory"("organizationId", "effectiveFrom");
-
--- CreateIndex
-CREATE UNIQUE INDEX "PointRateHistory_organizationId_effectiveFrom_key" ON "PointRateHistory"("organizationId", "effectiveFrom");
-
--- CreateIndex
 CREATE INDEX "AutoPointsComputation_organizationId_eventId_startedAt_idx" ON "AutoPointsComputation"("organizationId", "eventId", "startedAt");
 
 -- CreateIndex
@@ -870,42 +765,6 @@ CREATE INDEX "ChatMessage_senderUserId_createdAt_idx" ON "ChatMessage"("senderUs
 CREATE INDEX "ChatMessage_organizationId_deletedAt_createdAt_idx" ON "ChatMessage"("organizationId", "deletedAt", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "PayrollPeriod_organizationId_status_startsAt_idx" ON "PayrollPeriod"("organizationId", "status", "startsAt");
-
--- CreateIndex
-CREATE INDEX "PayrollPeriod_generatedByUserId_idx" ON "PayrollPeriod"("generatedByUserId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "PayrollPeriod_organizationId_startsAt_endsAt_key" ON "PayrollPeriod"("organizationId", "startsAt", "endsAt");
-
--- CreateIndex
-CREATE INDEX "PayrollLine_organizationId_participantId_idx" ON "PayrollLine"("organizationId", "participantId");
-
--- CreateIndex
-CREATE INDEX "PayrollLine_payrollPeriodId_idx" ON "PayrollLine"("payrollPeriodId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "PayrollLine_payrollPeriodId_participantId_key" ON "PayrollLine"("payrollPeriodId", "participantId");
-
--- CreateIndex
-CREATE INDEX "PayrollLinePointEntry_pointsLedgerEntryId_idx" ON "PayrollLinePointEntry"("pointsLedgerEntryId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "PayrollLinePointEntry_payrollLineId_pointsLedgerEntryId_key" ON "PayrollLinePointEntry"("payrollLineId", "pointsLedgerEntryId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "FinancePayout_externalTransactionId_key" ON "FinancePayout"("externalTransactionId");
-
--- CreateIndex
-CREATE INDEX "FinancePayout_organizationId_status_createdAt_idx" ON "FinancePayout"("organizationId", "status", "createdAt");
-
--- CreateIndex
-CREATE INDEX "FinancePayout_participantId_status_createdAt_idx" ON "FinancePayout"("participantId", "status", "createdAt");
-
--- CreateIndex
-CREATE INDEX "FinancePayout_payrollPeriodId_idx" ON "FinancePayout"("payrollPeriodId");
-
--- AddForeignKey
 ALTER TABLE "OauthAccount" ADD CONSTRAINT "OauthAccount_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1005,12 +864,6 @@ ALTER TABLE "PointsConfig" ADD CONSTRAINT "PointsConfig_organizationId_fkey" FOR
 ALTER TABLE "PointsConfig" ADD CONSTRAINT "PointsConfig_updatedByUserId_fkey" FOREIGN KEY ("updatedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "PointRateHistory" ADD CONSTRAINT "PointRateHistory_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PointRateHistory" ADD CONSTRAINT "PointRateHistory_createdByUserId_fkey" FOREIGN KEY ("createdByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "AutoPointsComputation" ADD CONSTRAINT "AutoPointsComputation_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1098,41 +951,4 @@ ALTER TABLE "ChatMessage" ADD CONSTRAINT "ChatMessage_eventId_fkey" FOREIGN KEY 
 ALTER TABLE "ChatMessage" ADD CONSTRAINT "ChatMessage_senderUserId_fkey" FOREIGN KEY ("senderUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "PayrollPeriod" ADD CONSTRAINT "PayrollPeriod_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PayrollPeriod" ADD CONSTRAINT "PayrollPeriod_generatedByUserId_fkey" FOREIGN KEY ("generatedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PayrollPeriod" ADD CONSTRAINT "PayrollPeriod_approvedByUserId_fkey" FOREIGN KEY ("approvedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PayrollLine" ADD CONSTRAINT "PayrollLine_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PayrollLine" ADD CONSTRAINT "PayrollLine_payrollPeriodId_fkey" FOREIGN KEY ("payrollPeriodId") REFERENCES "PayrollPeriod"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PayrollLine" ADD CONSTRAINT "PayrollLine_participantId_fkey" FOREIGN KEY ("participantId") REFERENCES "Participant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PayrollLinePointEntry" ADD CONSTRAINT "PayrollLinePointEntry_payrollLineId_fkey" FOREIGN KEY ("payrollLineId") REFERENCES "PayrollLine"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PayrollLinePointEntry" ADD CONSTRAINT "PayrollLinePointEntry_pointsLedgerEntryId_fkey" FOREIGN KEY ("pointsLedgerEntryId") REFERENCES "PointsLedgerEntry"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "FinancePayout" ADD CONSTRAINT "FinancePayout_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "FinancePayout" ADD CONSTRAINT "FinancePayout_payrollPeriodId_fkey" FOREIGN KEY ("payrollPeriodId") REFERENCES "PayrollPeriod"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "FinancePayout" ADD CONSTRAINT "FinancePayout_participantId_fkey" FOREIGN KEY ("participantId") REFERENCES "Participant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "FinancePayout" ADD CONSTRAINT "FinancePayout_createdByUserId_fkey" FOREIGN KEY ("createdByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "FinancePayout" ADD CONSTRAINT "FinancePayout_processedByUserId_fkey" FOREIGN KEY ("processedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 

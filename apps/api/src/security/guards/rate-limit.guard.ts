@@ -59,11 +59,10 @@ export class RateLimitGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request & { user?: { sub?: string } }>();
     const response = context.switchToHttp().getResponse<Response>();
     const now = Date.now();
-    const identity = this.resolveIdentity(request, config.scope ?? 'user_or_ip');
+    const limit = config.limit;
+    const windowMs = config.windowMs;
+    const identities = this.resolveIdentities(request, config.scope ?? 'user_or_ip');
     const routeKey = this.resolveRouteKey(request);
-    const key = `${routeKey}:${identity}`;
-
-    const current = this.counters.get(key);
     const shouldPersistCounter =
       config.bucket === 'api' ||
       config.bucket === 'auth' ||
@@ -71,10 +70,15 @@ export class RateLimitGuard implements CanActivate {
       config.bucket === 'oauth';
 
     if (shouldPersistCounter) {
-      const counter = await this.consumePersistentCounter(key, config.windowMs);
-      this.setHeaders(response, config.limit, counter.count, counter.resetAt);
+      const counters = await Promise.all(
+        identities.map((identity) =>
+          this.consumePersistentCounter(`${routeKey}:${identity}`, windowMs),
+        ),
+      );
+      const counter = this.selectStrictestCounter(counters);
+      this.setHeaders(response, limit, counter.count, counter.resetAt);
 
-      if (counter.count > config.limit) {
+      if (counter.count > limit) {
         response.setHeader(
           'Retry-After',
           Math.max(1, Math.ceil((counter.resetAt - now) / 1000)).toString(),
@@ -85,24 +89,31 @@ export class RateLimitGuard implements CanActivate {
       return true;
     }
 
-    if (!current || current.resetAt <= now) {
-      this.counters.set(key, {
-        count: 1,
-        resetAt: now + config.windowMs,
-      });
-      this.setHeaders(response, config.limit, 1, now + config.windowMs);
-      this.cleanupExpired(now);
-      return true;
-    }
+    const counters = identities.map((identity) => {
+      const key = `${routeKey}:${identity}`;
+      const current = this.counters.get(key);
 
-    current.count += 1;
-    this.setHeaders(response, config.limit, current.count, current.resetAt);
+      if (!current || current.resetAt <= now) {
+        const nextCounter = {
+          count: 1,
+          resetAt: now + windowMs,
+        };
+        this.counters.set(key, nextCounter);
+        return nextCounter;
+      }
+
+      current.count += 1;
+      return current;
+    });
+
+    const counter = this.selectStrictestCounter(counters);
+    this.setHeaders(response, limit, counter.count, counter.resetAt);
     this.cleanupExpired(now);
 
-    if (current.count > config.limit) {
+    if (counter.count > limit) {
       response.setHeader(
         'Retry-After',
-        Math.max(1, Math.ceil((current.resetAt - now) / 1000)).toString(),
+        Math.max(1, Math.ceil((counter.resetAt - now) / 1000)).toString(),
       );
       throw new HttpException('Too many requests', HttpStatus.TOO_MANY_REQUESTS);
     }
@@ -124,9 +135,13 @@ export class RateLimitGuard implements CanActivate {
           limit: override.limit ?? bucket.limit,
           windowMs: override.windowMs ?? bucket.windowMs,
           bucket: override.bucket,
-          scope:
+      scope:
             override.scope ??
-            (override.bucket === 'refresh' ? 'user_or_ip' : 'ip'),
+            (override.bucket === 'refresh'
+              ? 'user_or_ip'
+              : override.bucket === 'auth'
+                ? 'email_and_ip'
+                : 'ip'),
         };
       }
 
@@ -143,19 +158,35 @@ export class RateLimitGuard implements CanActivate {
     };
   }
 
-  private resolveIdentity(
+  private resolveIdentities(
     request: Request & { user?: { sub?: string } },
     scope: RateLimitScope,
-  ): string {
+  ): string[] {
     const userId = request.user?.sub;
 
     if (scope === 'user_or_ip' && typeof userId === 'string' && userId.trim().length > 0) {
-      return `user:${userId}`;
+      return [`user:${userId}`];
+    }
+
+    if (scope === 'email_or_ip' || scope === 'email_and_ip') {
+      const emailCandidate = (request.body as { email?: unknown } | undefined)?.email;
+
+      if (typeof emailCandidate === 'string') {
+        const normalizedEmail = emailCandidate.trim().toLowerCase();
+
+        if (normalizedEmail.length > 0) {
+          if (scope === 'email_and_ip') {
+            return [`email:${normalizedEmail}`, `ip:${request.ip || 'unknown'}`];
+          }
+
+          return [`email:${normalizedEmail}`];
+        }
+      }
     }
 
     const ip = request.ip;
 
-    return `ip:${ip || 'unknown'}`;
+    return [`ip:${ip || 'unknown'}`];
   }
 
   private resolveRouteKey(request: Request): string {
@@ -173,6 +204,20 @@ export class RateLimitGuard implements CanActivate {
     response.setHeader('X-RateLimit-Limit', limit.toString());
     response.setHeader('X-RateLimit-Remaining', Math.max(0, limit - count).toString());
     response.setHeader('X-RateLimit-Reset', Math.ceil(resetAt / 1000).toString());
+  }
+
+  private selectStrictestCounter<T extends { count: number; resetAt: number }>(counters: T[]): T {
+    return counters.reduce((strictest, candidate) => {
+      if (candidate.count > strictest.count) {
+        return candidate;
+      }
+
+      if (candidate.count === strictest.count && candidate.resetAt > strictest.resetAt) {
+        return candidate;
+      }
+
+      return strictest;
+    });
   }
 
   private cleanupExpired(now: number): void {

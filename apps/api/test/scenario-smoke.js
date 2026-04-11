@@ -3,7 +3,7 @@ require('reflect-metadata');
 const { randomUUID } = require('node:crypto');
 const { ConflictException, ForbiddenException, UnauthorizedException } = require('@nestjs/common');
 const { JwtService } = require('@nestjs/jwt');
-const { CurrencyCode, EventAttendanceStatus, EventStatus, EventType, MembershipStatus, NotificationChannel, NotificationDeliveryStatus, NotificationType, OrganizationJoinRequestStatus, OrganizationRole, ParticipantInviteStatus, PointsLedgerType, Prisma } = require('@prisma/client');
+const { EventAttendanceStatus, EventStatus, EventType, MembershipStatus, NotificationChannel, NotificationDeliveryStatus, NotificationType, OrganizationJoinRequestStatus, OrganizationRole, ParticipantInviteStatus, PointsLedgerType, Prisma } = require('@prisma/client');
 const { AuthService } = require('../dist/auth/auth.service');
 const { JwtStrategy } = require('../dist/auth/strategies/jwt.strategy');
 const { EventsService } = require('../dist/events/events.service');
@@ -74,7 +74,7 @@ class FakeWebPushService {
 
 class InMemoryPrisma {
   constructor() {
-    this.state = { users: [], refreshTokens: [], organizations: [], organizationInvites: [], organizationJoinRequests: [], memberships: [], participants: [], participantInvites: [], events: [], eventParticipants: [], participantAvailabilities: [], pointsConfigs: [], pointRateHistories: [], autoPointsComputations: [], pointsLedgerEntries: [], manualPointsAdjustments: [], manualPointsAudits: [], auditLogs: [], notifications: [], notificationRecipients: [], pushDeviceTokens: [], webPushSubscriptions: [] };
+    this.state = { users: [], refreshTokens: [], organizations: [], organizationInvites: [], organizationJoinRequests: [], memberships: [], participants: [], participantInvites: [], events: [], eventParticipants: [], participantAvailabilities: [], pointsConfigs: [], autoPointsComputations: [], pointsLedgerEntries: [], manualPointsAdjustments: [], manualPointsAudits: [], auditLogs: [], notifications: [], notificationRecipients: [], pushDeviceTokens: [], webPushSubscriptions: [] };
     this.user = this.model('user');
     this.refreshToken = this.model('refreshToken');
     this.organization = this.model('organization');
@@ -87,7 +87,6 @@ class InMemoryPrisma {
     this.eventParticipant = this.model('eventParticipant');
     this.participantAvailability = this.model('participantAvailability');
     this.pointsConfig = this.model('pointsConfig');
-    this.pointRateHistory = this.model('pointRateHistory');
     this.pointsLedgerEntry = this.model('pointsLedgerEntry');
     this.autoPointsComputation = this.model('autoPointsComputation');
     this.manualPointsAdjustment = this.model('manualPointsAdjustment');
@@ -105,7 +104,7 @@ class InMemoryPrisma {
   async $transaction(input) { return typeof input === 'function' ? input(this) : Promise.all(input); }
 
   table(name) {
-    const map = { user: 'users', refreshToken: 'refreshTokens', organization: 'organizations', organizationInvite: 'organizationInvites', organizationJoinRequest: 'organizationJoinRequests', membership: 'memberships', participant: 'participants', participantInvite: 'participantInvites', event: 'events', eventParticipant: 'eventParticipants', participantAvailability: 'participantAvailabilities', pointsConfig: 'pointsConfigs', pointRateHistory: 'pointRateHistories', pointsLedgerEntry: 'pointsLedgerEntries', autoPointsComputation: 'autoPointsComputations', manualPointsAdjustment: 'manualPointsAdjustments', manualPointsAudit: 'manualPointsAudits', auditLog: 'auditLogs', notification: 'notifications', notificationRecipient: 'notificationRecipients', pushDeviceToken: 'pushDeviceTokens', webPushSubscription: 'webPushSubscriptions', eventReminderDispatch: 'eventReminderDispatches' };
+    const map = { user: 'users', refreshToken: 'refreshTokens', organization: 'organizations', organizationInvite: 'organizationInvites', organizationJoinRequest: 'organizationJoinRequests', membership: 'memberships', participant: 'participants', participantInvite: 'participantInvites', event: 'events', eventParticipant: 'eventParticipants', participantAvailability: 'participantAvailabilities', pointsConfig: 'pointsConfigs', pointsLedgerEntry: 'pointsLedgerEntries', autoPointsComputation: 'autoPointsComputations', manualPointsAdjustment: 'manualPointsAdjustments', manualPointsAudit: 'manualPointsAudits', auditLog: 'auditLogs', notification: 'notifications', notificationRecipient: 'notificationRecipients', pushDeviceToken: 'pushDeviceTokens', webPushSubscription: 'webPushSubscriptions', eventReminderDispatch: 'eventReminderDispatches' };
     const key = map[name];
     if (!key) throw new Error(`Unsupported model ${name}`);
     return this.state[key];
@@ -142,8 +141,7 @@ class InMemoryPrisma {
       event: { ...base, organizationId: null, templateId: null, title: '', description: null, type: EventType.EVENT, status: EventStatus.PLANNED, startsAt: now, endsAt: new Date(now.getTime() + 3600000), durationMinutes: 60, timezone: 'UTC', location: null, isAllDay: false, createdByUserId: null, updatedByUserId: null, createdAt: now, updatedAt: now, deletedAt: null },
       eventParticipant: { ...base, eventId: null, participantId: null, templateRoleId: null, roleName: null, attendanceStatus: EventAttendanceStatus.INVITED, isRequired: true, checkInAt: null, checkOutAt: null, notes: null, createdAt: now, updatedAt: now },
       participantAvailability: { ...base, organizationId: null, participantId: null, startsAt: now, endsAt: new Date(now.getTime() + 3600000), status: 'BUSY', source: 'MANUAL', reason: null, createdByUserId: null, createdAt: now, updatedAt: now },
-      pointsConfig: { ...base, organizationId: null, enabled: false, periodStartDay: 25, performanceLongMinutes: 60, performanceLongPoints: new Prisma.Decimal(3), performanceShortPoints: new Prisma.Decimal(2), rehearsalMinutesPerPoint: 180, autoLockDays: 7, pointValue: null, currency: CurrencyCode.RUB, updatedByUserId: null, createdAt: now, updatedAt: now },
-      pointRateHistory: { ...base, organizationId: null, effectiveFrom: now, pointValue: new Prisma.Decimal(0), currency: CurrencyCode.RUB, createdByUserId: null, createdAt: now },
+      pointsConfig: { ...base, organizationId: null, enabled: false, periodStartDay: 25, performanceLongMinutes: 60, performanceLongPoints: new Prisma.Decimal(3), performanceShortPoints: new Prisma.Decimal(2), rehearsalMinutesPerPoint: 180, autoLockDays: 7, updatedByUserId: null, createdAt: now, updatedAt: now },
       pointsLedgerEntry: { ...base, organizationId: null, participantId: null, eventId: null, eventParticipantId: null, autoComputationId: null, periodStart: now, periodEnd: now, type: PointsLedgerType.AUTO_EVENT, computationStatus: 'CALCULATED', points: new Prisma.Decimal(0), description: null, metadata: null, createdByUserId: null, createdAt: now, updatedAt: now, reversedAt: null },
       autoPointsComputation: { ...base, organizationId: null, eventId: null, runByUserId: null, ruleVersion: 1, status: 'CALCULATED', startedAt: now, finishedAt: null, generatedEntriesCount: 0, generatedPoints: new Prisma.Decimal(0), metadata: null },
       manualPointsAdjustment: { ...base, organizationId: null, ledgerEntryId: null, participantId: null, performedByUserId: null, reason: '', createdAt: now, updatedAt: now, deletedAt: null },
@@ -181,7 +179,6 @@ class InMemoryPrisma {
     if (name === 'webPushSubscription' && where.endpointHash) return item.endpointHash === where.endpointHash;
     if (name === 'membership' && where.organizationId_userId) return item.organizationId === where.organizationId_userId.organizationId && item.userId === where.organizationId_userId.userId;
     if (name === 'pointsConfig' && where.organizationId) return item.organizationId === where.organizationId;
-    if (name === 'pointRateHistory' && where.organizationId_effectiveFrom) return item.organizationId === where.organizationId_effectiveFrom.organizationId && this.eq(item.effectiveFrom, where.organizationId_effectiveFrom.effectiveFrom);
     if (name === 'pushDeviceToken' && where.token) return item.token === where.token;
     if (name === 'eventReminderDispatch' && where.eventId_reminderKey) return item.eventId === where.eventId_reminderKey.eventId && item.reminderKey === where.eventId_reminderKey.reminderKey;
     return false;
@@ -261,7 +258,7 @@ class InMemoryPrisma {
   const results = [];
 
   const adminAuth = await authService.register({ email: 'admin@example.com', password: 'StrongPass123', firstName: 'Admin', lastName: 'Owner' }, requestMeta);
-  const organization = await organizationsService.createOrganization(adminAuth.user.id, { name: 'QA Studio', financeEnabled: true, timezone: 'Europe/Moscow' });
+  const organization = await organizationsService.createOrganization(adminAuth.user.id, { name: 'QA Studio', timezone: 'Europe/Moscow' });
   assert.equal(organization.role, OrganizationRole.ADMIN);
   assert.equal(prisma.state.memberships.some((m) => m.organizationId === organization.id && m.userId === adminAuth.user.id && m.status === MembershipStatus.ACTIVE && m.role === OrganizationRole.ADMIN), true);
   results.push('1. registration -> create organization');

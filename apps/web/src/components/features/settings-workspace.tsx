@@ -27,7 +27,6 @@ type OrganizationFormState = {
   name: string;
   description: string;
   timezone: string;
-  financeEnabled: boolean;
 };
 
 type InviteFormState = {
@@ -42,7 +41,6 @@ const initialFormState: OrganizationFormState = {
   name: '',
   description: '',
   timezone: 'UTC',
-  financeEnabled: false,
 };
 
 const displayMemberName = (member: OrganizationMember) => {
@@ -237,7 +235,6 @@ export function SettingsWorkspace() {
         name: organizationResponse.name,
         description: organizationResponse.description ?? '',
         timezone: organizationResponse.timezone ?? 'UTC',
-        financeEnabled: organizationResponse.financeEnabled,
       });
       setErrorText(null);
     } catch (error) {
@@ -264,7 +261,7 @@ export function SettingsWorkspace() {
       {
         label: 'Моя роль',
         value: activeRole ?? '—',
-        meta: 'От роли зависит, можно ли менять состав, инвайты и финансовые настройки.',
+        meta: 'От роли зависит, можно ли менять состав, инвайты и основные настройки.',
       },
       {
         label: 'Активные участники команды',
@@ -337,7 +334,6 @@ export function SettingsWorkspace() {
           name: form.name.trim(),
           description: form.description.trim() || undefined,
           timezone: form.timezone.trim(),
-          financeEnabled: form.financeEnabled,
         },
       });
 
@@ -599,21 +595,6 @@ export function SettingsWorkspace() {
                     }
                   />
 
-                  <label className="checkbox-row">
-                    <input
-                      checked={form.financeEnabled}
-                      type="checkbox"
-                      disabled={!canManageSettings}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          financeEnabled: event.target.checked,
-                        }))
-                      }
-                    />
-                    <span>Включить финансовый модуль для этой организации</span>
-                  </label>
-
                   {!canManageSettings ? (
                     <p className="empty-state">
                       Изменять настройки организации могут только ADMIN и DIRECTOR.
@@ -838,10 +819,6 @@ export function SettingsWorkspace() {
               <div className="resource-inline-info">
                 <strong>Код входа</strong>
                 <span>{organization?.inviteCode || '—'}</span>
-              </div>
-              <div className="resource-inline-info">
-                <strong>Финансы</strong>
-                <span>{organization?.financeEnabled ? 'Включены' : 'Отключены'}</span>
               </div>
             </CardContent>
           </Card>

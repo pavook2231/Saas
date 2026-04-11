@@ -35,7 +35,6 @@ const organizationSelect = {
   inviteCode: true,
   description: true,
   timezone: true,
-  settings: true,
   createdByUserId: true,
   createdAt: true,
   updatedAt: true,
@@ -74,9 +73,6 @@ export class OrganizationsService {
           inviteCode,
           description: this.trimOrNull(dto.description),
           timezone: this.trimOrNull(dto.timezone) ?? 'UTC',
-          settings: this.toAuditPayload({
-            financeEnabled: dto.financeEnabled ?? false,
-          }),
           createdByUserId: userId,
         },
         select: organizationSelect,
@@ -121,7 +117,6 @@ export class OrganizationsService {
       createdAt: organization.createdAt,
       updatedAt: organization.updatedAt,
       deletedAt: organization.deletedAt,
-      financeEnabled: this.getFinanceEnabled(organization.settings),
       role: OrganizationRole.ADMIN,
       membershipStatus: MembershipStatus.ACTIVE,
     };
@@ -153,13 +148,11 @@ export class OrganizationsService {
       id: membership.organization.id,
       name: membership.organization.name,
       slug: membership.organization.slug,
-      inviteCode: membership.organization.inviteCode,
       description: membership.organization.description,
       timezone: membership.organization.timezone,
       createdAt: membership.organization.createdAt,
       updatedAt: membership.organization.updatedAt,
       deletedAt: membership.organization.deletedAt,
-      financeEnabled: this.getFinanceEnabled(membership.organization.settings),
       role: membership.role,
       membershipStatus: membership.status,
       acceptedAt: membership.acceptedAt,
@@ -204,12 +197,10 @@ export class OrganizationsService {
       id: organization.id,
       name: organization.name,
       slug: organization.slug,
-      inviteCode: organization.inviteCode,
       description: organization.description,
       timezone: organization.timezone,
       createdAt: organization.createdAt,
       updatedAt: organization.updatedAt,
-      financeEnabled: this.getFinanceEnabled(organization.settings),
       role: membership?.role ?? OrganizationRole.MEMBER,
       membershipStatus: membership?.status ?? MembershipStatus.ACTIVE,
     };
@@ -239,15 +230,6 @@ export class OrganizationsService {
       throw new BadRequestException('Часовой пояс не может быть пустым');
     }
 
-    const currentSettings = this.getOrganizationSettingsRecord(organization.settings);
-    const nextSettings =
-      dto.financeEnabled !== undefined
-        ? {
-            ...currentSettings,
-            financeEnabled: dto.financeEnabled,
-          }
-        : undefined;
-
     const updatedOrganization = await this.prisma.organization.update({
       where: { id: organization.id },
       data: {
@@ -256,7 +238,6 @@ export class OrganizationsService {
         description:
           dto.description !== undefined ? this.trimOrNull(dto.description) : undefined,
         timezone: normalizedTimezone ?? undefined,
-        settings: nextSettings ? this.toAuditPayload(nextSettings) : undefined,
       },
       select: organizationSelect,
     });
@@ -283,7 +264,6 @@ export class OrganizationsService {
       createdAt: updatedOrganization.createdAt,
       updatedAt: updatedOrganization.updatedAt,
       deletedAt: updatedOrganization.deletedAt,
-      financeEnabled: this.getFinanceEnabled(updatedOrganization.settings),
     };
   }
 
@@ -417,13 +397,11 @@ export class OrganizationsService {
         id: invite.organization.id,
         name: invite.organization.name,
         slug: invite.organization.slug,
-        inviteCode: invite.organization.inviteCode,
         description: invite.organization.description,
         timezone: invite.organization.timezone,
         createdAt: invite.organization.createdAt,
         updatedAt: invite.organization.updatedAt,
         deletedAt: invite.organization.deletedAt,
-        financeEnabled: this.getFinanceEnabled(invite.organization.settings),
       },
     }));
   }
@@ -514,13 +492,11 @@ export class OrganizationsService {
           id: invite.organization.id,
           name: invite.organization.name,
           slug: invite.organization.slug,
-          inviteCode: invite.organization.inviteCode,
           description: invite.organization.description,
           timezone: invite.organization.timezone,
           createdAt: invite.organization.createdAt,
           updatedAt: invite.organization.updatedAt,
           deletedAt: invite.organization.deletedAt,
-          financeEnabled: this.getFinanceEnabled(invite.organization.settings),
         },
       };
     });
@@ -1072,7 +1048,6 @@ export class OrganizationsService {
 
     return {
       invitationId: invite.id,
-      email: invite.email,
       role: invite.role,
       status: invite.status,
       expiresAt: invite.expiresAt,
@@ -1356,7 +1331,6 @@ export class OrganizationsService {
         inviteCode: string;
         description: string | null;
         timezone: string;
-        settings: Prisma.JsonValue | null;
         createdAt: Date;
         updatedAt: Date;
         deletedAt: Date | null;
@@ -1584,18 +1558,16 @@ export class OrganizationsService {
     organization: Pick<
       Prisma.OrganizationGetPayload<{ select: typeof organizationSelect }>,
       'id' | 'name' | 'slug' | 'inviteCode' | 'description' | 'timezone' | 'createdAt' | 'updatedAt'
-    > & { settings: Prisma.JsonValue | null | undefined },
+    >,
   ) {
     return {
       id: organization.id,
       name: organization.name,
       slug: organization.slug,
-      inviteCode: organization.inviteCode,
       description: organization.description,
       timezone: organization.timezone,
       createdAt: organization.createdAt,
       updatedAt: organization.updatedAt,
-      financeEnabled: this.getFinanceEnabled(organization.settings),
     };
   }
 
@@ -1674,21 +1646,6 @@ export class OrganizationsService {
 
     const normalized = value.trim();
     return normalized.length > 0 ? normalized : null;
-  }
-
-  private getFinanceEnabled(settings: Prisma.JsonValue | null | undefined): boolean {
-    const record = this.getOrganizationSettingsRecord(settings);
-    return record.financeEnabled === true;
-  }
-
-  private getOrganizationSettingsRecord(
-    settings: Prisma.JsonValue | null | undefined,
-  ): Record<string, unknown> {
-    if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
-      return settings as Record<string, unknown>;
-    }
-
-    return {};
   }
 
   private toAuditPayload(value: unknown): Prisma.InputJsonValue {

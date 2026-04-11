@@ -42,9 +42,10 @@ export class EventsController {
   async listParticipants(
     @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
     organizationId: string,
+    @CurrentUser() user: AccessTokenPayload,
     @Query() query: ListParticipantsQueryDto,
   ) {
-    return this.eventsService.listParticipants(organizationId, query);
+    return this.eventsService.listParticipants(organizationId, user.sub, query);
   }
 
   @Get('participants/:participantId')
@@ -53,8 +54,9 @@ export class EventsController {
     organizationId: string,
     @Param('participantId', new ParseUUIDPipe({ version: '4' }))
     participantId: string,
+    @CurrentUser() user: AccessTokenPayload,
   ) {
-    return this.eventsService.getParticipant(organizationId, participantId);
+    return this.eventsService.getParticipant(organizationId, participantId, user.sub);
   }
 
   @Post('participants')
@@ -190,9 +192,10 @@ export class EventsController {
   async listEvents(
     @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
     organizationId: string,
+    @CurrentUser() user: AccessTokenPayload,
     @Query() query: ListEventsQueryDto,
   ) {
-    return this.eventsService.listEvents(organizationId, query);
+    return this.eventsService.listEvents(organizationId, user.sub, query);
   }
 
   @Post('events/week/publish')
@@ -216,8 +219,9 @@ export class EventsController {
     organizationId: string,
     @Param('eventId', new ParseUUIDPipe({ version: '4' }))
     eventId: string,
+    @CurrentUser() user: AccessTokenPayload,
   ) {
-    return this.eventsService.getEvent(organizationId, eventId);
+    return this.eventsService.getEvent(organizationId, eventId, user.sub);
   }
 
   @Get('events/:eventId/history')
@@ -231,8 +235,9 @@ export class EventsController {
     organizationId: string,
     @Param('eventId', new ParseUUIDPipe({ version: '4' }))
     eventId: string,
+    @CurrentUser() user: AccessTokenPayload,
   ) {
-    return this.eventsService.listEventHistory(organizationId, eventId);
+    return this.eventsService.listEventHistory(organizationId, eventId, user.sub);
   }
 
   @Post('events')

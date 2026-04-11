@@ -5,7 +5,7 @@ import { RateLimit } from '../security/decorators/rate-limit.decorator';
 import { AuthCookieService } from '../security/services/auth-cookie.service';
 
 import { AuthService } from './auth.service';
-import { AuthResponse, EmailCodeRequestResponse, RequestMeta } from './auth.types';
+import { AuthSuccessResponse, EmailCodeRequestResponse, RequestMeta } from './auth.types';
 import { LoginWithEmailCodeDto } from './dto/login-with-email-code.dto';
 import { RegisterWithEmailCodeDto } from './dto/register-with-email-code.dto';
 import { RequestEmailAuthCodeDto } from './dto/request-email-auth-code.dto';
@@ -32,7 +32,7 @@ export class EmailAuthController {
     @Body() dto: LoginWithEmailCodeDto,
     @Req() req: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthSuccessResponse> {
     const result = await this.authService.loginWithEmailCode(
       dto,
       this.extractRequestMeta(req),
@@ -55,7 +55,7 @@ export class EmailAuthController {
     @Body() dto: RegisterWithEmailCodeDto,
     @Req() req: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthSuccessResponse> {
     const result = await this.authService.registerWithEmailCode(
       dto,
       this.extractRequestMeta(req),
@@ -78,7 +78,7 @@ export class EmailAuthController {
     @Body() dto: ResetPasswordWithEmailCodeDto,
     @Req() req: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthSuccessResponse> {
     const result = await this.authService.resetPasswordWithEmailCode(
       dto,
       this.extractRequestMeta(req),
@@ -102,7 +102,11 @@ export class EmailAuthController {
     };
   }
 
-  private attachSessionCookies<T extends AuthResponse>(
+  private attachSessionCookies<
+    T extends {
+      tokens: { refreshToken?: string; refreshTokenExpiresAt?: string };
+    },
+  >(
     response: Response,
     payload: T,
   ): T & { csrfToken: string } {

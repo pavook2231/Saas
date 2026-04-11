@@ -2110,7 +2110,6 @@ textarea.ui-field:focus {
 
 .calendar-shell,
 .quick-panel,
-.finance-panel,
 .chat-panel {
   border: 1px solid rgba(219, 227, 239, 0.9);
   border-radius: 28px;
@@ -2497,27 +2496,16 @@ textarea.ui-field:focus {
 .status-cancelled { opacity: 0.58; text-decoration: line-through; }
 
 .quick-panel,
-.finance-panel,
 .chat-panel { padding: 16px; display: grid; gap: 12px; align-content: start; }
 .quick-panel h2,
-.finance-panel h2,
-.finance-panel h3,
 .chat-panel h2 { margin: 0; }
 .quick-form,
-.finance-form,
-.finance-block,
 .chat-form,
 .chat-compose { display: grid; gap: 10px; }
 .quick-form label,
-.finance-form label,
-.finance-block label,
 .chat-form label { display: grid; gap: 6px; font-size: 0.84rem; font-weight: 600; }
 .quick-form input,
 .quick-form select,
-.finance-form input,
-.finance-form select,
-.finance-block input,
-.finance-block select,
 .chat-form input,
 .chat-compose textarea {
   width: 100%;
@@ -2531,21 +2519,10 @@ textarea.ui-field:focus {
 
 .chat-compose textarea { min-height: 110px; padding: 12px; resize: vertical; }
 .quick-form .row,
-.finance-form .row,
-.finance-block .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.chat-form .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .quick-actions .danger { color: var(--error); border-color: rgba(220, 38, 38, 0.16); }
-.finance-block { padding: 12px; border: 1px solid rgba(219, 227, 239, 0.92); border-radius: 18px; background: rgba(247, 249, 252, 0.82); }
-.income-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.income-stats article { padding: 12px; border: 1px solid rgba(219, 227, 239, 0.92); border-radius: 16px; background: rgba(255, 255, 255, 0.92); display: grid; gap: 4px; }
-.income-stats span { color: var(--text-soft); font-size: 0.76rem; }
-.income-stats strong { font-size: 1rem; }
-.income-table-wrap,
 .chat-messages { overflow: auto; border: 1px solid rgba(219, 227, 239, 0.92); border-radius: 16px; background: rgba(255, 255, 255, 0.92); }
-.income-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-.income-table th,
-.income-table td { padding: 10px 12px; border-bottom: 1px solid rgba(219, 227, 239, 0.82); text-align: left; white-space: nowrap; }
-.income-table thead th { position: sticky; top: 0; background: rgba(255, 255, 255, 0.98); z-index: 1; }
 .chat-messages { max-height: 320px; padding: 10px; display: grid; gap: 8px; }
 .chat-message { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid rgba(219, 227, 239, 0.92); border-radius: 14px; background: rgba(247, 249, 252, 0.84); }
 .chat-message header { display: flex; justify-content: space-between; gap: 8px; font-size: 0.78rem; }
@@ -2793,7 +2770,6 @@ textarea.ui-field:focus {
 }
 
 .side-stack--calendar .quick-panel,
-.side-stack--calendar .finance-panel,
 .side-stack--calendar .chat-panel {
   height: 100%;
   min-height: 0;
@@ -3131,7 +3107,6 @@ textarea.ui-field {
 }
 
 .data-table-wrap,
-.income-table-wrap,
 .chat-messages {
   border-radius: 14px;
 }
@@ -3139,11 +3114,6 @@ textarea.ui-field {
 .data-table th,
 .data-table td {
   padding: 12px 14px;
-}
-
-.income-table th,
-.income-table td {
-  padding: 9px 12px;
 }
 
 .side-tabs {
@@ -3156,7 +3126,6 @@ textarea.ui-field {
 }
 
 .quick-panel,
-.finance-panel,
 .chat-panel {
   padding: 14px;
   gap: 12px;
@@ -3190,8 +3159,6 @@ textarea.ui-field {
 .calendar-selected-note,
 .composer-template-preview,
 .composer-conflict-card,
-.finance-block,
-.income-stats article,
 .chat-message {
   border-radius: 14px;
 }
@@ -3442,7 +3409,6 @@ textarea.ui-field {
 }
 
 .composer-panel,
-.finance-panel,
 .chat-panel {
   max-height: calc(100vh - 250px);
   overflow: auto;
@@ -4948,7 +4914,6 @@ textarea.ui-field {
   .app-topbar,
   .calendar-shell,
   .quick-panel,
-  .finance-panel,
   .chat-panel,
   .ui-card,
   .auth-hero-card,
@@ -5072,9 +5037,7 @@ textarea.ui-field {
   .resource-form-grid--double,
   .resource-form-grid--triple,
   .quick-form .row,
-  .finance-form .row,
-  .finance-block .row,
-  .income-stats,
+  .chat-form .row,
   .side-tabs,
   .quick-actions { grid-template-columns: 1fr; }
 

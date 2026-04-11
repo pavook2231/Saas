@@ -35,6 +35,8 @@ export type PublicUser = {
   lastName: string | null;
   avatarUrl: string | null;
   memberships: MembershipClaim[];
+  twoFactorEnabled: boolean;
+  twoFactorRequired: boolean;
 };
 
 export type TokenPair = {
@@ -44,14 +46,42 @@ export type TokenPair = {
   refreshTokenExpiresAt?: string;
 };
 
-export type AuthResponse = {
+export type AuthSuccessResponse = {
+  status: 'authenticated';
   user: PublicUser;
   tokens: TokenPair;
   csrfToken?: string;
 };
 
+export type TwoFactorRequiredResponse = {
+  status: 'two_factor_required';
+  method: 'email_code' | 'totp';
+  maskedEmail?: string;
+  expiresInSeconds?: number;
+};
+
+export type AuthResponse = AuthSuccessResponse | TwoFactorRequiredResponse;
+
 export type MeResponse = {
   user: PublicUser;
+};
+
+export type TwoFactorStatusResponse = {
+  required: boolean;
+  enabled: boolean;
+  pending: boolean;
+  method: 'totp' | null;
+};
+
+export type TotpSetupResponse = {
+  required: boolean;
+  enabled: boolean;
+  pending: true;
+  secret: string;
+  manualEntryKey: string;
+  issuer: string;
+  accountName: string;
+  otpauthUrl: string;
 };
 
 export type OAuthTokenExchangeResult = {

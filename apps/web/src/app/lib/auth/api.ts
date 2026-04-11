@@ -15,6 +15,11 @@ import {
   RegisterPayload,
   RegisterWithCodePayload,
   ResetPasswordWithCodePayload,
+  TotpSetupPayload,
+  TotpSetupResponse,
+  TotpTogglePayload,
+  TwoFactorStatus,
+  VerifyLoginTwoFactorPayload,
   UpdateProfilePayload,
 } from './types';
 
@@ -58,6 +63,21 @@ const assertOk = async (response: Response): Promise<Response> => {
 export const authApi = {
   async login(payload: LoginPayload): Promise<AuthResponse> {
     const response = await fetch(`${authBaseUrl}/login`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as AuthResponse;
+  },
+
+  async verifyLoginTwoFactor(payload: VerifyLoginTwoFactorPayload): Promise<AuthResponse> {
+    const response = await fetch(`${authBaseUrl}/login/2fa/verify`, {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -274,6 +294,71 @@ export const authApi = {
 
     await assertOk(response);
     return (await response.json()) as { success: true };
+  },
+
+  async getTwoFactorStatus(accessToken: string): Promise<TwoFactorStatus> {
+    const response = await fetch(`${authBaseUrl}/account/two-factor`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    await assertOk(response);
+    return (await response.json()) as TwoFactorStatus;
+  },
+
+  async beginTotpSetup(
+    accessToken: string,
+    payload: TotpSetupPayload,
+  ): Promise<TotpSetupResponse> {
+    const response = await fetch(`${authBaseUrl}/account/two-factor/setup`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as TotpSetupResponse;
+  },
+
+  async enableTotp(accessToken: string, payload: TotpTogglePayload): Promise<TwoFactorStatus> {
+    const response = await fetch(`${authBaseUrl}/account/two-factor/enable`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as TwoFactorStatus;
+  },
+
+  async disableTotp(accessToken: string, payload: TotpTogglePayload): Promise<TwoFactorStatus> {
+    const response = await fetch(`${authBaseUrl}/account/two-factor/disable`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    await assertOk(response);
+    return (await response.json()) as TwoFactorStatus;
   },
 
   async startOAuth(provider: OAuthProviderName, state: string): Promise<OAuthStartResponse> {

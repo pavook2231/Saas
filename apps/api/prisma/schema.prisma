@@ -54,6 +54,7 @@ enum OauthStateAction {
 
 enum EmailAuthCodePurpose {
   LOGIN
+  LOGIN_2FA
   REGISTER
   PASSWORD_RESET
 }
@@ -162,7 +163,6 @@ enum AuditTargetType {
   MANUAL_POINTS
   NOTIFICATION
   CHAT
-  FINANCE
   AUTH
   SETTINGS
 }
@@ -173,30 +173,8 @@ enum AuditSeverity {
   CRITICAL
 }
 
-enum PayrollPeriodStatus {
-  OPEN
-  CALCULATED
-  APPROVED
-  PAID
-  CANCELLED
-}
 
-enum PayoutStatus {
-  PENDING
-  PROCESSING
-  PAID
-  FAILED
-  CANCELLED
-}
 
-enum CurrencyCode {
-  RUB
-  USD
-  EUR
-  KZT
-  BYN
-  UZS
-}
 
 model User {
   id              String    @id @default(uuid()) @db.Uuid
@@ -207,6 +185,9 @@ model User {
   lastName        String?
   avatarUrl       String?
   phone           String?
+  totpSecret      String?
+  totpPendingSecret String?
+  totpEnabledAt   DateTime?
   isActive        Boolean   @default(true)
   lastLoginAt     DateTime?
   createdAt       DateTime  @default(now())
@@ -231,7 +212,6 @@ model User {
   eventsUpdated               Event[]                  @relation("EventUpdater")
   availabilityCreated         ParticipantAvailability[] @relation("AvailabilityCreator")
   pointsConfigsUpdated        PointsConfig[]           @relation("PointsConfigUpdater")
-  pointRatesCreated           PointRateHistory[]       @relation("PointRateCreator")
   autoPointRuns               AutoPointsComputation[]  @relation("AutoPointsRunBy")
   pointsEntriesCreated        PointsLedgerEntry[]      @relation("PointsEntryCreator")
   manualPointsAdjustments     ManualPointsAdjustment[] @relation("ManualAdjustmentPerformer")
@@ -242,10 +222,6 @@ model User {
   pushDeviceTokens            PushDeviceToken[]        @relation("UserPushDeviceTokens")
   webPushSubscriptions        WebPushSubscription[]    @relation("UserWebPushSubscriptions")
   chatMessagesSent            ChatMessage[]            @relation("ChatMessageSender")
-  payrollGenerated            PayrollPeriod[]          @relation("PayrollGenerator")
-  payrollApproved             PayrollPeriod[]          @relation("PayrollApprover")
-  payoutsCreated              FinancePayout[]          @relation("PayoutCreator")
-  payoutsProcessed            FinancePayout[]          @relation("PayoutProcessor")
   oauthStatesLinked           OauthState[]             @relation("OauthStateLinkUser")
 
   @@index([deletedAt])
@@ -353,7 +329,6 @@ model Organization {
   events                  Event[]
   availabilities          ParticipantAvailability[]
   pointsConfig            PointsConfig?
-  pointRates              PointRateHistory[]
   autoPointRuns           AutoPointsComputation[]
   pointsLedger            PointsLedgerEntry[]
   manualPointsAdjustments ManualPointsAdjustment[]
@@ -361,9 +336,6 @@ model Organization {
   auditLogs               AuditLog[]
   notifications           Notification[]
   chatMessages            ChatMessage[]
-  payrollPeriods          PayrollPeriod[]
-  payrollLines            PayrollLine[]
-  payouts                 FinancePayout[]
 
   @@index([createdByUserId])
   @@index([deletedAt])
@@ -463,8 +435,6 @@ model Participant {
   availabilities          ParticipantAvailability[]
   pointsLedger            PointsLedgerEntry[]
   manualPointsAdjustments ManualPointsAdjustment[]
-  payrollLines            PayrollLine[]
-  payouts                 FinancePayout[]
 
   @@unique([organizationId, userId])
   @@index([organizationId, lastName, firstName])
@@ -646,8 +616,6 @@ model PointsConfig {
   performanceShortPoints  Decimal      @default(2) @db.Decimal(12, 2)
   rehearsalMinutesPerPoint Int         @default(180)
   autoLockDays            Int          @default(7)
-  pointValue              Decimal?     @db.Decimal(12, 2)
-  currency                CurrencyCode @default(RUB)
   updatedByUserId         String?      @db.Uuid
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt
@@ -656,21 +624,6 @@ model PointsConfig {
   updatedBy    User?        @relation("PointsConfigUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
 }
 
-model PointRateHistory {
-  id              String       @id @default(uuid()) @db.Uuid
-  organizationId  String       @db.Uuid
-  effectiveFrom   DateTime
-  pointValue      Decimal      @db.Decimal(12, 2)
-  currency        CurrencyCode @default(RUB)
-  createdByUserId String?      @db.Uuid
-  createdAt       DateTime     @default(now())
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy    User?        @relation("PointRateCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-
-  @@unique([organizationId, effectiveFrom])
-  @@index([organizationId, effectiveFrom])
-}
 
 model AutoPointsComputation {
   id                   String                  @id @default(uuid()) @db.Uuid
@@ -721,7 +674,6 @@ model PointsLedgerEntry {
   createdBy       User?                  @relation("PointsEntryCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   manualAdjustment ManualPointsAdjustment?
   manualAudits    ManualPointsAudit[]
-  payrollLinks    PayrollLinePointEntry[]
 
   @@index([organizationId, periodStart, periodEnd])
   @@index([participantId, periodStart])
@@ -926,102 +878,6 @@ model ChatMessage {
   @@index([organizationId, deletedAt, createdAt])
 }
 
-model PayrollPeriod {
-  id               String              @id @default(uuid()) @db.Uuid
-  organizationId   String              @db.Uuid
-  startsAt         DateTime
-  endsAt           DateTime
-  status           PayrollPeriodStatus @default(OPEN)
-  pointValue       Decimal             @db.Decimal(12, 2)
-  currency         CurrencyCode        @default(RUB)
-  totalAutoPoints  Decimal             @default(0) @db.Decimal(12, 2)
-  totalManualPoints Decimal            @default(0) @db.Decimal(12, 2)
-  totalPoints      Decimal             @default(0) @db.Decimal(12, 2)
-  totalAmount      Decimal             @default(0) @db.Decimal(14, 2)
-  generatedByUserId String?            @db.Uuid
-  approvedByUserId String?             @db.Uuid
-  approvedAt       DateTime?
-  paidAt           DateTime?
-  notes            String?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  generatedBy  User?         @relation("PayrollGenerator", fields: [generatedByUserId], references: [id], onDelete: SetNull)
-  approvedBy   User?         @relation("PayrollApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
-  lines        PayrollLine[]
-  payouts      FinancePayout[]
 
-  @@unique([organizationId, startsAt, endsAt])
-  @@index([organizationId, status, startsAt])
-  @@index([generatedByUserId])
-}
 
-model PayrollLine {
-  id               String       @id @default(uuid()) @db.Uuid
-  organizationId   String       @db.Uuid
-  payrollPeriodId  String       @db.Uuid
-  participantId    String       @db.Uuid
-  autoPoints       Decimal      @default(0) @db.Decimal(12, 2)
-  manualPoints     Decimal      @default(0) @db.Decimal(12, 2)
-  correctionPoints Decimal      @default(0) @db.Decimal(12, 2)
-  totalPoints      Decimal      @db.Decimal(12, 2)
-  pointValue       Decimal      @db.Decimal(12, 2)
-  amount           Decimal      @db.Decimal(14, 2)
-  currency         CurrencyCode @default(RUB)
-  metadata         Json?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-
-  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  payrollPeriod PayrollPeriod        @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
-  participant   Participant           @relation(fields: [participantId], references: [id], onDelete: Restrict)
-  pointEntries  PayrollLinePointEntry[]
-
-  @@unique([payrollPeriodId, participantId])
-  @@index([organizationId, participantId])
-  @@index([payrollPeriodId])
-}
-
-model PayrollLinePointEntry {
-  id                String    @id @default(uuid()) @db.Uuid
-  payrollLineId     String    @db.Uuid
-  pointsLedgerEntryId String  @db.Uuid
-  createdAt         DateTime  @default(now())
-
-  payrollLine      PayrollLine       @relation(fields: [payrollLineId], references: [id], onDelete: Cascade)
-  pointsLedgerEntry PointsLedgerEntry @relation(fields: [pointsLedgerEntryId], references: [id], onDelete: Cascade)
-
-  @@unique([payrollLineId, pointsLedgerEntryId])
-  @@index([pointsLedgerEntryId])
-}
-
-model FinancePayout {
-  id                   String       @id @default(uuid()) @db.Uuid
-  organizationId       String       @db.Uuid
-  payrollPeriodId      String?      @db.Uuid
-  participantId        String       @db.Uuid
-  amount               Decimal      @db.Decimal(14, 2)
-  currency             CurrencyCode @default(RUB)
-  status               PayoutStatus @default(PENDING)
-  paymentMethod        String?
-  reference            String?
-  externalTransactionId String?     @unique
-  createdByUserId      String?      @db.Uuid
-  processedByUserId    String?      @db.Uuid
-  processedAt          DateTime?
-  failedAt             DateTime?
-  failureReason        String?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  payrollPeriod PayrollPeriod? @relation(fields: [payrollPeriodId], references: [id], onDelete: SetNull)
-  participant Participant @relation(fields: [participantId], references: [id], onDelete: Restrict)
-  createdBy User? @relation("PayoutCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  processedBy User? @relation("PayoutProcessor", fields: [processedByUserId], references: [id], onDelete: SetNull)
-
-  @@index([organizationId, status, createdAt])
-  @@index([participantId, status, createdAt])
-  @@index([payrollPeriodId])
-}

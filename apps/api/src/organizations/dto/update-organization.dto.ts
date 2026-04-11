@@ -1,11 +1,4 @@
-import {
-  IsBoolean,
-  IsOptional,
-  IsString,
-  Length,
-  Matches,
-  MaxLength,
-} from 'class-validator';
+import { IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator';
 
 export class UpdateOrganizationDto {
   @IsOptional()
@@ -28,8 +21,4 @@ export class UpdateOrganizationDto {
   @IsString()
   @MaxLength(120)
   timezone?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  financeEnabled?: boolean;
 }

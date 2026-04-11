@@ -12,6 +12,8 @@ export type AuthUser = {
   lastName: string | null;
   avatarUrl: string | null;
   memberships: MembershipClaim[];
+  twoFactorEnabled: boolean;
+  twoFactorRequired: boolean;
 };
 
 export type AuthTokens = {
@@ -21,11 +23,21 @@ export type AuthTokens = {
   refreshTokenExpiresAt?: string;
 };
 
-export type AuthResponse = {
+export type AuthSuccessResponse = {
+  status: 'authenticated';
   user: AuthUser;
   tokens: AuthTokens;
   csrfToken?: string;
 };
+
+export type TwoFactorRequiredResponse = {
+  status: 'two_factor_required';
+  method: 'email_code' | 'totp';
+  maskedEmail?: string;
+  expiresInSeconds?: number;
+};
+
+export type AuthResponse = AuthSuccessResponse | TwoFactorRequiredResponse;
 
 export type MeResponse = {
   user: AuthUser;
@@ -45,6 +57,39 @@ export type OAuthProviderName = 'google' | 'vk' | 'yandex';
 export type LoginPayload = {
   email: string;
   password: string;
+};
+
+export type VerifyLoginTwoFactorPayload = {
+  email: string;
+  password: string;
+  code: string;
+};
+
+export type TwoFactorStatus = {
+  required: boolean;
+  enabled: boolean;
+  pending: boolean;
+  method: 'totp' | null;
+};
+
+export type TotpSetupResponse = {
+  required: boolean;
+  enabled: boolean;
+  pending: true;
+  secret: string;
+  manualEntryKey: string;
+  issuer: string;
+  accountName: string;
+  otpauthUrl: string;
+};
+
+export type TotpSetupPayload = {
+  currentPassword?: string;
+};
+
+export type TotpTogglePayload = {
+  currentPassword?: string;
+  code: string;
 };
 
 export type RegisterPayload = {

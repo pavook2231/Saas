@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -6,12 +6,11 @@ import {
   organizationsApi,
   type OrganizationDetails,
 } from '@/app/lib/api/organizations';
+import { MetricCard } from '@/components/features/metric-card';
 import { PageHeader } from '@/components/features/page-header';
 import { useToastFeedback } from '@/components/features/use-toast-feedback';
-import { MetricCard } from '@/components/features/metric-card';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-import { PointsIncomePanel } from '../../app/components/points-income-panel';
 import { useActiveWorkspace } from './use-active-workspace';
 import { WorkspaceOrgEmpty } from './workspace-org-empty';
 
@@ -23,7 +22,7 @@ export function PointsWorkspace() {
 
   useToastFeedback({
     errorText,
-    errorTitle: 'Баллы и финансы',
+    errorTitle: 'Баллы',
   });
 
   const loadOrganization = useCallback(async () => {
@@ -61,28 +60,23 @@ export function PointsWorkspace() {
       {
         label: 'Роль в организации',
         value: activeRole ?? '—',
-        meta: 'Доступ к ставке балла, расчетам и экспорту определяется ролью.',
-      },
-      {
-        label: 'Финансовый модуль',
-        value:
-          loading || !organization
-            ? 'Проверяем...'
-            : organization.financeEnabled
-              ? 'Включен'
-              : 'Отключен',
-        meta: 'Финансы полностью опциональны и не мешают расписанию, если выключены.',
+        meta: 'Настройка и запуск расчета баллов зависят от роли в организации.',
       },
       {
         label: 'Часовой пояс',
         value: loading || !organization ? '—' : organization.timezone || 'UTC',
-        meta: 'Используется для отчетного и операционного контекста организации.',
+        meta: 'Используется для расписания и расчета периодов баллов.',
+      },
+      {
+        label: 'Статус модуля',
+        value: 'Баллы без финансов',
+        meta: 'В системе оставлен только контур будущего подсчета баллов.',
       },
     ],
     [activeRole, loading, organization],
   );
 
-  const canAccessFinance =
+  const canManagePoints =
     activeRole === 'ADMIN' || activeRole === 'DIRECTOR' || activeRole === 'ASSISTANT';
 
   if (!activeOrganizationId || !accessToken) {
@@ -90,7 +84,7 @@ export function PointsWorkspace() {
       <section className="app-page">
         <PageHeader
           eyebrow="Баллы"
-          title="Баллы и финансы"
+          title="Баллы"
           description="Рабочая страница уже готова, осталось выбрать активную организацию."
         />
         <WorkspaceOrgEmpty />
@@ -102,8 +96,8 @@ export function PointsWorkspace() {
     <section className="app-page">
       <PageHeader
         eyebrow="Баллы"
-        title="Баллы, ставка и расчет дохода"
-        description="Ставка балла, расчет периода 25–25 и экспорт уже подключены к текущей организации и сессии."
+        title="Баллы и расчет активности"
+        description="Финансовый слой удален. В рабочем пространстве остается только контур будущего подсчета баллов."
       />
 
       <div className="page-grid page-grid--three">
@@ -121,7 +115,7 @@ export function PointsWorkspace() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{organization?.name || 'Финансовый контур организации'}</CardTitle>
+          <CardTitle>{organization?.name || 'Пространство баллов организации'}</CardTitle>
           <CardDescription>
             Рабочее пространство уже привязано к текущей сессии, поэтому здесь не нужно вручную вводить токен и ID организации.
           </CardDescription>
@@ -138,18 +132,31 @@ export function PointsWorkspace() {
         </CardContent>
       </Card>
 
-      {canAccessFinance ? (
-        <PointsIncomePanel
-          organizationId={activeOrganizationId}
-          accessToken={accessToken}
-          lockWorkspace
-        />
+      {canManagePoints ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Что осталось в модуле</CardTitle>
+            <CardDescription>
+              Автоматические и ручные баллы можно развивать дальше без ставок за балл, доходов, payroll и выплат.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="resource-inline-panel__content">
+            <div className="resource-inline-info">
+              <strong>Сохранено</strong>
+              <span>конфигурация баллов, расчеты по событиям, ручные корректировки и история баллов</span>
+            </div>
+            <div className="resource-inline-info">
+              <strong>Удалено</strong>
+              <span>ставки за балл, расчет дохода, экспорт дохода, payroll-периоды и выплаты</span>
+            </div>
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Доступ к финансовым операциям ограничен</CardTitle>
+            <CardTitle>Доступ к настройкам баллов ограничен</CardTitle>
             <CardDescription>
-              Просматривать и менять ставки, расчеты и экспорт могут только ADMIN, DIRECTOR и ASSISTANT.
+              Работать с модулем баллов могут только ADMIN, DIRECTOR и ASSISTANT.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -163,4 +170,3 @@ export function PointsWorkspace() {
     </section>
   );
 }
-

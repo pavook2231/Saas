@@ -68,6 +68,10 @@ export function ProfileWorkspace() {
     user,
     logoutAll,
     changePassword,
+    getTwoFactorStatus,
+    beginTotpSetup,
+    enableTotp,
+    disableTotp,
     updateProfile,
     refreshSession,
   } = useAuth();
@@ -87,6 +91,19 @@ export function ProfileWorkspace() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [securityModalOpen, setSecurityModalOpen] = useState(false);
+  const [totpModalOpen, setTotpModalOpen] = useState(false);
+  const [totpMode, setTotpMode] = useState<'setup' | 'disable'>('setup');
+  const [twoFactorStatus, setTwoFactorStatus] = useState<{
+    required: boolean;
+    enabled: boolean;
+    pending: boolean;
+    method: 'totp' | null;
+  } | null>(null);
+  const [totpSetupData, setTotpSetupData] = useState<{
+    manualEntryKey: string;
+    issuer: string;
+    accountName: string;
+  } | null>(null);
   const [profileForm, setProfileForm] = useState({
     firstName: '',
     lastName: '',
@@ -96,6 +113,10 @@ export function ProfileWorkspace() {
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
+  });
+  const [totpForm, setTotpForm] = useState({
+    currentPassword: '',
+    code: '',
   });
 
   useToastFeedback({
@@ -150,6 +171,28 @@ export function ProfileWorkspace() {
   useEffect(() => {
     void loadProfileData();
   }, [loadProfileData]);
+
+  const loadTwoFactor = useCallback(async () => {
+    if (!accessToken) {
+      setTwoFactorStatus(null);
+      return;
+    }
+
+    try {
+      const status = await getTwoFactorStatus();
+      setTwoFactorStatus(status);
+    } catch (error) {
+      setErrorText(
+        error instanceof Error
+          ? error.message
+          : 'Не удалось загрузить статус двухфакторной защиты.',
+      );
+    }
+  }, [accessToken, getTwoFactorStatus]);
+
+  useEffect(() => {
+    void loadTwoFactor();
+  }, [loadTwoFactor]);
 
   const handleAcceptInvitation = async (invitation: OrganizationInvitation) => {
     if (!accessToken) {
@@ -319,6 +362,92 @@ export function ProfileWorkspace() {
       await logoutAll();
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось завершить все сессии.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const openTotpSetup = () => {
+    setTotpMode('setup');
+    setTotpSetupData(null);
+    setTotpForm({ currentPassword: '', code: '' });
+    setTotpModalOpen(true);
+  };
+
+  const openTotpDisable = () => {
+    setTotpMode('disable');
+    setTotpSetupData(null);
+    setTotpForm({ currentPassword: '', code: '' });
+    setTotpModalOpen(true);
+  };
+
+  const closeTotpModal = () => {
+    setTotpModalOpen(false);
+    setTotpSetupData(null);
+    setTotpForm({ currentPassword: '', code: '' });
+  };
+
+  const handleStartTotpSetup = async () => {
+    setProcessingId('totp-setup-start');
+    setNoticeText(null);
+    setErrorText(null);
+
+    try {
+      const response = await beginTotpSetup({
+        currentPassword: totpForm.currentPassword || undefined,
+      });
+      setTotpSetupData({
+        manualEntryKey: response.manualEntryKey,
+        issuer: response.issuer,
+        accountName: response.accountName,
+      });
+      setNoticeText(
+        'Секрет TOTP готов. Добавьте его в приложение-аутентификатор и подтвердите текущим кодом.',
+      );
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось начать настройку TOTP.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleEnableTotp = async () => {
+    setProcessingId('totp-enable');
+    setNoticeText(null);
+    setErrorText(null);
+
+    try {
+      const status = await enableTotp({
+        currentPassword: totpForm.currentPassword || undefined,
+        code: totpForm.code.trim(),
+      });
+      setTwoFactorStatus(status);
+      await refreshSession();
+      closeTotpModal();
+      setNoticeText('TOTP включен для этого аккаунта.');
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось включить TOTP.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDisableTotp = async () => {
+    setProcessingId('totp-disable');
+    setNoticeText(null);
+    setErrorText(null);
+
+    try {
+      const status = await disableTotp({
+        currentPassword: totpForm.currentPassword || undefined,
+        code: totpForm.code.trim(),
+      });
+      setTwoFactorStatus(status);
+      await refreshSession();
+      closeTotpModal();
+      setNoticeText('TOTP отключен для этого аккаунта.');
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось отключить TOTP.');
     } finally {
       setProcessingId(null);
     }
@@ -575,10 +704,31 @@ export function ProfileWorkspace() {
               <strong>{user?.email ?? '—'}</strong>
               <span>Почта используется как логин и сейчас не редактируется.</span>
             </div>
+            <div className="account-security-card__group">
+              <strong>TOTP {twoFactorStatus?.enabled ? 'включен' : 'не включен'}</strong>
+              <span>
+                {twoFactorStatus?.required
+                  ? twoFactorStatus?.enabled
+                    ? 'Для вашей роли код из приложения будет основным вторым шагом.'
+                    : 'Для вашей роли нужен TOTP. Пока действует переходный шаг через почту, но лучше включить приложение сейчас.'
+                  : twoFactorStatus?.enabled
+                    ? 'Код из приложения будет использоваться как второй шаг при входе.'
+                    : 'Можно добавить код из приложения-аутентификатора для дополнительной защиты.'}
+              </span>
+            </div>
             <div className="resource-card__actions">
               <Button type="button" variant="ghost" onClick={() => setSecurityModalOpen(true)}>
                 Сменить пароль
               </Button>
+              {twoFactorStatus?.enabled ? (
+                <Button type="button" variant="ghost" onClick={openTotpDisable}>
+                  Отключить TOTP
+                </Button>
+              ) : (
+                <Button type="button" variant="ghost" onClick={openTotpSetup}>
+                  Настроить TOTP
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="danger"
@@ -647,6 +797,103 @@ export function ProfileWorkspace() {
             disabled
             hint="Эта почта используется для входа и пока не редактируется."
           />
+        </div>
+      </Modal>
+
+      <Modal
+        open={totpModalOpen}
+        onClose={closeTotpModal}
+        title={totpMode === 'setup' ? 'Настроить TOTP' : 'Отключить TOTP'}
+        description={
+          totpMode === 'setup'
+            ? totpSetupData
+              ? 'Добавьте секрет в приложение-аутентификатор и подтвердите текущим шестизначным кодом.'
+              : 'Сначала подтвердите текущий пароль, затем мы покажем секрет для приложения-аутентификатора.'
+            : 'Подтвердите текущий пароль и код из приложения, чтобы отключить TOTP.'
+        }
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={closeTotpModal}>
+              Отмена
+            </Button>
+            {totpMode === 'setup' ? (
+              totpSetupData ? (
+                <Button
+                  type="button"
+                  onClick={() => void handleEnableTotp()}
+                  loading={processingId === 'totp-enable'}
+                >
+                  Включить TOTP
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => void handleStartTotpSetup()}
+                  loading={processingId === 'totp-setup-start'}
+                >
+                  Показать секрет
+                </Button>
+              )
+            ) : (
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => void handleDisableTotp()}
+                loading={processingId === 'totp-disable'}
+              >
+                Отключить
+              </Button>
+            )}
+          </>
+        }
+      >
+        <div className="profile-stack">
+          <Input
+            label="Текущий пароль"
+            type="password"
+            value={totpForm.currentPassword}
+            onChange={(event) =>
+              setTotpForm((current) => ({
+                ...current,
+                currentPassword: event.target.value,
+              }))
+            }
+            hint="Нужен для настройки и отключения TOTP."
+          />
+
+          {totpSetupData ? (
+            <>
+              <Input
+                label="Секрет для приложения"
+                value={totpSetupData.manualEntryKey}
+                disabled
+                hint={`${totpSetupData.issuer} · ${totpSetupData.accountName}`}
+              />
+              <Input
+                label="Код из приложения"
+                value={totpForm.code}
+                onChange={(event) =>
+                  setTotpForm((current) => ({
+                    ...current,
+                    code: event.target.value,
+                  }))
+                }
+                placeholder="123456"
+              />
+            </>
+          ) : totpMode === 'disable' ? (
+            <Input
+              label="Код из приложения"
+              value={totpForm.code}
+              onChange={(event) =>
+                setTotpForm((current) => ({
+                  ...current,
+                  code: event.target.value,
+                }))
+              }
+              placeholder="123456"
+            />
+          ) : null}
         </div>
       </Modal>
 

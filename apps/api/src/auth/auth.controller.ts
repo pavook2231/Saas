@@ -21,6 +21,7 @@ import { AuthService } from './auth.service';
 import {
   AccessTokenPayload,
   AuthResponse,
+  AuthSuccessResponse,
   LinkedOAuthAccount,
   MeResponse,
   OAuthAuthorizationStartResponse,
@@ -34,6 +35,7 @@ import { OAuthCallbackQueryDto } from './dto/oauth-callback-query.dto';
 import { OAuthStartQueryDto } from './dto/oauth-start-query.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
+import { VerifyLoginTwoFactorDto } from './dto/verify-login-two-factor.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
@@ -49,7 +51,7 @@ export class AuthController {
     @Body() dto: RegisterDto,
     @Req() req: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthSuccessResponse> {
     const result = await this.authService.register(dto, this.extractRequestMeta(req));
     return this.attachSessionCookies(response, result);
   }
@@ -62,6 +64,24 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<AuthResponse> {
     const result = await this.authService.login(dto, this.extractRequestMeta(req));
+    if (result.status === 'authenticated') {
+      return this.attachSessionCookies(response, result);
+    }
+
+    return result;
+  }
+
+  @Post('login/2fa/verify')
+  @RateLimit({ bucket: 'auth' })
+  async verifyLoginTwoFactor(
+    @Body() dto: VerifyLoginTwoFactorDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthSuccessResponse> {
+    const result = await this.authService.verifyLoginTwoFactor(
+      dto,
+      this.extractRequestMeta(req),
+    );
     return this.attachSessionCookies(response, result);
   }
 
@@ -390,7 +410,9 @@ export class AuthController {
     };
   }
 
-  private attachSessionCookies<T extends AuthResponse>(
+  private attachSessionCookies<
+    T extends AuthSuccessResponse | { tokens: { refreshToken?: string; refreshTokenExpiresAt?: string } },
+  >(
     response: Response,
     payload: T,
   ): T & { csrfToken: string } {
@@ -411,7 +433,7 @@ export class AuthController {
         refreshToken: undefined,
       },
       csrfToken,
-    };
+    } as T & { csrfToken: string };
   }
 
   private async attachOAuthStateCookie(

@@ -300,11 +300,19 @@ class InMemoryPrisma {
   assert.equal(prisma.state.participantInvites[0].status, ParticipantInviteStatus.PENDING);
   assert.equal(typeof invitedParticipant.inviteToken, 'string');
   const squatterAuth = await authService.register({ email: 'member@example.com', password: 'StrongPass123', firstName: 'Squatter', lastName: 'User' }, requestMeta);
-  let linkedParticipant = await eventsService.getParticipant(organization.id, invitedParticipant.id);
+  let linkedParticipant = await eventsService.getParticipant(
+    organization.id,
+    invitedParticipant.id,
+    adminAuth.user.id,
+  );
   assert.equal(linkedParticipant.userId, null);
   const invitedAuth = await authService.register({ email: 'member@example.com', password: 'RecoveredPass123', firstName: 'Invited', lastName: 'Member', participantInviteToken: invitedParticipant.inviteToken }, requestMeta);
   assert.equal(invitedAuth.user.id, squatterAuth.user.id);
-  linkedParticipant = await eventsService.getParticipant(organization.id, invitedParticipant.id);
+  linkedParticipant = await eventsService.getParticipant(
+    organization.id,
+    invitedParticipant.id,
+    adminAuth.user.id,
+  );
   assert.equal(linkedParticipant.userId, invitedAuth.user.id);
   assert.equal(linkedParticipant.invitationStatus, ParticipantInviteStatus.ACCEPTED);
   assert.equal(prisma.state.participantInvites[0].status, ParticipantInviteStatus.ACCEPTED);

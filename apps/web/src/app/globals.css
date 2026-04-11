@@ -4433,6 +4433,73 @@ textarea.ui-field {
     background-color 160ms ease;
 }
 
+.theatre-event--performance {
+  border-color: rgba(251, 146, 60, 0.34);
+  background:
+    linear-gradient(90deg, rgba(255, 237, 213, 0.92) 0, rgba(255, 237, 213, 0.92) 4px, rgba(255, 255, 255, 0.98) 4px),
+    rgba(255, 255, 255, 0.98);
+}
+
+.theatre-event--performance .theatre-event__time {
+  background: rgba(255, 237, 213, 0.96);
+  color: #9a3412;
+}
+
+.theatre-event--performance .theatre-event__type {
+  color: #c2410c;
+}
+
+.theatre-event--rehearsal {
+  border-color: rgba(74, 222, 128, 0.34);
+  background:
+    linear-gradient(90deg, rgba(220, 252, 231, 0.92) 0, rgba(220, 252, 231, 0.92) 4px, rgba(255, 255, 255, 0.98) 4px),
+    rgba(255, 255, 255, 0.98);
+}
+
+.theatre-event--rehearsal .theatre-event__time {
+  background: rgba(220, 252, 231, 0.96);
+  color: #166534;
+}
+
+.theatre-event--rehearsal .theatre-event__type {
+  color: #15803d;
+}
+
+.theatre-event--tour {
+  border-color: rgba(96, 165, 250, 0.34);
+  background:
+    linear-gradient(90deg, rgba(219, 234, 254, 0.92) 0, rgba(219, 234, 254, 0.92) 4px, rgba(255, 255, 255, 0.98) 4px),
+    rgba(255, 255, 255, 0.98);
+}
+
+.theatre-event--tour .theatre-event__time {
+  background: rgba(219, 234, 254, 0.96);
+  color: #1d4ed8;
+}
+
+.theatre-event--tour .theatre-event__type {
+  color: #2563eb;
+}
+
+.theatre-event--event,
+.theatre-event--custom {
+  border-color: rgba(192, 132, 252, 0.34);
+  background:
+    linear-gradient(90deg, rgba(243, 232, 255, 0.92) 0, rgba(243, 232, 255, 0.92) 4px, rgba(255, 255, 255, 0.98) 4px),
+    rgba(255, 255, 255, 0.98);
+}
+
+.theatre-event--event .theatre-event__time,
+.theatre-event--custom .theatre-event__time {
+  background: rgba(243, 232, 255, 0.96);
+  color: #7e22ce;
+}
+
+.theatre-event--event .theatre-event__type,
+.theatre-event--custom .theatre-event__type {
+  color: #7c3aed;
+}
+
 .theatre-event:hover {
   transform: translateY(-1px);
   border-color: rgba(37, 99, 235, 0.28);
@@ -4446,6 +4513,38 @@ textarea.ui-field {
 
 .theatre-event.is-cancelled {
   opacity: 0.62;
+}
+
+.theatre-event__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.theatre-event__marker {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex: 0 0 10px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7);
+}
+
+.theatre-event__marker--performance {
+  background: #ea580c;
+}
+
+.theatre-event__marker--rehearsal {
+  background: #16a34a;
+}
+
+.theatre-event__marker--tour {
+  background: #2563eb;
+}
+
+.theatre-event__marker--event,
+.theatre-event__marker--custom {
+  background: #9333ea;
 }
 
 .theatre-event__primary,
@@ -4496,7 +4595,9 @@ textarea.ui-field {
 
 .theatre-event__type {
   color: #6b788d;
-  font-weight: 600;
+  font-weight: 800;
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 .theatre-event__venue {
@@ -4595,7 +4696,7 @@ textarea.ui-field {
 .theatre-day-card__sections,
 .theatre-day-card__events {
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .theatre-day-card__summary-pills {
@@ -4618,8 +4719,8 @@ textarea.ui-field {
 }
 
 .theatre-day-card__summary-pill--performance {
-  background: rgba(219, 234, 254, 0.9);
-  color: #1d4ed8;
+  background: rgba(255, 237, 213, 0.96);
+  color: #c2410c;
 }
 
 .theatre-day-card__summary-pill--rehearsal {
@@ -4628,24 +4729,24 @@ textarea.ui-field {
 }
 
 .theatre-day-card__summary-pill--tour {
-  background: rgba(224, 231, 255, 0.94);
-  color: #4338ca;
+  background: rgba(219, 234, 254, 0.94);
+  color: #2563eb;
 }
 
 .theatre-day-card__summary-pill--other {
-  background: rgba(241, 245, 249, 0.96);
-  color: #475569;
+  background: rgba(243, 232, 255, 0.96);
+  color: #7c3aed;
 }
 
 .theatre-day-card__timeline {
   display: grid;
-  gap: 6px;
+  gap: 10px;
 }
 
 .theatre-day-card__section {
   display: grid;
   --lane-accent: rgba(148, 163, 184, 0.18);
-  gap: 6px;
+  gap: 8px;
   padding: 8px 10px;
   border: 1px solid rgba(226, 232, 240, 0.92);
   border-radius: 14px;
@@ -4685,6 +4786,15 @@ textarea.ui-field {
   font-size: 0.74rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.theatre-day-card__section-head {
+  padding-bottom: 2px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.82);
+}
+
+.theatre-day-card__section .theatre-day-card__timeline {
+  gap: 8px;
 }
 
 .theatre-day-card__empty {

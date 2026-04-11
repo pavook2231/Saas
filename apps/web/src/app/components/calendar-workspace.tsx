@@ -119,13 +119,13 @@ const theatreLaneMeta: Array<{
   {
     id: 'PERFORMANCE',
     label: 'Спектакли',
-    mobileLabel: 'Спект.',
+    mobileLabel: 'Спектакль',
     iconClassName: 'is-performance',
   },
   {
     id: 'REHEARSAL',
     label: 'Репетиции',
-    mobileLabel: 'Реп.',
+    mobileLabel: 'Репетиция',
     iconClassName: 'is-rehearsal',
   },
   {
@@ -476,17 +476,12 @@ export function CalendarWorkspace() {
           TOUR: [],
           OTHER: [],
         };
-        const events = theatreLaneMeta
-          .flatMap((lane) =>
-            laneEvents[lane.id].map((event) => ({
-              event,
-              lane,
-            })),
-          )
-          .sort(
-            (left, right) =>
-              new Date(left.event.startsAt).getTime() - new Date(right.event.startsAt).getTime(),
-          );
+        const sections = theatreLaneMeta
+          .map((lane) => ({
+            lane,
+            events: laneEvents[lane.id],
+          }))
+          .filter((section) => section.events.length > 0);
         const summary = theatreLaneMeta
           .map((lane) => ({
             lane,
@@ -497,9 +492,9 @@ export function CalendarWorkspace() {
         return {
           day,
           dayKey,
-          events,
+          sections,
           summary,
-          totalEvents: events.length,
+          totalEvents: sections.reduce((count, section) => count + section.events.length, 0),
           isToday: isSameDay(day, new Date()),
         };
       }),
@@ -791,9 +786,16 @@ export function CalendarWorkspace() {
       <button
         key={event.id}
         type="button"
-        className={`theatre-event${selectedEventId === event.id ? ' is-selected' : ''}${event.status === 'CANCELLED' ? ' is-cancelled' : ''}`}
+        className={`theatre-event theatre-event--${event.type.toLowerCase()}${selectedEventId === event.id ? ' is-selected' : ''}${event.status === 'CANCELLED' ? ' is-cancelled' : ''}`}
         onClick={() => setSelectedEventId(event.id)}
       >
+        <div className="theatre-event__eyebrow">
+          <span
+            className={`theatre-event__marker theatre-event__marker--${event.type.toLowerCase()}`}
+            aria-hidden="true"
+          />
+          <span className="theatre-event__type">{typeLabel[event.type]}</span>
+        </div>
         <div className="theatre-event__primary">
           <strong>{event.title}</strong>
           <span className="theatre-event__time" aria-label={`Время ${timeRange}`}>
@@ -810,7 +812,6 @@ export function CalendarWorkspace() {
             </Badge>
           ) : null}
           {event.performanceCastNumber ? <Badge variant="primary">{event.performanceCastNumber} состав</Badge> : null}
-          <span className="theatre-event__type">{typeLabel[event.type]}</span>
           {event.status === 'CANCELLED' ? <Badge variant="warning">Отменено</Badge> : null}
         </div>
       </button>
@@ -1041,7 +1042,7 @@ export function CalendarWorkspace() {
         </section>
         <section className="theatre-week-mobile">
           <div className="theatre-week-mobile__list">
-            {mobileWeekDays.map(({ day, dayKey, events: dayEvents, summary, totalEvents, isToday }) => {
+            {mobileWeekDays.map(({ day, dayKey, sections, summary, totalEvents, isToday }) => {
               const canCreateOnDay = canOpenControlPanel && totalEvents === 0;
               const isWeekend = day.getDay() === 0 || day.getDay() === 6;
 
@@ -1087,9 +1088,22 @@ export function CalendarWorkspace() {
                     </div>
                   ) : null}
 
-                  {dayEvents.length > 0 ? (
-                    <div className="theatre-day-card__timeline">
-                      {dayEvents.map(({ event }) => renderTheatreEvent(event))}
+                  {sections.length > 0 ? (
+                    <div className="theatre-day-card__sections">
+                      {sections.map(({ lane, events }) => (
+                        <div
+                          key={`${dayKey}-${lane.id}-section`}
+                          className={`theatre-day-card__section theatre-day-card__section--${lane.id.toLowerCase()}`}
+                        >
+                          <div className="theatre-day-card__section-head">
+                            <strong>{lane.mobileLabel}</strong>
+                            <span>{events.length}</span>
+                          </div>
+                          <div className="theatre-day-card__timeline">
+                            {events.map((event) => renderTheatreEvent(event))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="theatre-day-card__empty" aria-hidden="true" />

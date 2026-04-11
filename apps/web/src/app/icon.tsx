@@ -7,7 +7,7 @@ export const size = {
 
 export const contentType = 'image/png';
 
-function TheatreCalendarArtwork() {
+function TheatreCalendarHierarchyArtwork() {
   return (
     <div
       style={{
@@ -16,109 +16,84 @@ function TheatreCalendarArtwork() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#181733',
+        backgroundColor: '#14233b',
       }}
     >
       <svg width="512" height="512" viewBox="0 0 512 512" fill="none">
         <defs>
-          <linearGradient id="bg" x1="88" y1="64" x2="430" y2="448" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#9d224f" />
-            <stop offset="0.5" stopColor="#4c2d95" />
-            <stop offset="1" stopColor="#15203d" />
+          <linearGradient id="bg" x1="86" y1="60" x2="430" y2="450" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#1f3b64" />
+            <stop offset="1" stopColor="#0e1728" />
           </linearGradient>
-          <linearGradient id="sheet" x1="120" y1="126" x2="374" y2="394" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#fff8ea" />
-            <stop offset="1" stopColor="#ffe1a5" />
+          <linearGradient id="card" x1="118" y1="110" x2="396" y2="404" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#fffdfa" />
+            <stop offset="1" stopColor="#eef4fb" />
           </linearGradient>
-          <linearGradient id="sheetTop" x1="126" y1="126" x2="388" y2="210" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#ff7e76" />
-            <stop offset="1" stopColor="#d62857" />
+          <linearGradient id="top" x1="118" y1="110" x2="394" y2="202" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#2b5f9d" />
+            <stop offset="1" stopColor="#183f72" />
           </linearGradient>
-          <linearGradient id="curtainLeft" x1="62" y1="92" x2="170" y2="272" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#ff8b72" />
-            <stop offset="1" stopColor="#d42657" />
+          <linearGradient id="perf" x1="154" y1="236" x2="348" y2="266" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#ffb178" />
+            <stop offset="1" stopColor="#ff8a4c" />
           </linearGradient>
-          <linearGradient id="curtainRight" x1="344" y1="92" x2="452" y2="272" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#ff9f86" />
-            <stop offset="1" stopColor="#d42657" />
+          <linearGradient id="rehearsal" x1="154" y1="302" x2="348" y2="332" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#8fe0ae" />
+            <stop offset="1" stopColor="#4abb74" />
           </linearGradient>
-          <linearGradient id="mask" x1="179" y1="214" x2="326" y2="354" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#fff7dc" />
-            <stop offset="1" stopColor="#ffcf7a" />
+          <linearGradient id="tour" x1="154" y1="368" x2="348" y2="398" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#98c6ff" />
+            <stop offset="1" stopColor="#5d92f3" />
           </linearGradient>
-          <filter id="shadow" x="88" y="98" width="336" height="340" filterUnits="userSpaceOnUse">
-            <feOffset dy="20" />
-            <feGaussianBlur stdDeviation="18" />
+          <filter id="shadow" x="90" y="78" width="332" height="364" filterUnits="userSpaceOnUse">
+            <feOffset dy="18" />
+            <feGaussianBlur stdDeviation="14" />
             <feColorMatrix
               type="matrix"
-              values="0 0 0 0 0.0549 0 0 0 0 0.0745 0 0 0 0 0.2 0 0 0 0.26 0"
+              values="0 0 0 0 0.0392 0 0 0 0 0.0784 0 0 0 0 0.1451 0 0 0 0.28 0"
             />
             <feBlend in2="SourceGraphic" result="shape" />
           </filter>
         </defs>
 
         <rect x="0" y="0" width="512" height="512" rx="116" fill="url(#bg)" />
-        <rect x="0.5" y="0.5" width="511" height="511" rx="115.5" stroke="rgba(255,255,255,0.14)" />
-
-        <path
-          d="M68 90c26 8 50 28 64 58 11 24 18 56 18 96 0 36-7 70-22 98-18-24-31-55-39-92-11-55-18-107-21-160z"
-          fill="url(#curtainLeft)"
-          opacity="0.96"
-        />
-        <path
-          d="M444 90c-26 8-50 28-64 58-11 24-18 56-18 96 0 36 7 70 22 98 18-24 31-55 39-92 11-55 18-107 21-160z"
-          fill="url(#curtainRight)"
-          opacity="0.96"
-        />
+        <rect x="0.5" y="0.5" width="511" height="511" rx="115.5" stroke="rgba(255,255,255,0.1)" />
 
         <g filter="url(#shadow)">
-          <rect x="118" y="122" width="276" height="286" rx="48" fill="url(#sheet)" />
-          <rect x="118" y="122" width="276" height="82" rx="48" fill="url(#sheetTop)" />
-          <rect x="118" y="164" width="276" height="40" fill="url(#sheetTop)" />
-          <rect x="117.5" y="121.5" width="277" height="287" rx="48.5" stroke="rgba(255,255,255,0.28)" />
+          <rect x="116" y="108" width="280" height="300" rx="44" fill="url(#card)" />
+          <rect x="116" y="108" width="280" height="92" rx="44" fill="url(#top)" />
+          <rect x="116" y="156" width="280" height="44" fill="url(#top)" />
+          <rect x="116.75" y="108.75" width="278.5" height="298.5" rx="43.25" stroke="rgba(255,255,255,0.22)" />
 
-          <rect x="170" y="94" width="24" height="70" rx="12" fill="#ffd67d" />
-          <rect x="318" y="94" width="24" height="70" rx="12" fill="#ffd67d" />
-          <rect x="162" y="104" width="40" height="22" rx="11" fill="#fff3d2" />
-          <rect x="310" y="104" width="40" height="22" rx="11" fill="#fff3d2" />
+          <rect x="168" y="82" width="28" height="62" rx="14" fill="#dbeafe" />
+          <rect x="316" y="82" width="28" height="62" rx="14" fill="#dbeafe" />
+          <rect x="160" y="94" width="44" height="18" rx="9" fill="#ffffff" fillOpacity="0.8" />
+          <rect x="308" y="94" width="44" height="18" rx="9" fill="#ffffff" fillOpacity="0.8" />
 
-          <circle cx="256" cy="281" r="82" fill="url(#mask)" />
-          <ellipse cx="239" cy="266" rx="52" ry="58" fill="rgba(255,248,223,0.78)" />
-          <circle cx="226" cy="274" r="12" fill="#4e264f" />
-          <circle cx="286" cy="274" r="12" fill="#4e264f" />
-          <path
-            d="M214 328c14 22 34 33 58 33 24 0 44-11 58-33"
-            stroke="#4e264f"
-            strokeWidth="14"
-            strokeLinecap="round"
-          />
-          <path
-            d="M208 240c10-12 23-18 38-18 14 0 27 6 37 18"
-            stroke="#8c2f56"
-            strokeWidth="10"
-            strokeLinecap="round"
-          />
-          <path
-            d="M274 240c10-12 22-18 36-18 9 0 17 2 24 5"
-            stroke="#8c2f56"
-            strokeWidth="10"
-            strokeLinecap="round"
-          />
+          <circle cx="162" cy="138" r="10" fill="#ffffff" fillOpacity="0.82" />
+          <rect x="184" y="129" width="146" height="18" rx="9" fill="#ffffff" fillOpacity="0.8" />
+          <rect x="338" y="129" width="30" height="18" rx="9" fill="#dbeafe" />
 
-          <path d="M156 186h200" stroke="rgba(255,255,255,0.42)" strokeWidth="6" strokeLinecap="round" />
-          <path d="M176 228h42" stroke="rgba(78,38,79,0.16)" strokeWidth="10" strokeLinecap="round" />
-          <path d="M294 228h42" stroke="rgba(78,38,79,0.16)" strokeWidth="10" strokeLinecap="round" />
-          <path d="M176 370h44" stroke="rgba(78,38,79,0.14)" strokeWidth="10" strokeLinecap="round" />
-          <path d="M292 370h44" stroke="rgba(78,38,79,0.14)" strokeWidth="10" strokeLinecap="round" />
+          <rect x="152" y="228" width="208" height="38" rx="19" fill="url(#perf)" />
+          <circle cx="176" cy="247" r="8" fill="#ffffff" fillOpacity="0.95" />
+          <rect x="192" y="240" width="88" height="14" rx="7" fill="#ffffff" fillOpacity="0.86" />
+          <rect x="290" y="240" width="46" height="14" rx="7" fill="#ffffff" fillOpacity="0.56" />
+
+          <rect x="152" y="294" width="208" height="38" rx="19" fill="url(#rehearsal)" />
+          <circle cx="176" cy="313" r="8" fill="#ffffff" fillOpacity="0.95" />
+          <rect x="192" y="306" width="104" height="14" rx="7" fill="#ffffff" fillOpacity="0.86" />
+          <rect x="306" y="306" width="30" height="14" rx="7" fill="#ffffff" fillOpacity="0.56" />
+
+          <rect x="152" y="360" width="208" height="38" rx="19" fill="url(#tour)" />
+          <circle cx="176" cy="379" r="8" fill="#ffffff" fillOpacity="0.95" />
+          <rect x="192" y="372" width="76" height="14" rx="7" fill="#ffffff" fillOpacity="0.86" />
+          <rect x="278" y="372" width="58" height="14" rx="7" fill="#ffffff" fillOpacity="0.56" />
         </g>
-
-        <circle cx="132" cy="402" r="18" fill="rgba(255,214,129,0.18)" />
-        <circle cx="380" cy="122" r="24" fill="rgba(255,214,129,0.14)" />
       </svg>
     </div>
   );
 }
 
 export default function Icon() {
-  return new ImageResponse(<TheatreCalendarArtwork />, size);
+  return new ImageResponse(<TheatreCalendarHierarchyArtwork />, size);
 }

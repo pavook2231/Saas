@@ -12,11 +12,11 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
-      { url: '/icon?v=theatre-smile-20260411', type: 'image/png' },
+      { url: '/icon?v=calendar-hierarchy-20260411b', type: 'image/png' },
       { url: '/icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
       { url: '/icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml' },
     ],
-    apple: [{ url: '/apple-icon?v=theatre-smile-20260411', sizes: '180x180', type: 'image/png' }],
+    apple: [{ url: '/apple-icon?v=calendar-hierarchy-20260411b', sizes: '180x180', type: 'image/png' }],
   },
 };
 

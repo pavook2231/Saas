@@ -778,9 +778,10 @@ export function CalendarWorkspace() {
     );
   };
 
-  const renderTheatreEvent = (event: EventRecord) => {
+  const renderTheatreEvent = (event: EventRecord, options?: { showTypeLabel?: boolean }) => {
     const venue = isVenueName(event.location) ? event.location : null;
     const timeRange = getEventScheduleRange(event);
+    const showTypeLabel = options?.showTypeLabel ?? true;
 
     return (
       <button
@@ -794,7 +795,7 @@ export function CalendarWorkspace() {
             className={`theatre-event__marker theatre-event__marker--${event.type.toLowerCase()}`}
             aria-hidden="true"
           />
-          <span className="theatre-event__type">{typeLabel[event.type]}</span>
+          {showTypeLabel ? <span className="theatre-event__type">{typeLabel[event.type]}</span> : null}
         </div>
         <div className="theatre-event__primary">
           <strong>{event.title}</strong>
@@ -1098,7 +1099,7 @@ export function CalendarWorkspace() {
                             <strong>{lane.mobileLabel}</strong>
                           </div>
                           <div className="theatre-day-card__timeline">
-                            {events.map((event) => renderTheatreEvent(event))}
+                            {events.map((event) => renderTheatreEvent(event, { showTypeLabel: false }))}
                           </div>
                         </div>
                       ))}

@@ -40,8 +40,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      icon: '/icon?v=calendar-hierarchy-20260411b',
-      badge: '/icon?v=calendar-hierarchy-20260411b',
+      icon: '/calendar-icon',
+      badge: '/calendar-icon',
       tag,
       renotify: true,
       requireInteraction: true,

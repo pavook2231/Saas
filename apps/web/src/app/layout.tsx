@@ -11,12 +11,8 @@ export const metadata: Metadata = {
   description: ru.metadata.description,
   manifest: '/manifest.webmanifest',
   icons: {
-    icon: [
-      { url: '/icon?v=calendar-hierarchy-20260411b', type: 'image/png' },
-      { url: '/icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
-      { url: '/icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml' },
-    ],
-    apple: [{ url: '/apple-icon?v=calendar-hierarchy-20260411b', sizes: '180x180', type: 'image/png' }],
+    icon: [{ url: '/calendar-icon', sizes: '512x512', type: 'image/png' }],
+    apple: [{ url: '/calendar-apple-icon', sizes: '180x180', type: 'image/png' }],
   },
 };
 

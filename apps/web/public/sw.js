@@ -40,8 +40,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      icon: '/icons/icon-192.svg',
-      badge: '/icons/icon-192.svg',
+      icon: '/icon?v=theatre-smile-20260411',
+      badge: '/icon?v=theatre-smile-20260411',
       tag,
       renotify: true,
       requireInteraction: true,

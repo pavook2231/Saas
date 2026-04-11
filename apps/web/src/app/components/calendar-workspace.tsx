@@ -1070,19 +1070,18 @@ export function CalendarWorkspace() {
                       <span>{weekDayNumberFormat.format(day)}</span>
                     </div>
                     <div className="theatre-day-card__header-meta">
-                      {totalEvents > 0 ? <span className="theatre-day-card__count">{totalEvents}</span> : null}
                       {isToday ? <Badge variant="primary">Сегодня</Badge> : null}
                     </div>
                   </div>
 
                   {summary.length > 0 ? (
                     <div className="theatre-day-card__summary-pills">
-                      {summary.map(({ lane, count }) => (
+                      {summary.map(({ lane }) => (
                         <span
                           key={`${dayKey}-${lane.id}-summary`}
                           className={`theatre-day-card__summary-pill theatre-day-card__summary-pill--${lane.id.toLowerCase()}`}
                         >
-                          {lane.mobileLabel} · {count}
+                          {lane.mobileLabel}
                         </span>
                       ))}
                     </div>
@@ -1097,7 +1096,6 @@ export function CalendarWorkspace() {
                         >
                           <div className="theatre-day-card__section-head">
                             <strong>{lane.mobileLabel}</strong>
-                            <span>{events.length}</span>
                           </div>
                           <div className="theatre-day-card__timeline">
                             {events.map((event) => renderTheatreEvent(event))}

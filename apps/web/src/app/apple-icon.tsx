@@ -7,7 +7,7 @@ export const size = {
 
 export const contentType = 'image/png';
 
-function AppleMasksArtwork() {
+function AppleTheatreSmileArtwork() {
   return (
     <div
       style={{
@@ -16,65 +16,65 @@ function AppleMasksArtwork() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#2950FF',
+        backgroundColor: '#1f1a3d',
       }}
     >
       <svg width="180" height="180" viewBox="0 0 180 180" fill="none">
         <defs>
-          <linearGradient id="bg" x1="40" y1="26" x2="140" y2="152" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#44B6FF" />
-            <stop offset="1" stopColor="#294DFF" />
+          <linearGradient id="bg" x1="28" y1="22" x2="152" y2="158" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#8b1f52" />
+            <stop offset="0.52" stopColor="#412e8f" />
+            <stop offset="1" stopColor="#141b38" />
           </linearGradient>
-          <linearGradient id="rearMask" x1="100" y1="48" x2="143" y2="117" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#78C6FF" stopOpacity="0.95" />
-            <stop offset="1" stopColor="#5A79FF" stopOpacity="0.58" />
+          <linearGradient id="curtain" x1="18" y1="18" x2="56" y2="100" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#ff6b6b" />
+            <stop offset="1" stopColor="#d7264e" />
           </linearGradient>
-          <linearGradient id="frontMask" x1="59" y1="50" x2="108" y2="120" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#FFFFFF" />
-            <stop offset="1" stopColor="#F1F5FF" />
+          <linearGradient id="curtainRight" x1="126" y1="18" x2="162" y2="96" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#ff8b7d" />
+            <stop offset="1" stopColor="#cf244f" />
+          </linearGradient>
+          <linearGradient id="mask" x1="54" y1="48" x2="116" y2="126" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#ffe8b7" />
+            <stop offset="1" stopColor="#ffc66d" />
+          </linearGradient>
+          <linearGradient id="spot" x1="78" y1="42" x2="106" y2="104" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#fff8df" />
+            <stop offset="1" stopColor="#ffd489" />
           </linearGradient>
         </defs>
 
         <rect x="0" y="0" width="180" height="180" rx="40" fill="url(#bg)" />
         <rect x="0.5" y="0.5" width="179" height="179" rx="39.5" stroke="rgba(255,255,255,0.16)" />
-        <circle cx="74" cy="42" r="44" fill="rgba(120, 198, 255, 0.22)" />
 
         <path
-          d="M102 47c16-3 34-1 46 5 4 2 6 6 6 10l-4 41c-1 9-5 16-12 21-7 5-17 7-28 5-11-2-19-7-24-14-5-6-7-14-6-22l4-38c1-4 4-7 8-8h10z"
-          fill="url(#rearMask)"
+          d="M26 24c9 3 17 11 21 22 3 10 4 22 3 38-2 15-6 29-13 40-3-8-6-16-8-26-5-25-6-48-3-74z"
+          fill="url(#curtain)"
         />
         <path
-          d="M120 70c4-5 11-4 17 1 2 1 4 2 6 1 2-1 3 1 2 2-6 7-15 8-22 3-3-3-5-5-3-7z"
-          fill="#3159F4"
-          opacity="0.88"
+          d="M154 24c-9 3-17 11-21 22-3 10-4 22-3 38 2 15 6 29 13 40 3-8 6-16 8-26 5-25 6-48 3-74z"
+          fill="url(#curtainRight)"
         />
-        <path
-          d="M113 94c7-5 20-5 28 0 2 2 1 4-1 5-7 1-16 1-25 0-3-1-4-3-2-5z"
-          fill="#3159F4"
-          opacity="0.58"
-        />
+        <path d="M48 31h84" stroke="rgba(255,217,160,0.72)" strokeWidth="6" strokeLinecap="round" />
+        <circle cx="90" cy="42" r="7" fill="#ffd37c" />
 
+        <circle cx="90" cy="94" r="46" fill="url(#mask)" />
+        <ellipse cx="84" cy="82" rx="28" ry="32" fill="url(#spot)" opacity="0.78" />
+        <circle cx="73" cy="84" r="6.5" fill="#4f244e" />
+        <circle cx="108" cy="84" r="6.5" fill="#4f244e" />
         <path
-          d="M56 53c17 4 33 1 45-6 5-2 10 0 12 6l10 39c2 8 0 16-5 23-6 7-16 13-28 15-12 2-22 0-30-6-7-5-12-12-14-20l-9-36c-1-4 1-8 5-10 4-2 8-4 14-5z"
-          fill="url(#frontMask)"
+          d="M68 114c6 11 17 16 29 16 12 0 23-5 29-16"
+          stroke="#4f244e"
+          strokeWidth="7"
+          strokeLinecap="round"
         />
-        <path
-          d="M64 82c5-5 12-7 19-4 3 1 5 4 3 6-1 2-4 1-6 1-4-1-9 0-13 3-2 2-5 0-3-2z"
-          fill="#3159F4"
-        />
-        <path
-          d="M94 79c5-5 12-6 18-3 3 1 4 4 3 6-2 2-5 1-6 0-5-2-10-1-14 2-2 2-5 0-1-5z"
-          fill="#3159F4"
-        />
-        <path
-          d="M68 101c9-5 23-5 33 0 3 2 3 6 0 7-10 6-24 6-33 0-4-1-4-5 0-7z"
-          fill="#3159F4"
-        />
+        <path d="M60 69c6-6 13-10 21-10 8 0 15 4 21 10" stroke="#7f2a56" strokeWidth="5.5" strokeLinecap="round" />
+        <path d="M96 69c7-7 15-10 24-10 4 0 7 1 10 2" stroke="#7f2a56" strokeWidth="5.5" strokeLinecap="round" />
       </svg>
     </div>
   );
 }
 
 export default function AppleIcon() {
-  return new ImageResponse(<AppleMasksArtwork />, size);
+  return new ImageResponse(<AppleTheatreSmileArtwork />, size);
 }

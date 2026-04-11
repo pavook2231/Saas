@@ -1,4 +1,5 @@
-import { Body, Controller, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 
 import { RateLimit } from '../security/decorators/rate-limit.decorator';
 
@@ -7,6 +8,7 @@ import {
   MeResponse,
   TotpSetupResponse,
   TwoFactorStatusResponse,
+  CalendarSyncLinksResponse,
 } from './auth.types';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -28,6 +30,13 @@ export class AccountController {
     @Body() dto: UpdateProfileDto,
   ): Promise<MeResponse> {
     return this.authService.updateProfile(user.sub, dto);
+  }
+
+  @Get('calendar-sync')
+  async getCalendarSyncLinks(
+    @CurrentUser() user: AccessTokenPayload,
+  ): Promise<CalendarSyncLinksResponse> {
+    return this.authService.getCalendarSyncLinks(user.sub);
   }
 
   @Post('password')
@@ -72,5 +81,21 @@ export class AccountController {
     @Body() dto: DisableTotpDto,
   ): Promise<TwoFactorStatusResponse> {
     return this.authService.disableTotp(user.sub, dto);
+  }
+}
+
+@Controller('calendar/subscriptions')
+export class CalendarSubscriptionController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Get(':token.ics')
+  @Header('Content-Type', 'text/calendar; charset=utf-8')
+  @Header('Content-Disposition', 'inline; filename=\"theatre-calendar.ics\"')
+  async getCalendarFeed(
+    @Param('token') token: string,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<string> {
+    response.setHeader('Cache-Control', 'private, max-age=300');
+    return this.authService.getCalendarSubscriptionIcs(token);
   }
 }

@@ -27,6 +27,65 @@ const detectDeviceLabel = () => {
     : 'Браузер';
 };
 
+const detectPushPlatform = () => {
+  if (typeof navigator === 'undefined') {
+    return {
+      label: 'Устройство',
+      hint: 'Откройте страницу на нужном устройстве, чтобы проверить поддержку push.',
+      variant: 'neutral' as const,
+    };
+  }
+
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isIphone = /iphone/.test(userAgent);
+  const isIpad =
+    /ipad/.test(userAgent) ||
+    (/macintosh/.test(userAgent) &&
+      typeof document !== 'undefined' &&
+      'ontouchend' in document);
+  const isAndroid = /android/.test(userAgent);
+  const isChrome = /chrome|crios/.test(userAgent) && !/edg|opr|opera/.test(userAgent);
+  const isSafari = /safari/.test(userAgent) && !/chrome|crios|android/.test(userAgent);
+
+  if (isIphone || isIpad) {
+    return {
+      label: 'iPhone / iPad',
+      hint: 'Push работает только после добавления сайта на экран домой и запуска как отдельного веб-приложения.',
+      variant: 'warning' as const,
+    };
+  }
+
+  if (isAndroid && isChrome) {
+    return {
+      label: 'Android / Chrome',
+      hint: 'Push поддерживается прямо в браузере. Добавлять сайт на экран домой не нужно.',
+      variant: 'success' as const,
+    };
+  }
+
+  if (isChrome) {
+    return {
+      label: 'Chrome',
+      hint: 'Push поддерживается в браузере. Достаточно выдать разрешение на уведомления.',
+      variant: 'success' as const,
+    };
+  }
+
+  if (isSafari) {
+    return {
+      label: 'Safari',
+      hint: 'На Mac push работает в Safari. На iPhone и iPad нужен режим с экрана домой.',
+      variant: 'warning' as const,
+    };
+  }
+
+  return {
+    label: 'Браузер',
+    hint: 'Поддержка push зависит от браузера и системных разрешений.',
+    variant: 'neutral' as const,
+  };
+};
+
 const BellIcon = ({ enabled }: { enabled: boolean }) => (
   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path
@@ -83,6 +142,7 @@ export function BrowserNotificationsSettings({
   const [hasDeviceSubscription, setHasDeviceSubscription] = useState(false);
 
   const supported = browserPush.isSupported();
+  const platformInfo = useMemo(() => detectPushPlatform(), []);
 
   const syncDeviceSubscription = useCallback(async () => {
     if (!supported) {
@@ -285,6 +345,11 @@ export function BrowserNotificationsSettings({
         <Badge variant={hasDeviceSubscription ? 'success' : 'error'}>{stateLabel}</Badge>
       </div>
 
+      <div className="account-browser-push__platform">
+        <Badge variant={platformInfo.variant}>{platformInfo.label}</Badge>
+        <span>{platformInfo.hint}</span>
+      </div>
+
       <div className="account-browser-push__meta">
         {permission === 'default' ? (
           <span>После включения браузер попросит разрешение на уведомления.</span>
@@ -292,7 +357,9 @@ export function BrowserNotificationsSettings({
         {permission === 'denied' ? (
           <span>Разрешение можно вернуть в настройках браузера.</span>
         ) : null}
-        <span>На iPhone push работает после добавления сайта на экран Домой.</span>
+        {!supported ? (
+          <span>На этом устройстве браузер не дает оформить web push-подписку.</span>
+        ) : null}
       </div>
 
       {subscriptions.length > 0 ? (

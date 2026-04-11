@@ -272,6 +272,22 @@ export class EventsController {
     return this.eventsService.updateEvent(organizationId, eventId, user.sub, dto);
   }
 
+  @Post('events/:eventId/remind')
+  @RequireOrgRoles(
+    OrganizationRole.ADMIN,
+    OrganizationRole.DIRECTOR,
+    OrganizationRole.ASSISTANT,
+  )
+  async sendEventReminderNow(
+    @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
+    organizationId: string,
+    @Param('eventId', new ParseUUIDPipe({ version: '4' }))
+    eventId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.eventsService.sendEventReminderNow(organizationId, eventId, user.sub);
+  }
+
   @Put('events/:eventId/participants')
   @RequireOrgRoles(
     OrganizationRole.ADMIN,

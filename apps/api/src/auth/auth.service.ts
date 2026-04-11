@@ -17,6 +17,7 @@ import {
   AuditSeverity,
   AuditTargetType,
   EmailAuthCodePurpose,
+  EventAttendanceStatus,
   MembershipStatus,
   OAuthAccountStatus,
   OAuthProvider,
@@ -54,6 +55,7 @@ import {
   AccessTokenPayload,
   AuthResponse,
   AuthSuccessResponse,
+  CalendarSyncLinksResponse,
   EmailCodeRequestResponse,
   LinkedOAuthAccount,
   MeResponse,
@@ -484,6 +486,156 @@ export class AuthService {
     return {
       user: this.toPublicUser(updatedUser, memberships),
     };
+  }
+
+  async getCalendarSyncLinks(userId: string): Promise<CalendarSyncLinksResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        calendarSyncToken: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Учетная запись пользователя недоступна');
+    }
+
+    const token =
+      user.calendarSyncToken ??
+      (
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: {
+            calendarSyncToken: randomBytes(32).toString('hex'),
+          },
+          select: {
+            calendarSyncToken: true,
+          },
+        })
+      ).calendarSyncToken;
+
+    if (!token) {
+      throw new InternalServerErrorException('Не удалось подготовить календарную подписку');
+    }
+
+    const frontendBase =
+      this.getConfig().app.corsOrigins[0] ?? this.getConfig().app.corsOrigin;
+    const normalizedBase = frontendBase.replace(/\/$/, '');
+    const httpsUrl = `${normalizedBase}/api/calendar/subscriptions/${token}.ics`;
+
+    return {
+      httpsUrl,
+      webcalUrl: httpsUrl.replace(/^https?/, 'webcal'),
+    };
+  }
+
+  async getCalendarSubscriptionIcs(token: string): Promise<string> {
+    const normalizedToken = token.trim();
+
+    if (normalizedToken.length < 20) {
+      throw new NotFoundException('Календарная подписка не найдена');
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        calendarSyncToken: normalizedToken,
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Календарная подписка не найдена');
+    }
+
+    const now = new Date();
+    const events = await this.prisma.event.findMany({
+      where: {
+        deletedAt: null,
+        status: {
+          not: 'DRAFT',
+        },
+        participants: {
+          some: {
+            attendanceStatus: {
+              notIn: [EventAttendanceStatus.DECLINED, EventAttendanceStatus.ABSENT],
+            },
+            participant: {
+              userId: user.id,
+              deletedAt: null,
+            },
+          },
+        },
+      },
+      orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        type: true,
+        status: true,
+        startsAt: true,
+        endsAt: true,
+        location: true,
+        organization: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Theatre Internal Service//Calendar Sync//RU',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      `X-WR-CALNAME:${this.escapeIcsText(
+        `${this.buildDisplayName(user.firstName, user.lastName, user.email)} — Театр`,
+      )}`,
+      'X-WR-TIMEZONE:UTC',
+    ];
+
+    for (const event of events) {
+      lines.push('BEGIN:VEVENT');
+      lines.push(`UID:${event.id}@theatre-internal-service`);
+      lines.push(`DTSTAMP:${this.toIcsUtc(now)}`);
+      lines.push(`DTSTART:${this.toIcsUtc(event.startsAt)}`);
+      lines.push(`DTEND:${this.toIcsUtc(event.endsAt)}`);
+      lines.push(`SUMMARY:${this.escapeIcsText(event.title)}`);
+      lines.push(
+        `DESCRIPTION:${this.escapeIcsText(
+          [
+            this.getEventTypeLabel(event.type),
+            event.organization?.name ? `Организация: ${event.organization.name}` : '',
+            event.description ?? '',
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        )}`,
+      );
+
+      if (event.location) {
+        lines.push(`LOCATION:${this.escapeIcsText(event.location)}`);
+      }
+
+      lines.push(
+        event.status === 'CANCELLED' ? 'STATUS:CANCELLED' : 'STATUS:CONFIRMED',
+      );
+      lines.push('END:VEVENT');
+    }
+
+    lines.push('END:VCALENDAR');
+
+    return `${lines.join('\r\n')}\r\n`;
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
@@ -3054,6 +3206,46 @@ export class AuthService {
     } catch {
       return {};
     }
+  }
+
+  private escapeIcsText(value: string): string {
+    return value
+      .replace(/\\/g, '\\\\')
+      .replace(/\r\n|\r|\n/g, '\\n')
+      .replace(/,/g, '\\,')
+      .replace(/;/g, '\\;');
+  }
+
+  private toIcsUtc(value: Date): string {
+    return value
+      .toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\.\d{3}Z$/, 'Z');
+  }
+
+  private getEventTypeLabel(type: string): string {
+    if (type === 'PERFORMANCE') {
+      return 'Спектакль';
+    }
+
+    if (type === 'REHEARSAL') {
+      return 'Репетиция';
+    }
+
+    if (type === 'TOUR') {
+      return 'Гастроли';
+    }
+
+    return 'Событие';
+  }
+
+  private buildDisplayName(
+    firstName?: string | null,
+    lastName?: string | null,
+    email?: string | null,
+  ): string {
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+    return fullName || email || 'Календарь';
   }
 
   private toAuditPayload(value: unknown): Prisma.InputJsonValue {

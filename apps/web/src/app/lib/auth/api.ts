@@ -21,6 +21,7 @@ import {
   TwoFactorStatus,
   VerifyLoginTwoFactorPayload,
   UpdateProfilePayload,
+  CalendarSyncLinks,
 } from './types';
 
 const authBaseUrl = `${apiBaseUrl}/auth`;
@@ -308,6 +309,19 @@ export const authApi = {
 
     await assertOk(response);
     return (await response.json()) as TwoFactorStatus;
+  },
+
+  async getCalendarSyncLinks(accessToken: string): Promise<CalendarSyncLinks> {
+    const response = await fetch(`${authBaseUrl}/account/calendar-sync`, {
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    await assertOk(response);
+    return (await response.json()) as CalendarSyncLinks;
   },
 
   async beginTotpSetup(

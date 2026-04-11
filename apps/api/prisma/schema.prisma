@@ -186,6 +186,7 @@ model User {
   avatarUrl       String?
   phone           String?
   eventRemindersEnabled Boolean @default(true)
+  calendarSyncToken String? @unique
   totpSecret      String?
   totpPendingSecret String?
   totpEnabledAt   DateTime?

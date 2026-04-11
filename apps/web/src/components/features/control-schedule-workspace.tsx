@@ -340,7 +340,7 @@ export function ControlScheduleWorkspace() {
   const [modalOpen, setModalOpen] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [eventActionLoading, setEventActionLoading] = useState<'cancel' | 'delete' | null>(null);
+  const [eventActionLoading, setEventActionLoading] = useState<'cancel' | 'delete' | 'remind' | null>(null);
   const [noteExpanded, setNoteExpanded] = useState(false);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
   const [conflicts, setConflicts] = useState<ConflictCheckResult | null>(null);
@@ -822,6 +822,34 @@ export function ControlScheduleWorkspace() {
     }
   };
 
+  const handleSendReminderNow = async () => {
+    if (!accessToken || !activeOrganizationId || !editingEventId || eventActionLoading) {
+      return;
+    }
+
+    setEventActionLoading('remind');
+    setNoticeText(null);
+    setErrorText(null);
+
+    try {
+      const result = await operationsApi.sendEventReminder({
+        organizationId: activeOrganizationId,
+        accessToken,
+        eventId: editingEventId,
+      });
+
+      setNoticeText(
+        result.sentCount > 0
+          ? `Напоминание отправлено ${result.sentCount} ${pluralize(result.sentCount, 'участнику', 'участникам', 'участникам')}.`
+          : 'Некому отправлять: в событии нет участников с включёнными напоминаниями.',
+      );
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Не удалось отправить напоминание.');
+    } finally {
+      setEventActionLoading(null);
+    }
+  };
+
   const handlePublishWeek = async () => {
     if (!accessToken || !activeOrganizationId || publishingWeek || weekDraftEvents.length === 0) {
       return;
@@ -1023,6 +1051,9 @@ export function ControlScheduleWorkspace() {
                 <>
                   <Button type="button" variant="ghost" onClick={handleDuplicate} disabled={saving || Boolean(eventActionLoading)}>
                     Дублировать
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => void handleSendReminderNow()} loading={eventActionLoading === 'remind'}>
+                    Уведомить участников
                   </Button>
                   <Button type="button" variant="ghost" onClick={() => void handleCancelEvent()} loading={eventActionLoading === 'cancel'}>
                     Отменить

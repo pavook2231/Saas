@@ -147,3 +147,8 @@ export type OAuthStartResponse = {
   state: string;
   authorizationUrl: string;
 };
+
+export type CalendarSyncLinks = {
+  httpsUrl: string;
+  webcalUrl: string;
+};

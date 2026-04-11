@@ -7,7 +7,7 @@ import { PassportModule } from '@nestjs/passport';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SecurityModule } from '../security/security.module';
 
-import { AccountController } from './account.controller';
+import { AccountController, CalendarSubscriptionController } from './account.controller';
 import { AuthController } from './auth.controller';
 import { AuthEmailService } from './auth-email.service';
 import { AuthService } from './auth.service';
@@ -43,7 +43,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       },
     }),
   ],
-  controllers: [AuthController, AccountController, EmailAuthController],
+  controllers: [AuthController, AccountController, CalendarSubscriptionController, EmailAuthController],
   providers: [AuthService, AuthEmailService, JwtStrategy],
   exports: [AuthService],
 })

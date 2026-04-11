@@ -114,6 +114,11 @@ export type PublishWeekScheduleResult = {
   notified: boolean;
 };
 
+export type SendEventReminderResult = {
+  success: true;
+  sentCount: number;
+};
+
 export type EventHistoryRecord = {
   id: string;
   action: string;
@@ -455,6 +460,18 @@ export const operationsApi = {
       body: {
         anchorDate: params.anchorDate,
       },
+    });
+  },
+
+  sendEventReminder(
+    params: OrganizationScopedRequest & {
+      eventId: string;
+    },
+  ) {
+    return apiRequest<SendEventReminderResult>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: `/organizations/${params.organizationId}/events/${params.eventId}/remind`,
     });
   },
 

@@ -1756,6 +1756,93 @@ export class EventsService {
     };
   }
 
+  async sendEventReminderNow(
+    organizationId: string,
+    eventId: string,
+    actorUserId: string,
+  ) {
+    const event = await this.prisma.event.findFirst({
+      where: {
+        id: eventId,
+        organizationId,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        title: true,
+        startsAt: true,
+        timezone: true,
+        participants: {
+          where: {
+            attendanceStatus: {
+              notIn: [EventAttendanceStatus.DECLINED, EventAttendanceStatus.ABSENT],
+            },
+            participant: {
+              deletedAt: null,
+              userId: {
+                not: null,
+              },
+              user: {
+                is: {
+                  isActive: true,
+                  deletedAt: null,
+                  eventRemindersEnabled: true,
+                },
+              },
+            },
+          },
+          select: {
+            participant: {
+              select: {
+                userId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException('Событие не найдено');
+    }
+
+    const userIds = this.deduplicateUuids(
+      event.participants
+        .map((participant) => participant.participant.userId)
+        .filter((userId): userId is string => Boolean(userId)),
+    );
+
+    if (userIds.length === 0) {
+      return {
+        success: true as const,
+        sentCount: 0,
+      };
+    }
+
+    const timezone = this.trimOrNull(event.timezone) ?? 'UTC';
+    const result = await this.notificationsService.notifyUsers({
+      organizationId,
+      eventId: event.id,
+      actorUserId,
+      type: NotificationType.EVENT_REMINDER,
+      title: `Напоминание: ${event.title}`,
+      body: `Проверка напоминания. Событие начнётся ${this.formatReminderDateTime(event.startsAt, timezone)}.`,
+      payload: {
+        eventId: event.id,
+        eventTitle: event.title,
+        startsAt: event.startsAt.toISOString(),
+        url: `/calendar?eventId=${event.id}`,
+        reminderType: 'manual_test',
+      },
+      userIds,
+    });
+
+    return {
+      success: true as const,
+      sentCount: result.usersCount,
+    };
+  }
+
   async checkEventConflicts(organizationId: string, dto: CheckEventConflictsDto) {
     const range = this.parseDateRange(dto.startsAt, dto.endsAt);
 
@@ -2930,6 +3017,16 @@ export class EventsService {
     }
 
     return assemblyAt;
+  }
+
+  private formatReminderDateTime(date: Date, timezone: string): string {
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: '2-digit',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: timezone,
+    }).format(date);
   }
 
   private deduplicateUuids(values: string[]): string[] {

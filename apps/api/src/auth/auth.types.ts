@@ -66,6 +66,11 @@ export type MeResponse = {
   user: PublicUser;
 };
 
+export type CalendarSyncLinksResponse = {
+  httpsUrl: string;
+  webcalUrl: string;
+};
+
 export type TwoFactorStatusResponse = {
   required: boolean;
   enabled: boolean;

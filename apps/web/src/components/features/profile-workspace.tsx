@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { BrowserNotificationsSettings } from './browser-notifications-settings';
+import { CalendarSyncSettings } from './calendar-sync-settings';
 import { EventReminderSettings } from './event-reminder-settings';
 import { CreateOrganizationAction } from './create-organization-action';
 import { PageHeader } from './page-header';
@@ -686,6 +687,11 @@ export function ProfileWorkspace() {
           </CardHeader>
           <CardContent className="account-settings-card">
             <div className="account-toggle-list">
+              <CalendarSyncSettings
+                accessToken={accessToken}
+                onNotice={setNoticeText}
+                onError={setErrorText}
+              />
               <EventReminderSettings
                 accessToken={accessToken}
                 onNotice={setNoticeText}

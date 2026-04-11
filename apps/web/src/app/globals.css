@@ -1609,6 +1609,21 @@ textarea.ui-field:focus {
   font-size: 0.92rem;
 }
 
+.account-browser-push__platform {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 0 2px;
+}
+
+.account-browser-push__platform span {
+  flex: 1 1 260px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .account-browser-push__toggle small,
 .account-browser-push__subscription-copy span {
   color: var(--text-muted);
@@ -5276,6 +5291,10 @@ textarea.ui-field {
 
   .account-browser-push__toggle {
     flex: initial;
+  }
+
+  .account-browser-push__platform {
+    padding: 0;
   }
 
   .account-layout .profile-item-card .resource-card__actions,

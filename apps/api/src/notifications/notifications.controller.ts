@@ -19,6 +19,7 @@ import { RegisterPushDeviceDto } from './dto/register-push-device.dto';
 import { RegisterWebPushSubscriptionDto } from './dto/register-web-push-subscription.dto';
 import { UnregisterPushDeviceDto } from './dto/unregister-push-device.dto';
 import { UnregisterWebPushSubscriptionDto } from './dto/unregister-web-push-subscription.dto';
+import { UpdateReminderPreferencesDto } from './dto/update-reminder-preferences.dto';
 import { NotificationsService } from './notifications.service';
 
 @Controller('notifications')
@@ -37,6 +38,19 @@ export class NotificationsController {
     @Query() query: ListMyNotificationsQueryDto,
   ) {
     return this.notificationsService.listMyNotifications(user.sub, query);
+  }
+
+  @Get('preferences/reminders')
+  async getReminderPreferences(@CurrentUser() user: AccessTokenPayload) {
+    return this.notificationsService.getReminderPreferences(user.sub);
+  }
+
+  @Post('preferences/reminders')
+  async updateReminderPreferences(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: UpdateReminderPreferencesDto,
+  ) {
+    return this.notificationsService.updateReminderPreferences(user.sub, dto.enabled);
   }
 
   @Patch('me/:recipientId/read')

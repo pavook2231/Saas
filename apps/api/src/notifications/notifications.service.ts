@@ -44,6 +44,10 @@ type EventReminderDispatchResult = {
   failed: number;
 };
 
+type ReminderPreferencesResponse = {
+  enabled: boolean;
+};
+
 @Injectable()
 export class NotificationsService {
   constructor(
@@ -53,6 +57,46 @@ export class NotificationsService {
     private readonly webPushService: WebPushService,
     private readonly dataEncryptionService: DataEncryptionService,
   ) {}
+
+  async getReminderPreferences(userId: string): Promise<ReminderPreferencesResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        eventRemindersEnabled: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Пользователь не найден');
+    }
+
+    return {
+      enabled: user.eventRemindersEnabled,
+    };
+  }
+
+  async updateReminderPreferences(
+    userId: string,
+    enabled: boolean,
+  ): Promise<ReminderPreferencesResponse> {
+    const user = await this.prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        eventRemindersEnabled: enabled,
+      },
+      select: {
+        eventRemindersEnabled: true,
+      },
+    });
+
+    return {
+      enabled: user.eventRemindersEnabled,
+    };
+  }
 
   async registerPushDevice(userId: string, dto: RegisterPushDeviceDto) {
     const token = dto.token.trim();
@@ -696,6 +740,199 @@ export class NotificationsService {
     return result;
   }
 
+  async dispatchNextDayEventRemindersAtHour(
+    reminderHourLocal = 20,
+    windowMinutes = 2,
+  ): Promise<EventReminderDispatchResult> {
+    const now = new Date();
+    const lowerBound = new Date(now.getTime() - windowMinutes * 60_000);
+    const upperBound = new Date(now.getTime() + 36 * 60 * 60_000);
+
+    const events = await this.prisma.event.findMany({
+      where: {
+        deletedAt: null,
+        status: {
+          in: [EventStatus.PLANNED, EventStatus.CONFIRMED],
+        },
+        startsAt: {
+          gt: now,
+          lte: upperBound,
+        },
+        participants: {
+          some: {
+            attendanceStatus: {
+              notIn: [EventAttendanceStatus.DECLINED, EventAttendanceStatus.ABSENT],
+            },
+            participant: {
+              userId: {
+                not: null,
+              },
+              deletedAt: null,
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        title: true,
+        startsAt: true,
+        timezone: true,
+        participants: {
+          where: {
+            attendanceStatus: {
+              notIn: [EventAttendanceStatus.DECLINED, EventAttendanceStatus.ABSENT],
+            },
+            participant: {
+              deletedAt: null,
+              userId: {
+                not: null,
+              },
+              user: {
+                isActive: true,
+                deletedAt: null,
+                eventRemindersEnabled: true,
+              },
+            },
+          },
+          select: {
+            participant: {
+              select: {
+                userId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const result: EventReminderDispatchResult = {
+      processed: 0,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+    };
+
+    for (const event of events) {
+      const timezone = this.trimOrNull(event.timezone) ?? 'UTC';
+      const reminderAt = this.resolveDayBeforeReminderAt(event.startsAt, timezone, reminderHourLocal);
+
+      if (reminderAt < lowerBound || reminderAt > now) {
+        continue;
+      }
+
+      result.processed += 1;
+
+      const existingDispatch = await this.prisma.eventReminderDispatch.findUnique({
+        where: {
+          eventId_reminderKey: {
+            eventId: event.id,
+            reminderKey: 'day-before-20:00',
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+
+      if (existingDispatch?.status === NotificationDeliveryStatus.SENT) {
+        result.skipped += 1;
+        continue;
+      }
+
+      const dispatch = existingDispatch
+        ? await this.prisma.eventReminderDispatch.update({
+            where: {
+              id: existingDispatch.id,
+            },
+            data: {
+              reminderAt,
+              status: NotificationDeliveryStatus.PENDING,
+              errorMessage: null,
+              sentAt: null,
+            },
+            select: {
+              id: true,
+            },
+          })
+        : await this.prisma.eventReminderDispatch.create({
+            data: {
+              eventId: event.id,
+              reminderKey: 'day-before-20:00',
+              reminderAt,
+              status: NotificationDeliveryStatus.PENDING,
+            },
+            select: {
+              id: true,
+            },
+          });
+
+      const userIds = this.deduplicateIds(
+        event.participants
+          .map((participant) => participant.participant.userId)
+          .filter((userId): userId is string => Boolean(userId)),
+      );
+
+      if (userIds.length === 0) {
+        await this.prisma.eventReminderDispatch.update({
+          where: {
+            id: dispatch.id,
+          },
+          data: {
+            status: NotificationDeliveryStatus.FAILED,
+            errorMessage: 'No recipients with reminders enabled',
+          },
+        });
+        result.failed += 1;
+        continue;
+      }
+
+      try {
+        await this.notifyUsers({
+          organizationId: event.organizationId,
+          eventId: event.id,
+          type: NotificationType.EVENT_REMINDER,
+          title: `Напоминание: ${event.title}`,
+          body: `Завтра, ${this.formatReminderDateTime(event.startsAt, timezone)}`,
+          payload: {
+            eventId: event.id,
+            eventTitle: event.title,
+            startsAt: event.startsAt.toISOString(),
+            url: `/calendar?eventId=${event.id}`,
+            reminderType: 'day_before_20_local',
+          },
+          userIds,
+        });
+
+        await this.prisma.eventReminderDispatch.update({
+          where: {
+            id: dispatch.id,
+          },
+          data: {
+            status: NotificationDeliveryStatus.SENT,
+            sentAt: new Date(),
+          },
+        });
+
+        result.sent += 1;
+      } catch (error) {
+        await this.prisma.eventReminderDispatch.update({
+          where: {
+            id: dispatch.id,
+          },
+          data: {
+            status: NotificationDeliveryStatus.FAILED,
+            errorMessage: (error as Error).message.slice(0, 1000),
+          },
+        });
+        result.failed += 1;
+      }
+    }
+
+    return result;
+  }
+
   private async deliverPushForNotification(
     notificationId: string,
     userIds: string[],
@@ -924,6 +1161,107 @@ export class NotificationsService {
 
   private deduplicateIds(values: string[]): string[] {
     return Array.from(new Set(values));
+  }
+
+  private resolveDayBeforeReminderAt(
+    startsAt: Date,
+    timezone: string,
+    reminderHourLocal: number,
+  ): Date {
+    const eventLocal = this.getTimeZoneParts(startsAt, timezone);
+    const previousDay = new Date(Date.UTC(eventLocal.year, eventLocal.month - 1, eventLocal.day, 0, 0, 0, 0));
+    previousDay.setUTCDate(previousDay.getUTCDate() - 1);
+
+    return this.createDateInTimeZone(
+      timezone,
+      previousDay.getUTCFullYear(),
+      previousDay.getUTCMonth() + 1,
+      previousDay.getUTCDate(),
+      reminderHourLocal,
+      0,
+    );
+  }
+
+  private createDateInTimeZone(
+    timezone: string,
+    year: number,
+    month: number,
+    day: number,
+    hour: number,
+    minute: number,
+  ): Date {
+    let utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0));
+
+    for (let index = 0; index < 3; index += 1) {
+      const offsetMinutes = this.getTimeZoneOffsetMinutes(utcDate, timezone);
+      const adjusted = new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0) - offsetMinutes * 60_000);
+
+      if (adjusted.getTime() === utcDate.getTime()) {
+        break;
+      }
+
+      utcDate = adjusted;
+    }
+
+    return utcDate;
+  }
+
+  private getTimeZoneParts(date: Date, timezone: string) {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(date);
+    const read = (type: string) => Number(parts.find((item) => item.type === type)?.value ?? '0');
+
+    return {
+      year: read('year'),
+      month: read('month'),
+      day: read('day'),
+      hour: read('hour'),
+      minute: read('minute'),
+    };
+  }
+
+  private getTimeZoneOffsetMinutes(date: Date, timezone: string): number {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'shortOffset',
+      hour: '2-digit',
+    });
+    const offsetToken =
+      formatter.formatToParts(date).find((part) => part.type === 'timeZoneName')?.value ?? 'GMT';
+
+    if (offsetToken === 'GMT') {
+      return 0;
+    }
+
+    const match = offsetToken.match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/);
+
+    if (!match) {
+      return 0;
+    }
+
+    const sign = match[1] === '-' ? -1 : 1;
+    const hours = Number(match[2] ?? '0');
+    const minutes = Number(match[3] ?? '0');
+
+    return sign * (hours * 60 + minutes);
+  }
+
+  private formatReminderDateTime(date: Date, timezone: string): string {
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: '2-digit',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: timezone,
+    }).format(date);
   }
 
   private resolvePushUrl(input: NotifyUsersInput): string {

@@ -1,0 +1,2 @@
+ALTER TABLE "User"
+ADD COLUMN "eventRemindersEnabled" BOOLEAN NOT NULL DEFAULT true;

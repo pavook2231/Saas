@@ -130,7 +130,7 @@ class InMemoryPrisma {
     const now = new Date();
     const base = { id: data.id || randomUUID() };
     const defs = {
-      user: { ...base, email: '', passwordHash: null, isEmailVerified: false, firstName: null, lastName: null, avatarUrl: null, phone: null, isActive: true, lastLoginAt: null, createdAt: now, updatedAt: now, deletedAt: null },
+      user: { ...base, email: '', passwordHash: null, isEmailVerified: false, firstName: null, lastName: null, avatarUrl: null, phone: null, eventRemindersEnabled: true, isActive: true, lastLoginAt: null, createdAt: now, updatedAt: now, deletedAt: null },
       refreshToken: { ...base, userId: null, tokenHash: null, sessionId: null, userAgent: null, ipAddress: null, expiresAt: now, revokedAt: null, createdAt: now, updatedAt: now },
       organization: { ...base, name: '', slug: '', inviteCode: `join${String(base.id).replace(/-/g, '').slice(0, 8)}`, description: null, timezone: 'UTC', settings: null, createdByUserId: null, createdAt: now, updatedAt: now, deletedAt: null },
       organizationInvite: { ...base, organizationId: null, email: null, role: OrganizationRole.MEMBER, status: 'PENDING', tokenHash: randomUUID(), invitedByUserId: null, acceptedByUserId: null, expiresAt: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000), acceptedAt: null, revokedAt: null, createdAt: now, updatedAt: now },
@@ -196,6 +196,7 @@ class InMemoryPrisma {
       if (key === 'user' && name === 'organizationJoinRequest') { const user = this.state.users.find((u) => u.id === item.userId); if (!user || !this.matches('user', user, cond)) return false; continue; }
       if (key === 'participant' && name === 'participantInvite') { const participant = this.state.participants.find((p) => p.id === item.participantId); if (!participant || !this.matches('participant', participant, cond)) return false; continue; }
       if (key === 'participant' && name === 'eventParticipant') { const participant = this.state.participants.find((p) => p.id === item.participantId); if (!participant || !this.matches('participant', participant, cond)) return false; continue; }
+      if (key === 'user' && name === 'participant') { const user = this.state.users.find((u) => u.id === item.userId); if (!user || !this.matches('user', user, cond)) return false; continue; }
       if (key === 'event' && name === 'eventParticipant') { const event = this.state.events.find((e) => e.id === item.eventId); if (!event || !this.matches('event', event, cond)) return false; continue; }
       if (key === 'participants' && name === 'event') { const participants = this.state.eventParticipants.filter((p) => p.eventId === item.id); if (cond.some && !participants.some((p) => this.matches('eventParticipant', p, cond.some))) return false; continue; }
       if (key === 'ledgerEntry' && name === 'manualPointsAdjustment') { const entry = this.state.pointsLedgerEntries.find((e) => e.id === item.ledgerEntryId); if (!entry || !this.matches('pointsLedgerEntry', entry, cond)) return false; continue; }
@@ -224,7 +225,7 @@ class InMemoryPrisma {
     if (name === 'membership') return { ...item, organization: this.state.organizations.find((o) => o.id === item.organizationId) || null, user: this.state.users.find((u) => u.id === item.userId) || null };
     if (name === 'organizationInvite') return { ...item, organization: this.state.organizations.find((o) => o.id === item.organizationId) || null };
     if (name === 'organizationJoinRequest') return { ...item, organization: this.state.organizations.find((o) => o.id === item.organizationId) || null, user: this.state.users.find((u) => u.id === item.userId) || null };
-    if (name === 'participant') return { ...item, organization: this.state.organizations.find((o) => o.id === item.organizationId) || null };
+    if (name === 'participant') return { ...item, organization: this.state.organizations.find((o) => o.id === item.organizationId) || null, user: item.userId ? this.state.users.find((u) => u.id === item.userId) || null : null };
     if (name === 'participantInvite') return { ...item, organization: this.state.organizations.find((o) => o.id === item.organizationId) || null, participant: this.materialize('participant', this.state.participants.find((p) => p.id === item.participantId) || null) };
     if (name === 'eventParticipant') return { ...item, event: this.state.events.find((e) => e.id === item.eventId) || null, participant: this.materialize('participant', this.state.participants.find((p) => p.id === item.participantId) || null), templateRole: null };
     if (name === 'event') return { ...item, template: null, participants: this.state.eventParticipants.filter((p) => p.eventId === item.id).map((p) => this.materialize('eventParticipant', p)) };

@@ -44,11 +44,37 @@ export type WebPushClientConfig = {
   publicKey: string | null;
 };
 
+export type ReminderPreferences = {
+  enabled: boolean;
+};
+
 export const notificationsApi = {
   getWebPushConfig(params: AuthenticatedRequest) {
     return apiRequest<WebPushClientConfig>({
       accessToken: params.accessToken,
       path: '/notifications/push/web/config',
+    });
+  },
+
+  getReminderPreferences(params: AuthenticatedRequest) {
+    return apiRequest<ReminderPreferences>({
+      accessToken: params.accessToken,
+      path: '/notifications/preferences/reminders',
+    });
+  },
+
+  updateReminderPreferences(
+    params: AuthenticatedRequest & {
+      enabled: boolean;
+    },
+  ) {
+    return apiRequest<ReminderPreferences>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: '/notifications/preferences/reminders',
+      body: {
+        enabled: params.enabled,
+      },
     });
   },
 

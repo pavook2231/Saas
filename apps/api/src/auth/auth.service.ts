@@ -200,12 +200,6 @@ export class AuthService {
 
     const memberships = await this.getMembershipClaims(user.id);
 
-    if (this.requiresSensitiveRoleTwoFactor(memberships)) {
-      throw new ForbiddenException(
-        'Для чувствительных ролей вход через OAuth временно отключен до включения второго шага подтверждения.',
-      );
-    }
-
     const tokens = await this.createTokenPair(user, memberships, requestMeta);
 
     return {

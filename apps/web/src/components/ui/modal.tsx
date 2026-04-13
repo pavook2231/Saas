@@ -127,8 +127,8 @@ export function Modal({
         const fieldRect = field.getBoundingClientRect();
         const viewportHeight = viewport?.height ?? window.innerHeight;
         const viewportTop = viewport?.offsetTop ?? 0;
-        const visibleTop = Math.max(bodyRect.top + 12, viewportTop + 72);
-        const visibleBottom = Math.min(bodyRect.bottom - 12, viewportTop + viewportHeight - 88);
+        const visibleTop = Math.max(bodyRect.top + 10, viewportTop + 28);
+        const visibleBottom = Math.min(bodyRect.bottom - 12, viewportTop + viewportHeight - 96);
 
         let nextScrollTop = bodyElement.scrollTop;
 
@@ -169,12 +169,22 @@ export function Modal({
       }, 40);
     };
 
+    const handleInput = (event: Event) => {
+      if (!isFormField(event.target)) {
+        return;
+      }
+
+      revealField(event.target, 'auto');
+    };
+
     bodyElement.addEventListener('focusin', handleFocusIn);
+    bodyElement.addEventListener('input', handleInput);
     viewport?.addEventListener('resize', handleViewportShift);
     window.addEventListener('orientationchange', handleViewportShift);
 
     return () => {
       bodyElement.removeEventListener('focusin', handleFocusIn);
+      bodyElement.removeEventListener('input', handleInput);
       viewport?.removeEventListener('resize', handleViewportShift);
       window.removeEventListener('orientationchange', handleViewportShift);
     };

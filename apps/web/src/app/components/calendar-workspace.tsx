@@ -910,8 +910,7 @@ export function CalendarWorkspace() {
       <div className="calendar-simple__header">
         <div className="calendar-simple__intro">
           <p className="kicker">Календарь</p>
-          <h1>Расписание</h1>
-          <p className="period-label">{periodLabel}</p>
+          <p className="period-label calendar-simple__period">{periodLabel}</p>
         </div>
         <div className="calendar-simple__actions">
           <div className="calendar-simple__actions-main">

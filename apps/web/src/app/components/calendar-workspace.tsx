@@ -273,6 +273,7 @@ export function CalendarWorkspace() {
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [panelMode, setPanelMode] = useState<CalendarPanelMode>('main');
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [cursorDate, setCursorDate] = useState<Date>(() => startOfDay(new Date()));
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [templates, setTemplates] = useState<TemplateRecord[]>([]);
@@ -295,10 +296,14 @@ export function CalendarWorkspace() {
 
     const syncMobileModes = () => {
       const isMobileViewport = window.innerWidth <= 760;
+      setIsMobileViewport(isMobileViewport);
       if (isMobileViewport) {
         setViewMode('week');
         setPanelMode('compact');
+        return;
       }
+
+      setPanelMode('main');
     };
 
     syncMobileModes();
@@ -568,6 +573,10 @@ export function CalendarWorkspace() {
   const navigate = (direction: number) => {
     setCursorDate((current) => addDays(current, viewMode === 'month' ? direction * 28 : direction * 7));
   };
+
+  const showCompactMode = !loading && isMobileViewport && panelMode === 'compact';
+  const showMainMonthView = !loading && panelMode === 'main' && viewMode === 'month';
+  const showMainWeekView = !loading && panelMode === 'main' && viewMode === 'week';
 
   const buildComposerStateForEvent = (event: EventRecord): CalendarComposerState => {
     const lane = classifyTheatreLane(event);
@@ -918,22 +927,24 @@ export function CalendarWorkspace() {
               <button onClick={() => navigate(1)} type="button">Вперед</button>
             </div>
           </div>
-          <div className="calendar-simple__view-modes" role="tablist" aria-label="Режимы календаря">
-            <button
-              type="button"
-              className={panelMode === 'main' ? 'is-active' : ''}
-              onClick={() => setPanelMode('main')}
-            >
-              Основной
-            </button>
-            <button
-              type="button"
-              className={panelMode === 'compact' ? 'is-active' : ''}
-              onClick={() => setPanelMode('compact')}
-            >
-              Компактно
-            </button>
-          </div>
+          {isMobileViewport ? (
+            <div className="calendar-simple__view-modes" role="tablist" aria-label="Режимы календаря">
+              <button
+                type="button"
+                className={panelMode === 'main' ? 'is-active' : ''}
+                onClick={() => setPanelMode('main')}
+              >
+                Основной
+              </button>
+              <button
+                type="button"
+                className={panelMode === 'compact' ? 'is-active' : ''}
+                onClick={() => setPanelMode('compact')}
+              >
+                Компактно
+              </button>
+            </div>
+          ) : null}
           {canOpenControlPanel ? (
             <div className="calendar-simple__actions-cta">
               <Link className="ui-button ui-button--primary ui-button--md" href="/control/schedule">
@@ -965,7 +976,7 @@ export function CalendarWorkspace() {
       {errorText ? <p className="finance-error">{errorText}</p> : null}
       {loading ? <p className="empty-state">Загружаем расписание...</p> : null}
 
-      {!loading && panelMode === 'compact' ? (
+      {showCompactMode ? (
         <section className="calendar-compact-mode">
           <div className="calendar-compact-mode__hero">
             <div className="calendar-compact-mode__hero-copy">
@@ -1084,7 +1095,7 @@ export function CalendarWorkspace() {
         </section>
       ) : null}
 
-      {!loading && panelMode === 'main' && viewMode === 'month' ? (
+      {showMainMonthView ? (
         <section className="month-view">
           <div className="month-weekday-row">
             {weekDayLabels.map((day) => <div key={day}>{day}</div>)}
@@ -1154,7 +1165,7 @@ export function CalendarWorkspace() {
         </section>
       ) : null}
 
-      {!loading && panelMode === 'main' && viewMode === 'week' ? (
+      {showMainWeekView ? (
         <>
         <section className="theatre-week-summary">
           <div className="theatre-week-summary__card">
@@ -1233,9 +1244,7 @@ export function CalendarWorkspace() {
                             <div className="theatre-week-table__events">
                               {items.map((event) => renderTheatreEvent(event))}
                             </div>
-                          ) : (
-                            <div className="theatre-week-table__empty" aria-hidden="true" />
-                          )}
+                          ) : null}
                         </div>
                       );
                     })}

@@ -515,52 +515,53 @@ export function ControlPlaysWorkspace() {
 
                 return (
                   <article key={play.id} className="plays-card">
-                    <div className="plays-card__header">
-                      <div>
+                    <div className="plays-card__top">
+                      <div className="plays-card__identity">
                         <h3>{play.name}</h3>
                         <p>{formatDurationLabel(play.durationMinutes)}</p>
-                      </div>
-                      <div className="plays-card__badges">
-                        {venue ? (
-                          <Badge className={`venue-badge ${venueToneClass[venue]}`} title={venueLabelMap[venue]}>
-                            {venue}
-                          </Badge>
-                        ) : null}
-                        {templateHasAlternateCast(play) ? <Badge variant="primary">1/2 состав</Badge> : null}
-                        <Badge variant={play.isActive ? 'success' : 'neutral'}>
-                          {play.isActive ? 'Активен' : 'Скрыт'}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    <div className="plays-card__summary">
-                      <span>{groupedRoles.length} ролей</span>
-                      <span>{actorsCount} участников</span>
-                    </div>
-
-                    <div className="plays-card__roles">
-                      {groupedRoles.slice(0, 4).map((role) => (
-                        <div key={`${play.id}-${role.name}`} className="plays-card__role-row">
-                          <strong>{role.name}</strong>
-                          <span>{role.primary.length > 0 ? role.primary.join(', ') : '1 состав не заполнен'}</span>
-                          {templateHasAlternateCast(play) ? (
-                            <em>{role.alternate.length > 0 ? `2 состав: ${role.alternate.join(', ')}` : '2 состав пока не заполнен'}</em>
-                          ) : null}
+                        <div className="plays-card__summary">
+                          <span>{groupedRoles.length} ролей</span>
+                          <span>{actorsCount} участников</span>
                         </div>
-                      ))}
-                      {groupedRoles.length > 4 ? <span className="plays-card__more">Еще ролей: {groupedRoles.length - 4}</span> : null}
-                    </div>
+                      </div>
+                      <div className="plays-card__roles">
+                        {groupedRoles.slice(0, 2).map((role) => (
+                          <div key={`${play.id}-${role.name}`} className="plays-card__role-row">
+                            <strong>{role.name}</strong>
+                            <span>{role.primary.length > 0 ? role.primary.join(', ') : '1 состав не заполнен'}</span>
+                            {templateHasAlternateCast(play) ? (
+                              <em>{role.alternate.length > 0 ? `2 состав: ${role.alternate.join(', ')}` : '2 состав пока не заполнен'}</em>
+                            ) : null}
+                          </div>
+                        ))}
+                        {groupedRoles.length > 2 ? <span className="plays-card__more">Еще ролей: {groupedRoles.length - 2}</span> : null}
+                      </div>
 
-                    <div className="plays-card__actions">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => openEditModal(play)}>
-                        Редактировать
-                      </Button>
-                      <Link className="ui-button ui-button--ghost ui-button--sm" href={`/control/schedule?playId=${play.id}` as Route}>
-                        <span className="ui-button__content">В расписание</span>
-                      </Link>
-                      <Button type="button" variant="danger" size="sm" onClick={() => void handleArchivePlay(play)} loading={saving}>
-                        Удалить
-                      </Button>
+                      <div className="plays-card__aside">
+                        <div className="plays-card__badges">
+                          {venue ? (
+                            <Badge className={`venue-badge ${venueToneClass[venue]}`} title={venueLabelMap[venue]}>
+                              {venue}
+                            </Badge>
+                          ) : null}
+                          {templateHasAlternateCast(play) ? <Badge variant="primary">1/2 состав</Badge> : null}
+                          <Badge variant={play.isActive ? 'success' : 'neutral'}>
+                            {play.isActive ? 'Активен' : 'Скрыт'}
+                          </Badge>
+                        </div>
+
+                        <div className="plays-card__actions">
+                          <Button type="button" variant="ghost" size="sm" onClick={() => openEditModal(play)}>
+                            Редактировать
+                          </Button>
+                          <Link className="ui-button ui-button--ghost ui-button--sm" href={`/control/schedule?playId=${play.id}` as Route}>
+                            <span className="ui-button__content">В расписание</span>
+                          </Link>
+                          <Button type="button" variant="danger" size="sm" onClick={() => void handleArchivePlay(play)} loading={saving}>
+                            Удалить
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </article>
                 );

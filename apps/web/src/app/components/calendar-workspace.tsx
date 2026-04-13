@@ -535,6 +535,11 @@ export function CalendarWorkspace() {
   );
 
   const compactUpcomingEvents = useMemo(() => upcomingEvents.slice(0, 6), [upcomingEvents]);
+  const weekEventCount = useMemo(
+    () => weekDays.reduce((count, day) => count + (monthEventMap.get(toDayKey(day))?.length ?? 0), 0),
+    [monthEventMap, weekDays],
+  );
+  const nextEvent = compactUpcomingEvents[0] ?? null;
 
   const compactQuickDays = useMemo(
     () =>
@@ -972,6 +977,20 @@ export function CalendarWorkspace() {
                   : 'Сверху только навигация, ниже вся неделя и ближайшие события. Без лишних блоков и перегруза.'}
               </p>
             </div>
+            <div className="calendar-compact-mode__hero-stats" aria-label="Сводка недели">
+              <div className="calendar-compact-stat">
+                <span>На неделе</span>
+                <strong>{weekEventCount}</strong>
+              </div>
+              <div className="calendar-compact-stat">
+                <span>Сегодня</span>
+                <strong>{todayEvents.length}</strong>
+              </div>
+              <div className="calendar-compact-stat calendar-compact-stat--wide">
+                <span>Следующее</span>
+                <strong>{nextEvent ? getEventScheduleRange(nextEvent) : 'Пауза в расписании'}</strong>
+              </div>
+            </div>
             {canOpenControlPanel ? (
               <div className="calendar-compact-mode__hero-actions">
                 <Button type="button" onClick={() => openComposer(startOfDay(new Date()))}>
@@ -1137,6 +1156,21 @@ export function CalendarWorkspace() {
 
       {!loading && panelMode === 'main' && viewMode === 'week' ? (
         <>
+        <section className="theatre-week-summary">
+          <div className="theatre-week-summary__card">
+            <span>Неделя</span>
+            <strong>{weekEventCount} событий</strong>
+          </div>
+          <div className="theatre-week-summary__card">
+            <span>Сегодня</span>
+            <strong>{todayEvents.length > 0 ? `${todayEvents.length} в работе` : 'Свободно'}</strong>
+          </div>
+          <div className="theatre-week-summary__card theatre-week-summary__card--wide">
+            <span>Ближайшее</span>
+            <strong>{nextEvent ? nextEvent.title : 'Новых событий нет'}</strong>
+            <small>{nextEvent ? `${weekdayLongFormat.format(new Date(nextEvent.startsAt))} · ${getEventScheduleRange(nextEvent)}` : 'Добавьте слот, чтобы неделя ожила.'}</small>
+          </div>
+        </section>
         <section className="theatre-week-view theatre-week-view--desktop">
           <div className="theatre-week-table">
             <div className="theatre-week-table__header">
@@ -1241,6 +1275,7 @@ export function CalendarWorkspace() {
                       <span>{weekDayNumberFormat.format(day)}</span>
                     </div>
                     <div className="theatre-day-card__header-meta">
+                      {totalEvents > 0 ? <span className="theatre-day-card__count">{totalEvents}</span> : null}
                       {isToday ? <Badge variant="primary">Сегодня</Badge> : null}
                       {canOpenControlPanel ? (
                         <button
@@ -1260,12 +1295,12 @@ export function CalendarWorkspace() {
 
                   {summary.length > 0 ? (
                     <div className="theatre-day-card__summary-pills">
-                      {summary.map(({ lane }) => (
+                      {summary.map(({ lane, count }) => (
                         <span
                           key={`${dayKey}-${lane.id}-summary`}
                           className={`theatre-day-card__summary-pill theatre-day-card__summary-pill--${lane.id.toLowerCase()}`}
                         >
-                          {lane.mobileLabel}
+                          {lane.mobileLabel} · {count}
                         </span>
                       ))}
                     </div>

@@ -4040,6 +4040,7 @@ textarea.ui-field {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .calendar-simple__actions-main {
@@ -4066,10 +4067,11 @@ textarea.ui-field {
   border-radius: 16px;
   background: rgba(245, 248, 252, 0.96);
   border: 1px solid rgba(219, 227, 239, 0.92);
+  min-width: 0;
 }
 
 .calendar-simple__view-modes button {
-  min-height: 36px;
+  min-height: 42px;
   padding: 0 12px;
   border: 0;
   border-radius: 12px;
@@ -4090,6 +4092,7 @@ textarea.ui-field {
 .calendar-participants-mode {
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .calendar-compact-mode__hero,
@@ -4103,6 +4106,8 @@ textarea.ui-field {
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: var(--shadow-sm);
+  min-width: 0;
+  overflow: clip;
 }
 
 .calendar-compact-mode__hero-copy,
@@ -4245,6 +4250,7 @@ textarea.ui-field {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .calendar-participants-mode__view-switcher {
@@ -4256,10 +4262,11 @@ textarea.ui-field {
   border-radius: 16px;
   background: rgba(245, 248, 252, 0.96);
   border: 1px solid rgba(219, 227, 239, 0.92);
+  min-width: 0;
 }
 
 .calendar-participants-mode__view-switcher button {
-  min-height: 36px;
+  min-height: 42px;
   padding: 0 14px;
   border: 0;
   border-radius: 12px;
@@ -4275,7 +4282,7 @@ textarea.ui-field {
 }
 
 .calendar-participants-mode__chips button {
-  min-height: 34px;
+  min-height: 40px;
   padding: 0 12px;
   border: 1px solid rgba(219, 227, 239, 0.92);
   border-radius: 999px;
@@ -4293,17 +4300,22 @@ textarea.ui-field {
 .calendar-participants-mode__days {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .calendar-participants-mode__compact-week {
   display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 10px;
+  align-items: start;
+  min-width: 0;
 }
 
 .calendar-participant-compact-day {
   display: grid;
   gap: 10px;
   padding: 14px;
+  min-width: 0;
   border: 1px solid rgba(219, 227, 239, 0.92);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.96);
@@ -4394,11 +4406,13 @@ textarea.ui-field {
 
 .calendar-participant-day {
   border-radius: 20px;
+  min-width: 0;
 }
 
 .calendar-participant-day__body {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .calendar-participant-day.is-today {
@@ -4426,11 +4440,13 @@ textarea.ui-field {
 .calendar-participant-day__events {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .calendar-participant-row {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .calendar-participant-row__name {
@@ -4443,6 +4459,7 @@ textarea.ui-field {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .calendar-participant-pill {
@@ -4454,6 +4471,7 @@ textarea.ui-field {
   border: 1px solid rgba(226, 232, 240, 0.92);
   border-radius: 14px;
   background: rgba(248, 250, 252, 0.9);
+  overflow: hidden;
 }
 
 .calendar-participant-pill strong {
@@ -4628,6 +4646,7 @@ textarea.ui-field {
 .theatre-week-mobile__list {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .theatre-week-table {
@@ -5602,7 +5621,7 @@ textarea.ui-field {
   }
 
   .calendar-simple__view-modes button {
-    min-height: 40px;
+    min-height: 44px;
     padding-inline: 8px;
     font-size: 0.78rem;
   }
@@ -5664,6 +5683,21 @@ textarea.ui-field {
     min-width: 0;
   }
 
+  .calendar-participants-mode__chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    padding-bottom: 2px;
+  }
+
+  .calendar-participants-mode__chips button {
+    min-height: 44px;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
   .calendar-participants-mode__view-switcher {
     width: 100%;
     display: grid;
@@ -5671,41 +5705,77 @@ textarea.ui-field {
   }
 
   .calendar-participants-mode__view-switcher button {
-    min-height: 40px;
+    min-height: 44px;
   }
 
   .calendar-participants-mode__compact-week {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(136px, 1fr);
     gap: 8px;
+    padding-bottom: 2px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
   }
 
   .calendar-participant-compact-day {
-    padding: 12px;
+    padding: 11px 10px;
     border-radius: 16px;
+    scroll-snap-align: start;
+    min-height: 100%;
   }
 
   .calendar-participant-compact-day__head {
-    align-items: center;
+    align-items: flex-start;
+    gap: 6px;
   }
 
   .calendar-participant-compact-day__head strong {
-    font-size: 0.82rem;
-  }
-
-  .calendar-participant-compact-row > strong {
-    font-size: 0.72rem;
-  }
-
-  .calendar-participant-compact-pill {
-    padding: 8px 10px;
-    gap: 8px;
-  }
-
-  .calendar-participant-compact-pill span {
     font-size: 0.78rem;
   }
 
+  .calendar-participant-compact-day__head span,
+  .calendar-participant-compact-day__head small,
+  .calendar-participant-compact-day__empty,
   .calendar-participant-compact-pill small {
-    font-size: 0.7rem;
+    font-size: 0.67rem;
+  }
+
+  .calendar-participant-compact-day__content,
+  .calendar-participant-compact-row,
+  .calendar-participant-compact-row__events {
+    gap: 6px;
+  }
+
+  .calendar-participant-compact-row > strong {
+    font-size: 0.66rem;
+  }
+
+  .calendar-participant-compact-pill {
+    padding: 8px 9px;
+    gap: 6px;
+    border-radius: 12px;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .calendar-participant-compact-pill span {
+    display: block;
+    font-size: 0.74rem;
+    line-height: 1.12;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .calendar-participant-compact-pill small {
+    display: block;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .profile-toolbar__row {
@@ -5925,7 +5995,7 @@ textarea.ui-field {
   }
 
   .theatre-day-card {
-    gap: 8px;
+    gap: 7px;
     padding: 10px;
     border-radius: 16px;
   }
@@ -5974,9 +6044,9 @@ textarea.ui-field {
   }
 
   .theatre-day-card__summary-pill {
-    min-height: 20px;
-    padding-inline: 7px;
-    font-size: 0.66rem;
+    min-height: 18px;
+    padding-inline: 6px;
+    font-size: 0.64rem;
   }
 
   .calendar-composer__timing {
@@ -6032,6 +6102,10 @@ textarea.ui-field {
 
   .theatre-event__type {
     font-weight: 650;
+  }
+
+  .theatre-week-mobile {
+    touch-action: pan-y;
   }
 
   .theatre-event .venue-badge,

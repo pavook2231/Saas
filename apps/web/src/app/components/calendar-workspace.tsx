@@ -1260,9 +1260,9 @@ export function CalendarWorkspace() {
                         <div className="calendar-participant-day__empty">Никто не занят.</div>
                       )
                     ) : dayEvents.length > 0 ? (
-                      <div className="calendar-participant-day__events">
-                        {dayEvents.map((event) => renderTheatreEvent(event))}
-                      </div>
+                        <div className="calendar-participant-day__events">
+                          {dayEvents.map((event) => renderTheatreEvent(event, { showTypeLabel: false }))}
+                        </div>
                     ) : (
                       <div className="calendar-participant-day__empty">У этого участника в этот день событий нет.</div>
                     )}

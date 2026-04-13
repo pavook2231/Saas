@@ -161,6 +161,21 @@ const eventSelect = {
       },
     },
   },
+  checklistItems: {
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    select: {
+      id: true,
+      label: true,
+      category: true,
+      notes: true,
+      sortOrder: true,
+      isCompleted: true,
+      completedAt: true,
+      completedByUserId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  },
 } satisfies Prisma.EventSelect;
 
 const eventTypeLabelMap: Record<EventType, string> = {
@@ -252,9 +267,16 @@ type EventNotificationSnapshot = {
   id: string;
   title: string;
   startsAt: Date;
+  endsAt: Date;
   type: EventType;
   status: EventStatus;
   location: string | null;
+};
+
+type EventChangeSummary = {
+  changedFields: string[];
+  urgent: boolean;
+  checklistChanged: boolean;
 };
 
 type ParticipantRecord = Prisma.ParticipantGetPayload<{
@@ -1054,6 +1076,7 @@ export class EventsService {
               resolvedCast.templateRoles,
             )
           : [];
+    const checklistItems = this.normalizeChecklistItems(dto.checklistItems);
 
     if (participants.length > 0) {
       const conflicts = await this.detectConflicts({
@@ -1128,6 +1151,21 @@ export class EventsService {
         });
       }
 
+      if (checklistItems.length > 0) {
+        await tx.eventChecklistItem.createMany({
+          data: checklistItems.map((item, index) => ({
+            eventId: event.id,
+            label: item.label,
+            category: item.category,
+            notes: item.notes,
+            sortOrder: item.sortOrder ?? index,
+            isCompleted: item.isCompleted,
+            completedAt: item.isCompleted ? new Date() : null,
+            completedByUserId: item.isCompleted ? actorUserId : null,
+          })),
+        });
+      }
+
       await tx.auditLog.create({
         data: {
           organizationId,
@@ -1139,6 +1177,7 @@ export class EventsService {
         payload: {
             title: event.title,
             participantsCount: participants.length,
+            checklistItemsCount: checklistItems.length,
           },
         },
       });
@@ -1284,6 +1323,8 @@ export class EventsService {
               resolvedCast.templateRoles,
             )
           : null;
+    const checklistItems =
+      dto.checklistItems !== undefined ? this.normalizeChecklistItems(dto.checklistItems) : null;
 
     const participantIdsToCheck =
       participantsPayload?.map((item) => item.participantId) ??
@@ -1383,6 +1424,29 @@ export class EventsService {
         }
       }
 
+      if (checklistItems) {
+        await tx.eventChecklistItem.deleteMany({
+          where: {
+            eventId: existing.id,
+          },
+        });
+
+        if (checklistItems.length > 0) {
+          await tx.eventChecklistItem.createMany({
+            data: checklistItems.map((item, index) => ({
+              eventId: existing.id,
+              label: item.label,
+              category: item.category,
+              notes: item.notes,
+              sortOrder: item.sortOrder ?? index,
+              isCompleted: item.isCompleted,
+              completedAt: item.isCompleted ? new Date() : null,
+              completedByUserId: item.isCompleted ? actorUserId : null,
+            })),
+          });
+        }
+      }
+
       await tx.auditLog.create({
         data: {
           organizationId,
@@ -1391,7 +1455,23 @@ export class EventsService {
           targetId: existing.id,
           action: 'event.updated',
           description: 'Event updated',
-          payload: this.toAuditPayload(dto),
+          payload: this.toAuditPayload(
+            this.buildEventChangePayload(existing, {
+              title,
+              description: dto.description,
+              type: dto.type,
+              status: dto.status,
+              startsAt: dto.startsAt !== undefined ? range.startsAt : undefined,
+              endsAt: dto.endsAt !== undefined ? range.endsAt : undefined,
+              assemblyAt:
+                dto.assemblyAt !== undefined || dto.startsAt !== undefined || dto.type !== undefined
+                  ? assemblyAt
+                  : undefined,
+              location: dto.location !== undefined ? this.trimOrNull(dto.location) : undefined,
+              participantsCount: participantsPayload ? participantsPayload.length : undefined,
+              checklistItemsCount: checklistItems ? checklistItems.length : undefined,
+            }),
+          ),
         },
       });
     });
@@ -1399,6 +1479,10 @@ export class EventsService {
     const updatedEvent = await this.getEventRecordOrThrow(organizationId, existing.id);
     const existingSnapshot = this.toEventNotificationSnapshot(existing);
     const updatedSnapshot = this.toEventNotificationSnapshot(updatedEvent);
+    const changeSummary = this.buildEventChangeSummary(existing, updatedEvent, {
+      participantsChanged: participantsPayload !== null,
+      checklistChanged: checklistItems !== null,
+    });
     const eventParticipantUserIds = this.extractLinkedUserIds(updatedEvent.participants);
     const replacementDetected =
       existing.type === EventType.PERFORMANCE &&
@@ -1421,6 +1505,7 @@ export class EventsService {
         userIds: eventParticipantUserIds,
         previousEvent: existingSnapshot,
         variant: 'draft',
+        changeSummary,
       });
     } else if (updatedEvent.status === EventStatus.CANCELLED && existing.status !== EventStatus.CANCELLED) {
       await this.notifyScheduleChangeSafe({
@@ -1430,6 +1515,7 @@ export class EventsService {
         userIds: eventParticipantUserIds,
         previousEvent: existingSnapshot,
         variant: 'cancelled',
+        changeSummary,
       });
     } else if (existing.status === EventStatus.DRAFT) {
       await this.notifyScheduleChangeSafe({
@@ -1439,6 +1525,7 @@ export class EventsService {
         userIds: eventParticipantUserIds,
         previousEvent: existingSnapshot,
         variant: 'assigned',
+        changeSummary,
       });
     } else {
       await this.notifyScheduleChangeSafe({
@@ -1448,6 +1535,7 @@ export class EventsService {
         userIds: eventParticipantUserIds,
         previousEvent: existingSnapshot,
         variant: replacementDetected ? 'replacement' : 'updated',
+        changeSummary,
       });
     }
 
@@ -1564,6 +1652,7 @@ export class EventsService {
           description: 'Event participants updated',
           payload: {
             participantsCount: participants.length,
+            changedFields: ['participants'],
           },
         },
       });
@@ -1578,6 +1667,11 @@ export class EventsService {
         userIds: this.extractLinkedUserIds(updatedEvent.participants),
         previousEvent: this.toEventNotificationSnapshot(event),
         variant: 'participants',
+        changeSummary: {
+          changedFields: ['participants'],
+          urgent: false,
+          checklistChanged: false,
+        },
       });
     }
 
@@ -2727,6 +2821,7 @@ export class EventsService {
     id: string;
     title: string;
     startsAt: Date;
+    endsAt?: Date;
     type: EventType;
     status: EventStatus;
     location: string | null;
@@ -2735,10 +2830,142 @@ export class EventsService {
       id: event.id,
       title: event.title,
       startsAt: event.startsAt,
+      endsAt: event.endsAt ?? event.startsAt,
       type: event.type,
       status: event.status,
       location: event.location,
     };
+  }
+
+  private normalizeChecklistItems(
+    items: Array<{
+      label: string;
+      category?: string;
+      notes?: string;
+      sortOrder?: number;
+      isCompleted?: boolean;
+    }> = [],
+  ) {
+    return items
+      .map((item, index) => ({
+        label: this.requireTrimmedText(item.label, `checklistItems[${index}].label`, 1).slice(0, 160),
+        category: this.trimOrNull(item.category),
+        notes: this.trimOrNull(item.notes),
+        sortOrder: typeof item.sortOrder === 'number' ? Math.max(0, Math.trunc(item.sortOrder)) : index,
+        isCompleted: item.isCompleted === true,
+      }))
+      .sort((left, right) => left.sortOrder - right.sortOrder);
+  }
+
+  private buildEventChangePayload(
+    existing: {
+      title: string;
+      type: EventType;
+      status: EventStatus;
+      startsAt: Date;
+      endsAt: Date;
+      assemblyAt?: Date | null;
+      location?: string | null;
+    },
+    next: {
+      title?: string;
+      description?: string;
+      type?: EventType;
+      status?: EventStatus;
+      startsAt?: Date;
+      endsAt?: Date;
+      assemblyAt?: Date | null;
+      location?: string | null;
+      participantsCount?: number;
+      checklistItemsCount?: number;
+    },
+  ) {
+    const changedFields: string[] = [];
+
+    if (next.title !== undefined && next.title !== existing.title) changedFields.push('title');
+    if (next.type !== undefined && next.type !== existing.type) changedFields.push('type');
+    if (next.status !== undefined && next.status !== existing.status) changedFields.push('status');
+    if (next.startsAt && next.startsAt.getTime() !== existing.startsAt.getTime()) changedFields.push('startsAt');
+    if (next.endsAt && next.endsAt.getTime() !== existing.endsAt.getTime()) changedFields.push('endsAt');
+    if ((next.assemblyAt ?? null)?.getTime?.() !== (existing.assemblyAt ?? null)?.getTime?.() && next.assemblyAt !== undefined) changedFields.push('assemblyAt');
+    if (next.location !== undefined && next.location !== (existing.location ?? null)) changedFields.push('location');
+    if (next.participantsCount !== undefined) changedFields.push('participants');
+    if (next.checklistItemsCount !== undefined) changedFields.push('checklist');
+
+    return {
+      ...next,
+      changedFields,
+    };
+  }
+
+  private buildEventChangeSummary(
+    previousEvent: {
+      title: string;
+      startsAt: Date;
+      endsAt: Date;
+      location: string | null;
+      participants?: Array<unknown>;
+      checklistItems?: Array<unknown>;
+    },
+    nextEvent: {
+      title: string;
+      startsAt: Date;
+      endsAt: Date;
+      location: string | null;
+      participants?: Array<unknown>;
+      checklistItems?: Array<unknown>;
+    },
+    options?: {
+      participantsChanged?: boolean;
+      checklistChanged?: boolean;
+    },
+  ): EventChangeSummary {
+    const changedFields: string[] = [];
+
+    if (previousEvent.title !== nextEvent.title) changedFields.push('название');
+    if (previousEvent.startsAt.getTime() !== nextEvent.startsAt.getTime()) changedFields.push('время начала');
+    if (previousEvent.endsAt.getTime() !== nextEvent.endsAt.getTime()) changedFields.push('время окончания');
+    if ((previousEvent.location ?? '') !== (nextEvent.location ?? '')) changedFields.push('площадка');
+    if (options?.participantsChanged) changedFields.push('состав');
+    if (options?.checklistChanged) changedFields.push('чек-лист');
+
+    const urgent =
+      previousEvent.startsAt.getTime() !== nextEvent.startsAt.getTime() ||
+      previousEvent.endsAt.getTime() !== nextEvent.endsAt.getTime() ||
+      (previousEvent.location ?? '') !== (nextEvent.location ?? '');
+
+    return {
+      changedFields,
+      urgent,
+      checklistChanged: options?.checklistChanged ?? false,
+    };
+  }
+
+  private buildScheduleNotificationDedupeKey(input: {
+    event: EventNotificationSnapshot;
+    actorUserId: string;
+    previousEvent?: EventNotificationSnapshot;
+    variant: string;
+    changeSummary?: EventChangeSummary;
+  }) {
+    return createHash('sha256')
+      .update(
+        JSON.stringify({
+          eventId: input.event.id,
+          actorUserId: input.actorUserId,
+          variant: input.variant,
+          startsAt: input.event.startsAt.toISOString(),
+          endsAt: input.event.endsAt.toISOString(),
+          status: input.event.status,
+          location: input.event.location,
+          previousStartsAt: input.previousEvent?.startsAt.toISOString(),
+          previousEndsAt: input.previousEvent?.endsAt.toISOString(),
+          previousStatus: input.previousEvent?.status,
+          previousLocation: input.previousEvent?.location,
+          changedFields: input.changeSummary?.changedFields ?? [],
+        }),
+      )
+      .digest('hex');
   }
 
   private getWeekBounds(anchor: Date) {
@@ -2787,14 +3014,19 @@ export class EventsService {
   private buildEventNotificationPayload(
     event: EventNotificationSnapshot,
     url = `/calendar?eventId=${event.id}`,
+    changedFields: string[] = [],
+    urgent = false,
   ): Record<string, unknown> {
     return {
       eventId: event.id,
       eventTitle: event.title,
       startsAt: event.startsAt.toISOString(),
+      endsAt: event.endsAt.toISOString(),
       type: event.type,
       status: event.status,
       location: event.location,
+      changedFields,
+      urgent,
       url,
       tag: `schedule-${event.id}`,
     };
@@ -2803,6 +3035,7 @@ export class EventsService {
   private buildScheduleNotificationMessage(input: {
     event: EventNotificationSnapshot;
     previousEvent?: EventNotificationSnapshot;
+    changeSummary?: EventChangeSummary;
     variant:
       | 'assigned'
       | 'updated'
@@ -2816,6 +3049,10 @@ export class EventsService {
     const previousSummary = input.previousEvent
       ? this.getEventNotificationSummary(input.previousEvent)
       : null;
+    const changedFields = input.changeSummary?.changedFields ?? [];
+    const urgent = input.changeSummary?.urgent ?? input.variant === 'cancelled';
+    const changeHint =
+      changedFields.length > 0 ? ` Изменилось: ${changedFields.join(', ')}.` : '';
 
     switch (input.variant) {
       case 'assigned':
@@ -2827,14 +3064,14 @@ export class EventsService {
         };
       case 'participants':
         return {
-          type: NotificationType.EVENT_UPDATED,
+          type: urgent ? NotificationType.EVENT_URGENT_CHANGE : NotificationType.EVENT_UPDATED,
           title: 'Изменился состав события',
           body: `${summary}. Проверьте роли и участников в календаре.`,
           url: `/calendar?eventId=${input.event.id}`,
         };
       case 'cancelled':
         return {
-          type: NotificationType.EVENT_UPDATED,
+          type: NotificationType.EVENT_URGENT_CHANGE,
           title: 'Событие отменено',
           body: `${summary}. Событие снято с актуальной недели.`,
           url: `/calendar?eventId=${input.event.id}`,
@@ -2855,7 +3092,7 @@ export class EventsService {
         };
       case 'replacement':
         return {
-          type: NotificationType.EVENT_UPDATED,
+          type: NotificationType.EVENT_URGENT_CHANGE,
           title: 'В расписании замена спектакля',
           body: previousSummary
             ? `${previousSummary} заменено на ${summary}.`
@@ -2865,7 +3102,7 @@ export class EventsService {
       case 'updated':
       default:
         return {
-          type: NotificationType.EVENT_UPDATED,
+          type: urgent ? NotificationType.EVENT_URGENT_CHANGE : NotificationType.EVENT_UPDATED,
           title: 'Изменение в расписании на этой неделе',
           body:
             previousSummary && previousSummary !== summary
@@ -2882,6 +3119,7 @@ export class EventsService {
     event: EventNotificationSnapshot;
     userIds: string[];
     previousEvent?: EventNotificationSnapshot;
+    changeSummary?: EventChangeSummary;
     variant:
       | 'assigned'
       | 'updated'
@@ -2902,6 +3140,7 @@ export class EventsService {
     const message = this.buildScheduleNotificationMessage({
       event: input.event,
       previousEvent: input.previousEvent,
+      changeSummary: input.changeSummary,
       variant: input.variant,
     });
 
@@ -2910,10 +3149,16 @@ export class EventsService {
         organizationId: input.organizationId,
         eventId: input.event.id,
         actorUserId: input.actorUserId,
+        dedupeKey: this.buildScheduleNotificationDedupeKey(input),
         type: message.type,
         title: message.title,
         body: message.body,
-        payload: this.buildEventNotificationPayload(input.event, message.url),
+        payload: this.buildEventNotificationPayload(
+          input.event,
+          message.url,
+          input.changeSummary?.changedFields,
+          input.changeSummary?.urgent ?? false,
+        ),
         userIds: input.userIds,
       });
     } catch (error) {

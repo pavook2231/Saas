@@ -83,6 +83,19 @@ export type EventParticipantRecord = {
   } | null;
 };
 
+export type EventChecklistItemRecord = {
+  id: string;
+  label: string;
+  category: string | null;
+  notes: string | null;
+  sortOrder: number;
+  isCompleted: boolean;
+  completedAt: string | null;
+  completedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type EventRecord = {
   id: string;
   organizationId: string;
@@ -104,6 +117,7 @@ export type EventRecord = {
   updatedAt: string;
   template: EventTemplateSummary | null;
   participants: EventParticipantRecord[];
+  checklistItems: EventChecklistItemRecord[];
 };
 
 export type PublishWeekScheduleResult = {
@@ -244,6 +258,13 @@ export type CreateEventPayload = {
     isRequired?: boolean;
     notes?: string;
   }>;
+  checklistItems?: Array<{
+    label: string;
+    category?: string;
+    notes?: string;
+    sortOrder?: number;
+    isCompleted?: boolean;
+  }>;
 };
 
 export type UpdateEventPayload = {
@@ -268,6 +289,13 @@ export type UpdateEventPayload = {
     attendanceStatus?: EventAttendanceStatus;
     isRequired?: boolean;
     notes?: string;
+  }>;
+  checklistItems?: Array<{
+    label: string;
+    category?: string;
+    notes?: string;
+    sortOrder?: number;
+    isCompleted?: boolean;
   }>;
 };
 

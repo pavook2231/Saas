@@ -6,6 +6,7 @@ import {
   operationsApi,
   participantDisplayName,
   type ConflictCheckResult,
+  type EventHistoryRecord,
   type EventRecord,
   type EventStatus,
   type EventType,
@@ -44,6 +45,12 @@ type ScheduleFormState = {
   participantIds: string[];
   performanceCastMode: PerformanceCastMode;
   description: string;
+  checklistItems: Array<{
+    label: string;
+    category: string;
+    notes: string;
+    isCompleted: boolean;
+  }>;
 };
 
 const alternateRoleSuffixPattern = /\s+\(дубль\)$/i;
@@ -82,6 +89,7 @@ const initialFormState: ScheduleFormState = {
   participantIds: [],
   performanceCastMode: 'AUTO',
   description: '',
+  checklistItems: [],
 };
 
 const addDays = (date: Date, amount: number) => {
@@ -263,6 +271,12 @@ const mapEventToForm = (event: EventRecord): ScheduleFormState => ({
         ? 'CAST_2'
         : 'AUTO',
   description: event.description ?? '',
+  checklistItems: event.checklistItems.map((item) => ({
+    label: item.label,
+    category: item.category ?? '',
+    notes: item.notes ?? '',
+    isCompleted: item.isCompleted,
+  })),
 });
 
 const computeConflictMap = (events: EventRecord[]) => {
@@ -346,6 +360,8 @@ export function ControlScheduleWorkspace() {
   const [noteExpanded, setNoteExpanded] = useState(false);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
   const [conflicts, setConflicts] = useState<ConflictCheckResult | null>(null);
+  const [eventHistory, setEventHistory] = useState<EventHistoryRecord[]>([]);
+  const [eventHistoryLoading, setEventHistoryLoading] = useState(false);
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -425,6 +441,43 @@ export function ControlScheduleWorkspace() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!editingEventId || !accessToken || !activeOrganizationId) {
+      setEventHistory([]);
+      setEventHistoryLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setEventHistoryLoading(true);
+
+    void operationsApi
+      .listEventHistory({
+        organizationId: activeOrganizationId,
+        accessToken,
+        eventId: editingEventId,
+      })
+      .then((items) => {
+        if (!cancelled) {
+          setEventHistory(items);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEventHistory([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setEventHistoryLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, activeOrganizationId, editingEventId]);
 
   const selectedPlay = useMemo(() => plays.find((play) => play.id === form.playId) ?? null, [form.playId, plays]);
   const selectedPlayHasAlternateCast = useMemo(() => playHasAlternateCast(selectedPlay), [selectedPlay]);
@@ -675,6 +728,15 @@ export function ControlScheduleWorkspace() {
         form.kind === 'PERFORMANCE'
           ? undefined
           : form.participantIds.map((participantId) => ({ participantId, isRequired: true })),
+      checklistItems: form.checklistItems
+        .map((item, index) => ({
+          label: item.label.trim(),
+          category: item.category.trim() || undefined,
+          notes: item.notes.trim() || undefined,
+          isCompleted: item.isCompleted,
+          sortOrder: index,
+        }))
+        .filter((item) => item.label.length > 0),
     };
   };
 
@@ -1313,6 +1375,111 @@ export function ControlScheduleWorkspace() {
             )}
           </div>
 
+          <div className="control-schedule-modal__section control-schedule-modal__checklist">
+            <div className="control-schedule-modal__section-head">
+              <div>
+                <strong>Чек-лист события</strong>
+                <span>Реквизит, сбор, костюмы, техника, документы.</span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setForm((current) => ({
+                    ...current,
+                    checklistItems: [
+                      ...current.checklistItems,
+                      { label: '', category: '', notes: '', isCompleted: false },
+                    ],
+                  }))
+                }
+              >
+                Добавить пункт
+              </Button>
+            </div>
+
+            {form.checklistItems.length === 0 ? (
+              <p className="control-schedule-modal__muted">Пока пусто. Добавьте рабочие пункты подготовки.</p>
+            ) : (
+              <div className="control-schedule-checklist">
+                {form.checklistItems.map((item, index) => (
+                  <div key={`checklist-${index}`} className="control-schedule-checklist__item">
+                    <Input
+                      label="Пункт"
+                      value={item.label}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          checklistItems: current.checklistItems.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, label: event.target.value } : entry,
+                          ),
+                        }))
+                      }
+                      placeholder="Например, проверить реквизит"
+                    />
+                    <Input
+                      label="Категория"
+                      value={item.category}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          checklistItems: current.checklistItems.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, category: event.target.value } : entry,
+                          ),
+                        }))
+                      }
+                      placeholder="Костюмы / Техника / Документы"
+                    />
+                    <Input
+                      label="Комментарий"
+                      value={item.notes}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          checklistItems: current.checklistItems.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, notes: event.target.value } : entry,
+                          ),
+                        }))
+                      }
+                      placeholder="Если нужен комментарий"
+                    />
+                    <div className="control-schedule-checklist__actions">
+                      <label className="control-schedule-checklist__toggle">
+                        <input
+                          type="checkbox"
+                          checked={item.isCompleted}
+                          onChange={(event) =>
+                            setForm((current) => ({
+                              ...current,
+                              checklistItems: current.checklistItems.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, isCompleted: event.target.checked } : entry,
+                              ),
+                            }))
+                          }
+                        />
+                        <span>Готово</span>
+                      </label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          setForm((current) => ({
+                            ...current,
+                            checklistItems: current.checklistItems.filter((_, entryIndex) => entryIndex !== index),
+                          }))
+                        }
+                      >
+                        Удалить
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="control-schedule-modal__section">
             <button
               type="button"
@@ -1332,6 +1499,50 @@ export function ControlScheduleWorkspace() {
               />
             ) : null}
           </div>
+
+          {editingEventId ? (
+            <div className="control-schedule-modal__section">
+              <div className="control-schedule-modal__section-head">
+                <div>
+                  <strong>История изменений</strong>
+                  <span>Кто и что менял в этом событии.</span>
+                </div>
+              </div>
+              {eventHistoryLoading ? (
+                <p className="control-schedule-modal__muted">Загружаем историю...</p>
+              ) : eventHistory.length === 0 ? (
+                <p className="control-schedule-modal__muted">История пока пустая.</p>
+              ) : (
+                <div className="schedule-history-list">
+                  {eventHistory.map((item) => {
+                    const payload =
+                      item.payload && typeof item.payload === 'object' && !Array.isArray(item.payload)
+                        ? item.payload as Record<string, unknown>
+                        : null;
+                    const changedFields =
+                      payload && Array.isArray(payload.changedFields)
+                        ? payload.changedFields.filter((value): value is string => typeof value === 'string')
+                        : [];
+
+                    return (
+                      <article key={item.id} className="schedule-history-item">
+                        <div>
+                          <strong>
+                            {item.actor
+                              ? `${item.actor.firstName} ${item.actor.lastName}`.trim() || item.actor.email || 'Пользователь'
+                              : 'Система'}
+                          </strong>
+                          <span>{item.description ?? item.action}</span>
+                          {changedFields.length > 0 ? <small>Изменено: {changedFields.join(', ')}</small> : null}
+                        </div>
+                        <small>{new Date(item.createdAt).toLocaleString('ru-RU')}</small>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
 
           <div className="control-schedule-modal__section control-schedule-modal__section--status">
             {checkingConflicts ? (

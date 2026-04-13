@@ -17,6 +17,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+import { EventChecklistItemInputDto } from './event-checklist-item-input.dto';
 import { EventParticipantInputDto } from './event-participant-input.dto';
 
 export class CreateEventDto {
@@ -86,4 +87,11 @@ export class CreateEventDto {
   @ValidateNested({ each: true })
   @Type(() => EventParticipantInputDto)
   participants?: EventParticipantInputDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => EventChecklistItemInputDto)
+  checklistItems?: EventChecklistItemInputDto[];
 }

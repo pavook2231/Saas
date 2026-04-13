@@ -30,6 +30,7 @@ type NotifyUsersInput = {
   organizationId?: string;
   eventId?: string;
   actorUserId?: string;
+  dedupeKey?: string;
   type: NotificationType;
   title: string;
   body: string;
@@ -47,6 +48,12 @@ type EventReminderDispatchResult = {
 type ReminderPreferencesResponse = {
   enabled: boolean;
 };
+
+const scheduleChangeNotificationTypes: NotificationType[] = [
+  NotificationType.EVENT_ASSIGNED,
+  NotificationType.EVENT_UPDATED,
+  NotificationType.EVENT_URGENT_CHANGE,
+];
 
 @Injectable()
 export class NotificationsService {
@@ -367,6 +374,81 @@ export class NotificationsService {
     };
   }
 
+  async listMyScheduleChanges(userId: string, limit: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { scheduleChangesSeenAt: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Пользователь не найден');
+    }
+
+    const seenAt = user.scheduleChangesSeenAt;
+    const where: Prisma.NotificationRecipientWhereInput = {
+      userId,
+      channel: NotificationChannel.WEB,
+      notification: {
+        type: {
+          in: scheduleChangeNotificationTypes,
+        },
+        ...(seenAt ? { createdAt: { gt: seenAt } } : {}),
+      },
+    };
+
+    const items = await this.prisma.notificationRecipient.findMany({
+      where,
+      select: {
+        id: true,
+        status: true,
+        deliveredAt: true,
+        readAt: true,
+        createdAt: true,
+        notification: {
+          select: {
+            id: true,
+            organizationId: true,
+            eventId: true,
+            actorUserId: true,
+            type: true,
+            title: true,
+            body: true,
+            payload: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      take: limit,
+    });
+
+    return {
+      seenAt,
+      unreadCount: items.length,
+      items: items.map((item) => ({
+        recipientId: item.id,
+        status: item.status,
+        deliveredAt: item.deliveredAt,
+        readAt: item.readAt,
+        createdAt: item.createdAt,
+        notification: item.notification,
+      })),
+    };
+  }
+
+  async markScheduleChangesSeen(userId: string) {
+    const now = new Date();
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { scheduleChangesSeenAt: now },
+    });
+
+    return {
+      success: true as const,
+      seenAt: now,
+    };
+  }
+
   async markAsRead(userId: string, recipientId: string) {
     const recipient = await this.prisma.notificationRecipient.findFirst({
       where: {
@@ -492,12 +574,34 @@ export class NotificationsService {
 
     const now = new Date();
 
+    if (input.dedupeKey) {
+      const existing = await this.prisma.notification.findUnique({
+        where: {
+          dedupeKey: input.dedupeKey,
+        },
+        select: {
+          id: true,
+          createdAt: true,
+        },
+      });
+
+      if (existing) {
+        return {
+          notificationId: existing.id,
+          usersCount: uniqueUserIds.length,
+          pushUsersCount: 0,
+          deduplicated: true as const,
+        };
+      }
+    }
+
     const notification = await this.prisma.$transaction(async (tx) => {
       const created = await tx.notification.create({
         data: {
           organizationId: input.organizationId,
           eventId: input.eventId,
           actorUserId: input.actorUserId,
+          dedupeKey: input.dedupeKey,
           type: input.type,
           title: input.title,
           body: input.body,

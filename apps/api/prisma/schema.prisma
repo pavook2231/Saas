@@ -128,6 +128,7 @@ enum ManualPointsAuditAction {
 enum NotificationType {
   EVENT_ASSIGNED
   EVENT_UPDATED
+  EVENT_URGENT_CHANGE
   EVENT_REMINDER
   SYSTEM
 }
@@ -187,6 +188,7 @@ model User {
   phone           String?
   eventRemindersEnabled Boolean @default(true)
   calendarSyncToken String? @unique
+  scheduleChangesSeenAt DateTime?
   totpSecret      String?
   totpPendingSecret String?
   totpEnabledAt   DateTime?
@@ -221,6 +223,7 @@ model User {
   auditLogs                   AuditLog[]               @relation("AuditActor")
   notificationsAuthored       Notification[]           @relation("NotificationActor")
   notificationRecipients      NotificationRecipient[]  @relation("NotificationRecipientUser")
+  eventChecklistItemsCompleted EventChecklistItem[]    @relation("EventChecklistCompletedBy")
   pushDeviceTokens            PushDeviceToken[]        @relation("UserPushDeviceTokens")
   webPushSubscriptions        WebPushSubscription[]    @relation("UserWebPushSubscriptions")
   chatMessagesSent            ChatMessage[]            @relation("ChatMessageSender")
@@ -555,6 +558,7 @@ model Event {
   notifications Notification[]
   reminderDispatches EventReminderDispatch[]
   chatMessages ChatMessage[]
+  checklistItems EventChecklistItem[]
 
   @@index([organizationId, startsAt])
   @@index([organizationId, status, startsAt])
@@ -757,6 +761,7 @@ model Notification {
   organizationId  String?          @db.Uuid
   eventId         String?          @db.Uuid
   actorUserId     String?          @db.Uuid
+  dedupeKey       String?          @unique
   type            NotificationType
   title           String
   body            String
@@ -771,6 +776,26 @@ model Notification {
   @@index([organizationId, createdAt])
   @@index([eventId, createdAt])
   @@index([type, createdAt])
+}
+
+model EventChecklistItem {
+  id                String   @id @default(uuid()) @db.Uuid
+  eventId           String   @db.Uuid
+  label             String
+  category          String?
+  notes             String?
+  sortOrder         Int      @default(0)
+  isCompleted       Boolean  @default(false)
+  completedAt       DateTime?
+  completedByUserId String?  @db.Uuid
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  event        Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  completedBy  User? @relation("EventChecklistCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, sortOrder])
+  @@index([completedByUserId, updatedAt])
 }
 
 model NotificationRecipient {

@@ -15,7 +15,7 @@ export type NotificationItem = {
     organizationId: string | null;
     eventId: string | null;
     actorUserId: string | null;
-    type: 'EVENT_ASSIGNED' | 'EVENT_UPDATED' | 'EVENT_REMINDER' | 'SYSTEM';
+    type: 'EVENT_ASSIGNED' | 'EVENT_UPDATED' | 'EVENT_URGENT_CHANGE' | 'EVENT_REMINDER' | 'SYSTEM';
     title: string;
     body: string;
     payload: Record<string, unknown> | null;
@@ -24,6 +24,12 @@ export type NotificationItem = {
 };
 
 export type NotificationsListResponse = {
+  unreadCount: number;
+  items: NotificationItem[];
+};
+
+export type ScheduleChangesFeedResponse = {
+  seenAt: string | null;
   unreadCount: number;
   items: NotificationItem[];
 };
@@ -103,6 +109,28 @@ export const notificationsApi = {
       accessToken: params.accessToken,
       method: 'PATCH',
       path: `/notifications/me/${params.recipientId}/read`,
+    });
+  },
+
+  listMyScheduleChanges(
+    params: AuthenticatedRequest & {
+      limit?: number;
+    },
+  ) {
+    return apiRequest<ScheduleChangesFeedResponse>({
+      accessToken: params.accessToken,
+      path: '/notifications/me/schedule-changes',
+      searchParams: {
+        limit: params.limit,
+      },
+    });
+  },
+
+  markScheduleChangesSeen(params: AuthenticatedRequest) {
+    return apiRequest<{ success: true; seenAt: string }>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: '/notifications/me/schedule-changes/seen',
     });
   },
 

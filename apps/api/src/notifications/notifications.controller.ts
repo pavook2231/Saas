@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/auth.types';
 
 import { ListMyNotificationsQueryDto } from './dto/list-my-notifications-query.dto';
+import { ListScheduleChangeFeedQueryDto } from './dto/list-schedule-change-feed-query.dto';
 import { RegisterPushDeviceDto } from './dto/register-push-device.dto';
 import { RegisterWebPushSubscriptionDto } from './dto/register-web-push-subscription.dto';
 import { UnregisterPushDeviceDto } from './dto/unregister-push-device.dto';
@@ -38,6 +39,19 @@ export class NotificationsController {
     @Query() query: ListMyNotificationsQueryDto,
   ) {
     return this.notificationsService.listMyNotifications(user.sub, query);
+  }
+
+  @Get('me/schedule-changes')
+  async myScheduleChanges(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query() query: ListScheduleChangeFeedQueryDto,
+  ) {
+    return this.notificationsService.listMyScheduleChanges(user.sub, query.limit ?? 8);
+  }
+
+  @Post('me/schedule-changes/seen')
+  async markScheduleChangesSeen(@CurrentUser() user: AccessTokenPayload) {
+    return this.notificationsService.markScheduleChangesSeen(user.sub);
   }
 
   @Get('preferences/reminders')

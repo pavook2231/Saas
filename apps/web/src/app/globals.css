@@ -537,8 +537,10 @@ textarea.ui-field:focus {
   gap: var(--space-4);
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pinch-zoom;
 }
 
 body.is-scroll-locked {
@@ -1049,6 +1051,7 @@ body.is-scroll-locked {
 .resource-form-grid {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .modal-form-section {
@@ -4244,6 +4247,33 @@ textarea.ui-field {
   flex-wrap: wrap;
 }
 
+.calendar-participants-mode__view-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 4px;
+  border-radius: 16px;
+  background: rgba(245, 248, 252, 0.96);
+  border: 1px solid rgba(219, 227, 239, 0.92);
+}
+
+.calendar-participants-mode__view-switcher button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.calendar-participants-mode__view-switcher button.is-active {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--primary);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+}
+
 .calendar-participants-mode__chips button {
   min-height: 34px;
   padding: 0 12px;
@@ -4263,6 +4293,103 @@ textarea.ui-field {
 .calendar-participants-mode__days {
   display: grid;
   gap: 12px;
+}
+
+.calendar-participants-mode__compact-week {
+  display: grid;
+  gap: 10px;
+}
+
+.calendar-participant-compact-day {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(219, 227, 239, 0.92);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow-sm);
+}
+
+.calendar-participant-compact-day.is-today {
+  border-color: rgba(37, 99, 235, 0.24);
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.96), rgba(255, 255, 255, 0.96));
+}
+
+.calendar-participant-compact-day.is-empty {
+  background: rgba(250, 252, 255, 0.92);
+}
+
+.calendar-participant-compact-day__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.calendar-participant-compact-day__head strong {
+  display: block;
+  font-size: 0.88rem;
+}
+
+.calendar-participant-compact-day__head span,
+.calendar-participant-compact-day__head small,
+.calendar-participant-compact-day__empty,
+.calendar-participant-compact-pill small {
+  color: var(--text-soft);
+  font-size: 0.74rem;
+}
+
+.calendar-participant-compact-day__content,
+.calendar-participant-compact-row,
+.calendar-participant-compact-row__events {
+  display: grid;
+  gap: 8px;
+}
+
+.calendar-participant-compact-row > strong {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.calendar-participant-compact-pill {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.94);
+}
+
+.calendar-participant-compact-pill span {
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.calendar-participant-compact-pill--performance {
+  border-color: rgba(251, 146, 60, 0.34);
+  background: rgba(255, 237, 213, 0.58);
+}
+
+.calendar-participant-compact-pill--rehearsal {
+  border-color: rgba(74, 222, 128, 0.34);
+  background: rgba(220, 252, 231, 0.56);
+}
+
+.calendar-participant-compact-pill--tour {
+  border-color: rgba(96, 165, 250, 0.34);
+  background: rgba(219, 234, 254, 0.58);
+}
+
+.calendar-participant-compact-pill--event,
+.calendar-participant-compact-pill--custom {
+  border-color: rgba(192, 132, 252, 0.34);
+  background: rgba(243, 232, 255, 0.58);
 }
 
 .calendar-participant-day {
@@ -5148,6 +5275,9 @@ textarea.ui-field {
 .calendar-composer {
   display: grid;
   gap: 14px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .calendar-composer__timing {
@@ -5532,6 +5662,50 @@ textarea.ui-field {
 
   .calendar-participant-pill {
     min-width: 0;
+  }
+
+  .calendar-participants-mode__view-switcher {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .calendar-participants-mode__view-switcher button {
+    min-height: 40px;
+  }
+
+  .calendar-participants-mode__compact-week {
+    gap: 8px;
+  }
+
+  .calendar-participant-compact-day {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .calendar-participant-compact-day__head {
+    align-items: center;
+  }
+
+  .calendar-participant-compact-day__head strong {
+    font-size: 0.82rem;
+  }
+
+  .calendar-participant-compact-row > strong {
+    font-size: 0.72rem;
+  }
+
+  .calendar-participant-compact-pill {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .calendar-participant-compact-pill span {
+    font-size: 0.78rem;
+  }
+
+  .calendar-participant-compact-pill small {
+    font-size: 0.7rem;
   }
 
   .profile-toolbar__row {
@@ -6239,12 +6413,16 @@ textarea.ui-field {
 .control-schedule-modal {
   display: grid;
   gap: 14px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .control-schedule-modal__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  min-width: 0;
 }
 
 .control-schedule-modal__grid--repeat {

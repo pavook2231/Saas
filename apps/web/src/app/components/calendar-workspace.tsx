@@ -26,6 +26,7 @@ import { isVenueName, venueLabelMap, venueOptions, venueToneClass, type VenueNam
 
 type ViewMode = 'week' | 'month';
 type CalendarPanelMode = 'main' | 'compact' | 'participants';
+type ParticipantCalendarMode = 'regular' | 'compact';
 type TheatreLane = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'OTHER';
 type CalendarComposerKind = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'EVENT';
 type CalendarComposerState = {
@@ -273,6 +274,7 @@ export function CalendarWorkspace() {
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [panelMode, setPanelMode] = useState<CalendarPanelMode>('main');
+  const [participantCalendarMode, setParticipantCalendarMode] = useState<ParticipantCalendarMode>('regular');
   const [participantFilter, setParticipantFilter] = useState<string>('all');
   const [cursorDate, setCursorDate] = useState<Date>(() => startOfDay(new Date()));
   const [events, setEvents] = useState<EventRecord[]>([]);
@@ -1140,36 +1142,54 @@ export function CalendarWorkspace() {
             ))}
           </div>
 
-          <div className="calendar-participants-mode__days">
-            {participantViewDays.map(({ day, dayKey, totalEvents, rows, events: dayEvents, isToday }) => (
-              <Card key={`participant-day-${dayKey}`} className={`calendar-participant-day${isToday ? ' is-today' : ''}`}>
-                <CardContent className="calendar-participant-day__body">
-                  <div className="calendar-participant-day__header">
+          <div className="calendar-participants-mode__view-switcher" role="tablist" aria-label="Вид календаря участников">
+            <button
+              type="button"
+              className={participantCalendarMode === 'regular' ? 'is-active' : ''}
+              onClick={() => setParticipantCalendarMode('regular')}
+            >
+              Обычный
+            </button>
+            <button
+              type="button"
+              className={participantCalendarMode === 'compact' ? 'is-active' : ''}
+              onClick={() => setParticipantCalendarMode('compact')}
+            >
+              Компактный
+            </button>
+          </div>
+
+          {participantCalendarMode === 'compact' ? (
+            <div className="calendar-participants-mode__compact-week">
+              {participantViewDays.map(({ day, dayKey, totalEvents, rows, events: dayEvents, isToday }) => (
+                <article
+                  key={`participant-compact-day-${dayKey}`}
+                  className={`calendar-participant-compact-day${isToday ? ' is-today' : ''}${totalEvents === 0 ? ' is-empty' : ''}`}
+                >
+                  <div className="calendar-participant-compact-day__head">
                     <div>
                       <strong>{formatDayName(day)}</strong>
                       <span>{weekDayNumberFormat.format(day)}</span>
                     </div>
-                    <Badge variant={isToday ? 'primary' : 'neutral'}>
-                      {totalEvents > 0 ? `${totalEvents} ${totalEvents === 1 ? 'событие' : 'события'}` : 'Свободно'}
-                    </Badge>
+                    <small>{totalEvents > 0 ? `${totalEvents} ${totalEvents === 1 ? 'событие' : 'события'}` : 'Свободно'}</small>
                   </div>
 
                   {participantFilter === 'all' ? (
                     rows.length > 0 ? (
-                      <div className="calendar-participant-day__rows">
+                      <div className="calendar-participant-compact-day__content">
                         {rows.map((row) => (
-                          <div key={`${dayKey}-${row.participant.id}`} className="calendar-participant-row">
-                            <div className="calendar-participant-row__name">{participantDisplayName(row.participant)}</div>
-                            <div className="calendar-participant-row__events">
+                          <div key={`${dayKey}-compact-${row.participant.id}`} className="calendar-participant-compact-row">
+                            <strong>{participantDisplayName(row.participant)}</strong>
+                            <div className="calendar-participant-compact-row__events">
                               {row.events.map((event) => (
                                 <button
-                                  key={event.id}
+                                  key={`compact-${event.id}`}
                                   type="button"
-                                  className="calendar-participant-pill"
+                                  className={`calendar-participant-compact-pill calendar-participant-compact-pill--${event.type.toLowerCase()}`}
                                   onClick={() => setSelectedEventId(event.id)}
                                 >
-                                  <strong>{event.title}</strong>
-                                  <span>{getEventScheduleRange(event)}</span>
+                                  <span>{event.title}</span>
+                                  <small>{getEventScheduleRange(event)}</small>
                                 </button>
                               ))}
                             </div>
@@ -1177,19 +1197,80 @@ export function CalendarWorkspace() {
                         ))}
                       </div>
                     ) : (
-                      <div className="calendar-participant-day__empty">Никто не занят.</div>
+                      <div className="calendar-participant-compact-day__empty">Никто не занят.</div>
                     )
                   ) : dayEvents.length > 0 ? (
-                    <div className="calendar-participant-day__events">
-                      {dayEvents.map((event) => renderTheatreEvent(event))}
+                    <div className="calendar-participant-compact-day__content">
+                      {dayEvents.map((event) => (
+                        <button
+                          key={`compact-event-${event.id}`}
+                          type="button"
+                          className={`calendar-participant-compact-pill calendar-participant-compact-pill--${event.type.toLowerCase()}`}
+                          onClick={() => setSelectedEventId(event.id)}
+                        >
+                          <span>{event.title}</span>
+                          <small>{getEventScheduleRange(event)}</small>
+                        </button>
+                      ))}
                     </div>
                   ) : (
-                    <div className="calendar-participant-day__empty">У этого участника в этот день событий нет.</div>
+                    <div className="calendar-participant-compact-day__empty">Свободно</div>
                   )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="calendar-participants-mode__days">
+              {participantViewDays.map(({ day, dayKey, totalEvents, rows, events: dayEvents, isToday }) => (
+                <Card key={`participant-day-${dayKey}`} className={`calendar-participant-day${isToday ? ' is-today' : ''}`}>
+                  <CardContent className="calendar-participant-day__body">
+                    <div className="calendar-participant-day__header">
+                      <div>
+                        <strong>{formatDayName(day)}</strong>
+                        <span>{weekDayNumberFormat.format(day)}</span>
+                      </div>
+                      <Badge variant={isToday ? 'primary' : 'neutral'}>
+                        {totalEvents > 0 ? `${totalEvents} ${totalEvents === 1 ? 'событие' : 'события'}` : 'Свободно'}
+                      </Badge>
+                    </div>
+
+                    {participantFilter === 'all' ? (
+                      rows.length > 0 ? (
+                        <div className="calendar-participant-day__rows">
+                          {rows.map((row) => (
+                            <div key={`${dayKey}-${row.participant.id}`} className="calendar-participant-row">
+                              <div className="calendar-participant-row__name">{participantDisplayName(row.participant)}</div>
+                              <div className="calendar-participant-row__events">
+                                {row.events.map((event) => (
+                                  <button
+                                    key={event.id}
+                                    type="button"
+                                    className="calendar-participant-pill"
+                                    onClick={() => setSelectedEventId(event.id)}
+                                  >
+                                    <strong>{event.title}</strong>
+                                    <span>{getEventScheduleRange(event)}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="calendar-participant-day__empty">Никто не занят.</div>
+                      )
+                    ) : dayEvents.length > 0 ? (
+                      <div className="calendar-participant-day__events">
+                        {dayEvents.map((event) => renderTheatreEvent(event))}
+                      </div>
+                    ) : (
+                      <div className="calendar-participant-day__empty">У этого участника в этот день событий нет.</div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </section>
       ) : null}
 

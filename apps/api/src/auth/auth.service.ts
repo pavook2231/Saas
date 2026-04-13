@@ -78,6 +78,12 @@ const OAUTH_STATE_EXPIRES_IN = '10m';
 const OAUTH_FETCH_TIMEOUT_MS = 12000;
 const EMAIL_AUTH_CODE_EXPIRES_MINUTES = 10;
 const EMAIL_AUTH_CODE_LENGTH = 6;
+
+type CalendarSubscriptionFeed = {
+  body: string;
+  etag: string;
+  lastModified: Date;
+};
 const EMAIL_AUTH_CODE_MAX_ATTEMPTS = 5;
 const EMAIL_AUTH_CODE_RESEND_COOLDOWN_SECONDS = 60;
 const AUTH_EMAIL_LOCK_THRESHOLD = 5;
@@ -530,7 +536,7 @@ export class AuthService {
     };
   }
 
-  async getCalendarSubscriptionIcs(token: string): Promise<string> {
+  async getCalendarSubscriptionFeed(token: string): Promise<CalendarSubscriptionFeed> {
     const normalizedToken = token.trim();
 
     if (normalizedToken.length < 20) {
@@ -577,6 +583,8 @@ export class AuthService {
       orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
       select: {
         id: true,
+        createdAt: true,
+        updatedAt: true,
         title: true,
         description: true,
         type: true,
@@ -592,22 +600,38 @@ export class AuthService {
       },
     });
 
+    const lastModified = events.reduce<Date>(
+      (latest, event) => (event.updatedAt > latest ? event.updatedAt : latest),
+      now,
+    );
+
     const lines = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'PRODID:-//Theatre Internal Service//Calendar Sync//RU',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
+      'REFRESH-INTERVAL;VALUE=DURATION:PT15M',
+      'X-PUBLISHED-TTL:PT15M',
       `X-WR-CALNAME:${this.escapeIcsText(
         `${this.buildDisplayName(user.firstName, user.lastName, user.email)} — Театр`,
       )}`,
       'X-WR-TIMEZONE:UTC',
+      `LAST-MODIFIED:${this.toIcsUtc(lastModified)}`,
     ];
 
     for (const event of events) {
+      const sequence = Math.max(
+        0,
+        Math.floor((event.updatedAt.getTime() - event.createdAt.getTime()) / 1000),
+      );
+
       lines.push('BEGIN:VEVENT');
       lines.push(`UID:${event.id}@theatre-internal-service`);
       lines.push(`DTSTAMP:${this.toIcsUtc(now)}`);
+      lines.push(`CREATED:${this.toIcsUtc(event.createdAt)}`);
+      lines.push(`LAST-MODIFIED:${this.toIcsUtc(event.updatedAt)}`);
+      lines.push(`SEQUENCE:${sequence}`);
       lines.push(`DTSTART:${this.toIcsUtc(event.startsAt)}`);
       lines.push(`DTEND:${this.toIcsUtc(event.endsAt)}`);
       lines.push(`SUMMARY:${this.escapeIcsText(event.title)}`);
@@ -635,7 +659,14 @@ export class AuthService {
 
     lines.push('END:VCALENDAR');
 
-    return `${lines.join('\r\n')}\r\n`;
+    const body = `${lines.join('\r\n')}\r\n`;
+    const etag = createHash('sha256').update(body).digest('hex');
+
+    return {
+      body,
+      etag,
+      lastModified,
+    };
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {

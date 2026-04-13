@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Header, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
-import type { Response } from 'express';
+import { Body, Controller, Get, Header, Param, Patch, Post, Req, Res, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
 
 import { RateLimit } from '../security/decorators/rate-limit.decorator';
 
@@ -93,9 +93,27 @@ export class CalendarSubscriptionController {
   @Header('Content-Disposition', 'inline; filename=\"theatre-calendar.ics\"')
   async getCalendarFeed(
     @Param('token') token: string,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<string> {
-    response.setHeader('Cache-Control', 'private, max-age=300');
-    return this.authService.getCalendarSubscriptionIcs(token);
+    const feed = await this.authService.getCalendarSubscriptionFeed(token);
+    const ifNoneMatch = request.headers['if-none-match'];
+    const ifModifiedSince = request.headers['if-modified-since'];
+
+    response.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+    response.setHeader('ETag', `"${feed.etag}"`);
+    response.setHeader('Last-Modified', feed.lastModified.toUTCString());
+
+    if (
+      ifNoneMatch === `"${feed.etag}"` ||
+      (typeof ifModifiedSince === 'string' &&
+        Number.isFinite(Date.parse(ifModifiedSince)) &&
+        new Date(ifModifiedSince).getTime() >= feed.lastModified.getTime())
+    ) {
+      response.status(304);
+      return '';
+    }
+
+    return feed.body;
   }
 }

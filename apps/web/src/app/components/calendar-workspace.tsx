@@ -25,7 +25,6 @@ import { canAccessControlPanel } from '@/lib/organization-access';
 import { isVenueName, venueLabelMap, venueOptions, venueToneClass, type VenueName } from '@/lib/venues';
 
 type ViewMode = 'week' | 'month';
-type CalendarPanelMode = 'main' | 'compact';
 type TheatreLane = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'OTHER';
 type CalendarComposerKind = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'EVENT';
 type CalendarComposerState = {
@@ -272,7 +271,6 @@ export function CalendarWorkspace() {
   const searchParams = useSearchParams();
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const [viewMode, setViewMode] = useState<ViewMode>('week');
-  const [panelMode, setPanelMode] = useState<CalendarPanelMode>('main');
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [cursorDate, setCursorDate] = useState<Date>(() => startOfDay(new Date()));
   const [events, setEvents] = useState<EventRecord[]>([]);
@@ -299,11 +297,7 @@ export function CalendarWorkspace() {
       setIsMobileViewport(isMobileViewport);
       if (isMobileViewport) {
         setViewMode('week');
-        setPanelMode('compact');
-        return;
       }
-
-      setPanelMode('main');
     };
 
     syncMobileModes();
@@ -492,39 +486,23 @@ export function CalendarWorkspace() {
     [monthEventMap, weekDays],
   );
 
-  const mobileWeekDays = useMemo(
+  const mobileScheduleDays = useMemo(
     () =>
       weekDays.map((day) => {
         const dayKey = toDayKey(day);
-        const laneEvents = theatreWeekMap.get(dayKey) ?? {
-          PERFORMANCE: [],
-          REHEARSAL: [],
-          TOUR: [],
-          OTHER: [],
-        };
-        const sections = theatreLaneMeta
-          .map((lane) => ({
-            lane,
-            events: laneEvents[lane.id],
-          }))
-          .filter((section) => section.events.length > 0);
-        const summary = theatreLaneMeta
-          .map((lane) => ({
-            lane,
-            count: laneEvents[lane.id].length,
-          }))
-          .filter((item) => item.count > 0);
+        const items = monthEventMap.get(dayKey) ?? [];
 
         return {
           day,
           dayKey,
-          sections,
-          summary,
-          totalEvents: sections.reduce((count, section) => count + section.events.length, 0),
           isToday: isSameDay(day, new Date()),
+          events: [...items].sort(
+            (left, right) =>
+              new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
+          ),
         };
       }),
-    [theatreWeekMap, weekDays],
+    [monthEventMap, weekDays],
   );
 
   const upcomingEvents = useMemo(() => {
@@ -539,54 +517,11 @@ export function CalendarWorkspace() {
     [upcomingEvents],
   );
 
-  const overdueEvents = useMemo(() => {
-    const now = Date.now();
-    const weekStart = startOfWeek(new Date()).getTime();
-
-    return events
-      .filter((event) => {
-        const endsAt = new Date(event.endsAt).getTime();
-        return event.status !== 'CANCELLED' && endsAt < now && endsAt >= weekStart;
-      })
-      .sort((left, right) => new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime());
-  }, [events]);
-
-  const tomorrowEvents = useMemo(() => {
-    const tomorrow = addDays(startOfDay(new Date()), 1);
-    return upcomingEvents.filter((event) => isSameDay(new Date(event.startsAt), tomorrow));
-  }, [upcomingEvents]);
-
-  const weekRemainderEvents = useMemo(() => {
-    const todayKey = toDayKey(startOfDay(new Date()));
-    const tomorrowKey = toDayKey(addDays(startOfDay(new Date()), 1));
-    const weekKeys = new Set(weekDays.map((day) => toDayKey(day)));
-
-    return upcomingEvents.filter((event) => {
-      const dayKey = toDayKey(new Date(event.startsAt));
-      return weekKeys.has(dayKey) && dayKey !== todayKey && dayKey !== tomorrowKey;
-    });
-  }, [upcomingEvents, weekDays]);
-
-  const compactUpcomingEvents = useMemo(() => upcomingEvents.slice(0, 6), [upcomingEvents]);
   const weekEventCount = useMemo(
     () => weekDays.reduce((count, day) => count + (monthEventMap.get(toDayKey(day))?.length ?? 0), 0),
     [monthEventMap, weekDays],
   );
-  const nextEvent = compactUpcomingEvents[0] ?? null;
-
-  const compactQuickDays = useMemo(
-    () =>
-      weekDays.map((day) => {
-        const dayEvents = monthEventMap.get(toDayKey(day)) ?? [];
-        return {
-          day,
-          count: dayEvents.length,
-          firstEvent: dayEvents[0] ?? null,
-          isToday: isSameDay(day, new Date()),
-        };
-      }),
-    [monthEventMap, weekDays],
-  );
+  const nextEvent = upcomingEvents[0] ?? null;
 
   const periodLabel = useMemo(() => {
     if (viewMode === 'month') {
@@ -602,9 +537,8 @@ export function CalendarWorkspace() {
     setCursorDate((current) => addDays(current, viewMode === 'month' ? direction * 28 : direction * 7));
   };
 
-  const showCompactMode = !loading && isMobileViewport && panelMode === 'compact';
-  const showMainMonthView = !loading && panelMode === 'main' && viewMode === 'month';
-  const showMainWeekView = !loading && panelMode === 'main' && viewMode === 'week';
+  const showMainMonthView = !loading && viewMode === 'month';
+  const showMainWeekView = !loading && viewMode === 'week';
 
   const buildComposerStateForEvent = (event: EventRecord): CalendarComposerState => {
     const lane = classifyTheatreLane(event);
@@ -869,10 +803,46 @@ export function CalendarWorkspace() {
     );
   };
 
-  const renderTheatreEvent = (event: EventRecord, options?: { showTypeLabel?: boolean }) => {
+  const renderTheatreEvent = (
+    event: EventRecord,
+    options?: { showTypeLabel?: boolean; mobileStream?: boolean },
+  ) => {
     const venue = isVenueName(event.location) ? event.location : null;
     const timeRange = getEventScheduleRange(event);
     const showTypeLabel = options?.showTypeLabel ?? true;
+    const isMobileStream = options?.mobileStream ?? false;
+    const isUpdated =
+      new Date(event.updatedAt).getTime() - new Date(event.createdAt).getTime() > 60_000;
+    const metaParts = [
+      venue ? venueLabelMap[venue] : event.location,
+      event.performanceCastNumber ? `${event.performanceCastNumber} состав` : null,
+      event.status === 'CANCELLED' ? 'Отменено' : null,
+    ].filter(Boolean);
+
+    if (isMobileStream) {
+      return (
+        <button
+          key={event.id}
+          type="button"
+          className={`theatre-event theatre-event--stream theatre-event--${event.type.toLowerCase()}${
+            selectedEventId === event.id ? ' is-selected' : ''
+          }${event.status === 'CANCELLED' ? ' is-cancelled' : ''}`}
+          onClick={() => setSelectedEventId(event.id)}
+        >
+          <div className="theatre-event__stream-marker" aria-hidden="true" />
+          <div className="theatre-event__stream-time">
+            <strong>{timeRange}</strong>
+            {isUpdated ? <span>Изменено</span> : null}
+          </div>
+          <div className="theatre-event__stream-copy">
+            <strong>{event.title}</strong>
+            {metaParts.length > 0 ? (
+              <span className="theatre-event__stream-meta">{metaParts.join(' · ')}</span>
+            ) : null}
+          </div>
+        </button>
+      );
+    }
 
     return (
       <button
@@ -955,24 +925,6 @@ export function CalendarWorkspace() {
               <button onClick={() => navigate(1)} type="button">Вперед</button>
             </div>
           </div>
-          {isMobileViewport ? (
-            <div className="calendar-simple__view-modes" role="tablist" aria-label="Режимы календаря">
-              <button
-                type="button"
-                className={panelMode === 'main' ? 'is-active' : ''}
-                onClick={() => setPanelMode('main')}
-              >
-                Основной
-              </button>
-              <button
-                type="button"
-                className={panelMode === 'compact' ? 'is-active' : ''}
-                onClick={() => setPanelMode('compact')}
-              >
-                Компактно
-              </button>
-            </div>
-          ) : null}
           {canOpenControlPanel ? (
             <div className="calendar-simple__actions-cta">
               <Link className="ui-button ui-button--primary ui-button--md" href="/control/schedule">
@@ -983,170 +935,8 @@ export function CalendarWorkspace() {
         </div>
       </div>
 
-      {canOpenControlPanel && panelMode === 'main' ? (
-        <Card className="schedule-mode-card schedule-mode-card--calendar">
-          <CardContent className="schedule-mode-card__body">
-            <div className="schedule-mode-card__copy">
-              <p className="kicker">Режим 2</p>
-              <h2>Точечное редактирование</h2>
-              <p>Здесь меняют отдельные опубликованные события. Уведомление отправляется только участникам выбранного события и только если оно касается текущей недели.</p>
-            </div>
-            <div className="schedule-mode-card__actions">
-              <Badge variant="primary">Точечное редактирование</Badge>
-              <Link className="ui-button ui-button--ghost ui-button--md" href="/control/schedule">
-                <span className="ui-button__content">Перейти к планированию</span>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
       {errorText ? <p className="finance-error">{errorText}</p> : null}
       {loading ? <p className="empty-state">Загружаем расписание...</p> : null}
-
-      {showCompactMode ? (
-        <section className="calendar-compact-mode">
-          <div className="calendar-compact-mode__hero">
-            <div className="calendar-compact-mode__hero-copy">
-              <p className="kicker">Компактный обзор</p>
-              <h2>{todayEvents.length > 0 ? 'Сегодня в работе' : 'Неделя без перегруза'}</h2>
-              <p>
-                {todayEvents.length > 0
-                  ? `На сегодня запланировано ${todayEvents.length} ${todayEvents.length === 1 ? 'событие' : 'события'}. Откройте карточку или добавьте слот без перехода в большой режим.`
-                  : 'Сверху только навигация, ниже вся неделя и ближайшие события. Без лишних блоков и перегруза.'}
-              </p>
-            </div>
-            <div className="calendar-compact-mode__hero-stats" aria-label="Сводка недели">
-              <div className="calendar-compact-stat">
-                <span>На неделе</span>
-                <strong>{weekEventCount}</strong>
-              </div>
-              <div className="calendar-compact-stat">
-                <span>Сегодня</span>
-                <strong>{todayEvents.length}</strong>
-              </div>
-              <div className="calendar-compact-stat calendar-compact-stat--wide">
-                <span>Следующее</span>
-                <strong>{nextEvent ? getEventScheduleRange(nextEvent) : 'Пауза в расписании'}</strong>
-              </div>
-            </div>
-            {canOpenControlPanel ? (
-              <div className="calendar-compact-mode__hero-actions">
-                <Button type="button" onClick={() => openComposer(startOfDay(new Date()))}>
-                  Быстро добавить на сегодня
-                </Button>
-                <Button type="button" variant="ghost" onClick={() => openComposer(addDays(startOfDay(new Date()), 1))}>
-                  Добавить на завтра
-                </Button>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="calendar-compact-mode__quick-days">
-            {compactQuickDays.map(({ day, count, firstEvent, isToday }) => (
-              <button
-                key={`compact-${toDayKey(day)}`}
-                type="button"
-                className={`calendar-compact-day${isToday ? ' is-today' : ''}`}
-                onClick={() => {
-                  setCursorDate(startOfDay(day));
-                  if (firstEvent) {
-                    setSelectedEventId(firstEvent.id);
-                    return;
-                  }
-
-                  if (count === 0 && canOpenControlPanel) {
-                    openComposer(day);
-                  }
-                }}
-              >
-                <span className="calendar-compact-day__label">{formatDayName(day)}</span>
-                <strong>{weekDayNumberFormat.format(day)}</strong>
-                <span className="calendar-compact-day__count">
-                  {count > 0 ? `${count} ${count === 1 ? 'событие' : 'события'}` : canOpenControlPanel ? 'Тапните, чтобы добавить' : 'Свободно'}
-                </span>
-                {firstEvent ? <small>{firstEvent.title}</small> : null}
-              </button>
-            ))}
-          </div>
-
-          <div className="calendar-compact-mode__columns">
-            {[
-              {
-                title: 'Просрочено',
-                subtitle: overdueEvents.length > 0 ? `${overdueEvents.length} требует внимания` : 'Пусто',
-                events: overdueEvents.slice(0, 4),
-                empty: 'Просроченных событий за эту неделю нет.',
-              },
-              {
-                title: 'Сегодня',
-                subtitle: todayEvents.length > 0 ? `${todayEvents.length} в работе` : 'Свободно',
-                events: todayEvents,
-                empty: canOpenControlPanel ? 'Можно быстро добавить событие на сегодня.' : 'На сегодня событий нет.',
-              },
-              {
-                title: 'Завтра',
-                subtitle: tomorrowEvents.length > 0 ? `${tomorrowEvents.length} запланировано` : 'Свободно',
-                events: tomorrowEvents,
-                empty: canOpenControlPanel ? 'Можно подготовить завтрашний день заранее.' : 'На завтра событий нет.',
-              },
-              {
-                title: 'На неделе',
-                subtitle: weekRemainderEvents.length > 0 ? `Ещё ${weekRemainderEvents.length}` : 'Больше ничего',
-                events: weekRemainderEvents.slice(0, 6),
-                empty: 'Остальная неделя пока свободна.',
-              },
-            ].map((section) => (
-              <Card key={section.title} className="calendar-compact-section">
-                <CardContent className="calendar-compact-section__body">
-                  <div className="calendar-compact-section__head">
-                    <strong>{section.title}</strong>
-                    <span>{section.subtitle}</span>
-                  </div>
-                  <div className="calendar-compact-section__list">
-                    {section.events.length > 0 ? (
-                      section.events.map((event) => renderTheatreEvent(event))
-                    ) : (
-                      <div className="calendar-compact-section__empty">{section.empty}</div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-
-            <Card className="calendar-compact-section">
-              <CardContent className="calendar-compact-section__body">
-                <div className="calendar-compact-section__head">
-                  <strong>Ближайшее</strong>
-                  <span>Следующие 6 событий</span>
-                </div>
-                <div className="calendar-compact-section__list">
-                  {compactUpcomingEvents.length > 0 ? (
-                    compactUpcomingEvents.map((event) => (
-                      <button
-                        key={`compact-upcoming-${event.id}`}
-                        type="button"
-                        className="calendar-upcoming-item"
-                        onClick={() => setSelectedEventId(event.id)}
-                      >
-                        <div>
-                          <strong>{event.title}</strong>
-                          <span>{typeLabel[event.type]}</span>
-                        </div>
-                        <small>
-                          {weekdayLongFormat.format(new Date(event.startsAt))} · {getEventScheduleRange(event)}
-                        </small>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="calendar-compact-section__empty">Пока нет будущих событий.</div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-      ) : null}
 
       {showMainMonthView ? (
         <section className="month-view">
@@ -1309,14 +1099,15 @@ export function CalendarWorkspace() {
         </section>
         <section className="theatre-week-mobile">
           <div className="theatre-week-mobile__list">
-            {mobileWeekDays.map(({ day, dayKey, sections, summary, totalEvents, isToday }) => {
-              const canCreateOnDay = canOpenControlPanel && totalEvents === 0;
-              const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+            {mobileScheduleDays.map(({ day, dayKey, events, isToday }) => {
+              const canCreateOnDay = canOpenControlPanel && events.length === 0;
 
               return (
                 <article
                   key={`${dayKey}-mobile`}
-                  className={`theatre-day-card${isToday ? ' is-today' : ''}${isWeekend ? ' is-weekend' : ''}${totalEvents > 0 ? ' has-events' : ' is-empty'}${canCreateOnDay ? ' is-interactive' : ''}`}
+                  className={`theatre-mobile-day${isToday ? ' is-today' : ''}${
+                    events.length === 0 ? ' is-empty' : ''
+                  }${canCreateOnDay ? ' is-interactive' : ''}`}
                   onClick={canCreateOnDay ? () => openComposer(day) : undefined}
                   role={canCreateOnDay ? 'button' : undefined}
                   tabIndex={canCreateOnDay ? 0 : undefined}
@@ -1331,18 +1122,16 @@ export function CalendarWorkspace() {
                       : undefined
                   }
                 >
-                  <div className="theatre-day-card__header">
-                    <div className="theatre-day-card__day">
-                      <strong>{formatDayName(day)}</strong>
-                      <span>{weekDayNumberFormat.format(day)}</span>
+                  <div className="theatre-mobile-day__header">
+                    <div className="theatre-mobile-day__day">
+                      <strong>{formatDayName(day)}, {weekDayNumberFormat.format(day)}</strong>
                     </div>
-                    <div className="theatre-day-card__header-meta">
-                      {totalEvents > 0 ? <span className="theatre-day-card__count">{totalEvents}</span> : null}
+                    <div className="theatre-mobile-day__meta">
                       {isToday ? <Badge variant="primary">Сегодня</Badge> : null}
                       {canOpenControlPanel ? (
                         <button
                           type="button"
-                          className="theatre-day-card__quick-add"
+                          className="theatre-mobile-day__quick-add"
                           aria-label={`Быстро добавить событие на ${weekdayLongFormat.format(day)}`}
                           onClick={(event) => {
                             event.stopPropagation();
@@ -1355,37 +1144,16 @@ export function CalendarWorkspace() {
                     </div>
                   </div>
 
-                  {summary.length > 0 ? (
-                    <div className="theatre-day-card__summary-pills">
-                      {summary.map(({ lane, count }) => (
-                        <span
-                          key={`${dayKey}-${lane.id}-summary`}
-                          className={`theatre-day-card__summary-pill theatre-day-card__summary-pill--${lane.id.toLowerCase()}`}
-                        >
-                          {lane.mobileLabel} · {count}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {sections.length > 0 ? (
-                    <div className="theatre-day-card__sections">
-                      {sections.map(({ lane, events }) => (
-                        <div
-                          key={`${dayKey}-${lane.id}-section`}
-                          className={`theatre-day-card__section theatre-day-card__section--${lane.id.toLowerCase()}`}
-                        >
-                          <div className="theatre-day-card__section-head">
-                            <strong>{lane.mobileLabel}</strong>
-                          </div>
-                          <div className="theatre-day-card__timeline">
-                            {events.map((event) => renderTheatreEvent(event, { showTypeLabel: false }))}
-                          </div>
-                        </div>
-                      ))}
+                  {events.length > 0 ? (
+                    <div className="theatre-mobile-day__events">
+                      {events.map((event) =>
+                        renderTheatreEvent(event, { showTypeLabel: false, mobileStream: true }),
+                      )}
                     </div>
                   ) : (
-                    <div className="theatre-day-card__empty" aria-hidden="true" />
+                    <div className="theatre-mobile-day__empty">
+                      {canOpenControlPanel ? 'Нажмите, чтобы добавить событие.' : 'Событий нет.'}
+                    </div>
                   )}
                 </article>
               );

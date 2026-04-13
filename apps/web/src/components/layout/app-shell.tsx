@@ -14,7 +14,7 @@ import { useMobileViewport } from '../features/use-mobile-viewport';
 import { Select } from '../ui/select';
 import { AppSidebar } from './app-sidebar';
 import { AppTopbar } from './app-topbar';
-import { CalendarIcon, EventIcon, ParticipantsIcon, PointsIcon, SettingsIcon } from './nav-icons';
+import { CalendarIcon, EventIcon, ParticipantsIcon, SettingsIcon } from './nav-icons';
 import { MobileShellNav, type MobileShellNavItem } from './mobile-shell-nav';
 import { PageTransition } from './page-transition';
 
@@ -45,10 +45,6 @@ const mobileShellMeta = (pathname: string) => {
       actionHref: '/control/plays' as Route,
       actionLabel: 'Спектакли',
     };
-  }
-
-  if (pathname.startsWith('/points')) {
-    return { title: 'Баллы', eyebrow: 'Мобильный режим' };
   }
 
   if (pathname.startsWith('/profile')) {
@@ -89,7 +85,6 @@ export function AppShell({ children }: PropsWithChildren) {
       pathname.startsWith('/templates') ||
       pathname.startsWith('/participants') ||
       pathname.startsWith('/settings') ||
-      pathname.startsWith('/points') ||
       pathname.startsWith('/events');
 
     if (isControlRoute && (!activeOrganizationId || !canAccessControlPanel(activeRole as never))) {
@@ -146,10 +141,7 @@ export function AppShell({ children }: PropsWithChildren) {
       );
     }
 
-    items.push(
-      { href: '/points', label: 'Баллы', icon: PointsIcon },
-      { href: '/profile', label: 'Ещё', icon: SettingsIcon },
-    );
+    items.push({ href: '/profile', label: 'Ещё', icon: SettingsIcon });
 
     return items;
   }, [hasControlAccess]);

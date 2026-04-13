@@ -7061,16 +7061,13 @@ textarea.ui-field {
   max-width: 520px;
 }
 
+.control-schedule-mobile-footer {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
 @media (max-width: 900px) {
-  .schedule-mode-card__body,
-  .schedule-mode-card__actions {
-    align-items: flex-start;
-  }
-
-  .schedule-mode-card__body {
-    flex-direction: column;
-  }
-
   .plays-toolbar,
   .plays-editor__grid {
     grid-template-columns: 1fr;
@@ -7138,11 +7135,16 @@ textarea.ui-field {
 
   .control-schedule-board__toolbar-main,
   .control-schedule-board__toolbar-aside,
-  .control-schedule-board__nav,
   .control-schedule-board__publish-actions,
   .control-schedule-modal__footer,
   .control-schedule-modal__footer-side {
     flex-direction: column;
+  }
+
+  .control-schedule-board__nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
   }
 
   .control-schedule-board__publish-counter {
@@ -7157,6 +7159,30 @@ textarea.ui-field {
 
   .control-schedule-board__view-switcher button {
     flex: 1 1 0;
+  }
+
+  .control-schedule-board__nav .ui-button,
+  .control-schedule-board__publish-actions .ui-button {
+    width: 100%;
+  }
+
+  .control-schedule-board__toolbar-card {
+    border-radius: 20px;
+  }
+
+  .control-schedule-board__period {
+    gap: 6px;
+  }
+
+  .control-schedule-board__period strong {
+    font-size: 1.2rem;
+    line-height: 1.1;
+  }
+
+  .control-schedule-board__publish-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .control-schedule-modal__grid {
@@ -7176,6 +7202,24 @@ textarea.ui-field {
     margin: 0;
     align-self: end;
     border-radius: 26px 26px 0 0;
+  }
+
+  .control-schedule-modal__panel--mobile {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .control-schedule-modal__panel--mobile .ui-modal__footer {
+    position: sticky;
+    bottom: 0;
+    background: rgba(255, 252, 248, 0.98);
+    backdrop-filter: blur(14px);
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .control-schedule-mobile-footer .ui-button {
+    width: 100%;
+    min-height: 48px;
   }
 
   .control-schedule-modal__panel .ui-modal__body {
@@ -7253,7 +7297,7 @@ textarea.ui-field {
   right: 12px;
   bottom: max(12px, env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   padding: 10px;
   border-radius: 24px;
@@ -7283,7 +7327,7 @@ textarea.ui-field {
 }
 
 .app-frame__content--mobile {
-  padding-bottom: 110px;
+  padding-bottom: 148px;
 }
 
 .management-mobile-shell {
@@ -7445,5 +7489,144 @@ textarea.ui-field {
   .profile-section-card,
   .profile-mobile-user-card {
     border-radius: 20px;
+  }
+}
+@media (max-width: 760px) {
+  .theatre-week-mobile__list {
+    gap: 24px;
+  }
+
+  .theatre-mobile-day {
+    display: grid;
+    gap: 12px;
+  }
+
+  .theatre-mobile-day__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .theatre-mobile-day__day strong {
+    font-size: 0.94rem;
+    line-height: 1.15;
+    font-weight: 700;
+    color: #556273;
+  }
+
+  .theatre-mobile-day__meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .theatre-mobile-day__quick-add {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(92, 47, 79, 0.08);
+    color: var(--primary-strong);
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .theatre-mobile-day__events {
+    display: grid;
+    gap: 0;
+  }
+
+  .theatre-mobile-day__empty {
+    color: var(--text-muted);
+    font-size: 0.84rem;
+    padding-bottom: 4px;
+  }
+
+  .theatre-event--stream {
+    display: grid;
+    grid-template-columns: 4px minmax(88px, auto) minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .theatre-event--stream:hover,
+  .theatre-event--stream.is-selected {
+    transform: none;
+    box-shadow: none;
+    border: 0;
+  }
+
+  .theatre-event__stream-marker {
+    width: 4px;
+    min-height: 42px;
+    border-radius: 999px;
+    background: #94a3b8;
+    margin-top: 2px;
+  }
+
+  .theatre-event--performance .theatre-event__stream-marker {
+    background: #8f2f3c;
+  }
+
+  .theatre-event--rehearsal .theatre-event__stream-marker {
+    background: #2f6e68;
+  }
+
+  .theatre-event--tour .theatre-event__stream-marker {
+    background: #b77928;
+  }
+
+  .theatre-event--event .theatre-event__stream-marker,
+  .theatre-event--custom .theatre-event__stream-marker {
+    background: #64748b;
+  }
+
+  .theatre-event__stream-time,
+  .theatre-event__stream-copy {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .theatre-event__stream-time strong {
+    font-size: 0.92rem;
+    line-height: 1.15;
+    font-weight: 800;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .theatre-event__stream-time span,
+  .theatre-event__stream-meta {
+    font-size: 0.76rem;
+    line-height: 1.25;
+    color: var(--text-muted);
+  }
+
+  .theatre-event__stream-time span {
+    color: #b45309;
+    font-weight: 700;
+  }
+
+  .theatre-event__stream-copy strong {
+    font-size: 0.96rem;
+    line-height: 1.16;
+    font-weight: 700;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .theatre-event--stream + .theatre-event--stream {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(221, 210, 200, 0.7);
   }
 }

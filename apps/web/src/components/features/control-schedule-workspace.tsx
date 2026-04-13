@@ -1,6 +1,5 @@
 ﻿'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
@@ -25,6 +24,7 @@ import { venueLabelMap, venueOptions, type VenueName } from '@/lib/venues';
 
 import { ManagementShell } from './management-shell';
 import { useActiveWorkspace } from './use-active-workspace';
+import { useMobileViewport } from './use-mobile-viewport';
 import { useToastFeedback } from './use-toast-feedback';
 
 type ViewMode = 'month' | 'week';
@@ -328,6 +328,7 @@ const countUniqueLinkedParticipantUsers = (events: EventRecord[]) =>
 
 export function ControlScheduleWorkspace() {
   const { accessToken, activeOrganizationId } = useActiveWorkspace();
+  const isMobileViewport = useMobileViewport();
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [cursorDate, setCursorDate] = useState(() => startOfDay(new Date()));
   const [plays, setPlays] = useState<TemplateRecord[]>([]);
@@ -338,6 +339,7 @@ export function ControlScheduleWorkspace() {
   const [saving, setSaving] = useState(false);
   const [publishingWeek, setPublishingWeek] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventActionLoading, setEventActionLoading] = useState<'cancel' | 'delete' | 'remind' | null>(null);
@@ -579,6 +581,7 @@ export function ControlScheduleWorkspace() {
   const closeModal = () => {
     if (saving || eventActionLoading) return;
     setModalOpen(false);
+    setMobileActionsOpen(false);
     setEditingEventId(null);
     setConflicts(null);
     setForm(initialFormState);
@@ -876,28 +879,74 @@ export function ControlScheduleWorkspace() {
     }
   };
 
+  const mobileEditFooter = (
+    <div className="control-schedule-mobile-footer">
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => void handleSave('DRAFT')}
+        loading={saving}
+        fullWidth
+      >
+        Сохранить в черновик
+      </Button>
+      <Button type="button" onClick={() => void handleSave('PLANNED')} loading={saving} fullWidth>
+        Опубликовать сразу
+      </Button>
+      {editingEventId ? (
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => setMobileActionsOpen(true)}
+          disabled={saving || Boolean(eventActionLoading)}
+          fullWidth
+        >
+          Действия
+        </Button>
+      ) : null}
+    </div>
+  );
+
+  const desktopEditFooter = (
+    <div className="control-schedule-modal__footer">
+      <div className="control-schedule-modal__footer-side">
+        {editingEventId ? (
+          <>
+            <Button type="button" variant="ghost" onClick={handleDuplicate} disabled={saving || Boolean(eventActionLoading)}>
+              Дублировать
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => void handleSendReminderNow()} loading={eventActionLoading === 'remind'}>
+              Уведомить участников
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => void handleCancelEvent()} loading={eventActionLoading === 'cancel'}>
+              Отменить
+            </Button>
+            <Button type="button" variant="danger" onClick={() => void handleDeleteEvent()} loading={eventActionLoading === 'delete'}>
+              Удалить
+            </Button>
+          </>
+        ) : null}
+      </div>
+      <div className="control-schedule-modal__footer-side">
+        <Button type="button" variant="ghost" onClick={closeModal} disabled={saving || Boolean(eventActionLoading)}>
+          Отмена
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => void handleSave('DRAFT')} loading={saving}>
+          Сохранить в черновик
+        </Button>
+        <Button type="button" onClick={() => void handleSave('PLANNED')} loading={saving}>
+          Опубликовать сразу
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <ManagementShell
       title="Составить расписание"
-      description="Режим планирования недели: сначала соберите черновики, затем опубликуйте всю неделю одним действием."
+      description="Планирование недели, черновики и публикация событий."
     >
       <div className="control-schedule-board">
-        <Card className="schedule-mode-card schedule-mode-card--planner">
-          <CardContent className="schedule-mode-card__body">
-            <div className="schedule-mode-card__copy">
-              <p className="kicker">Режим 1</p>
-              <h2>Составить расписание</h2>
-              <p>Здесь планируют неделю целиком. Уведомления уходят только после массовой публикации недели.</p>
-            </div>
-            <div className="schedule-mode-card__actions">
-              <Badge variant="primary">Массовая публикация</Badge>
-              <Link className="ui-button ui-button--ghost ui-button--md" href="/calendar">
-                <span className="ui-button__content">Открыть календарь</span>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-
         <Card className="control-schedule-board__toolbar-card">
           <CardContent className="control-schedule-board__toolbar">
             <div className="control-schedule-board__toolbar-main">
@@ -1043,40 +1092,8 @@ export function ControlScheduleWorkspace() {
         title={editingEventId ? 'Редактировать событие' : 'Новое событие'}
         description={weekdayLongFormat.format(new Date(`${form.date}T00:00:00`))}
         size="md"
-        panelClassName="control-schedule-modal__panel"
-        footer={
-          <div className="control-schedule-modal__footer">
-            <div className="control-schedule-modal__footer-side">
-              {editingEventId ? (
-                <>
-                  <Button type="button" variant="ghost" onClick={handleDuplicate} disabled={saving || Boolean(eventActionLoading)}>
-                    Дублировать
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={() => void handleSendReminderNow()} loading={eventActionLoading === 'remind'}>
-                    Уведомить участников
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={() => void handleCancelEvent()} loading={eventActionLoading === 'cancel'}>
-                    Отменить
-                  </Button>
-                  <Button type="button" variant="danger" onClick={() => void handleDeleteEvent()} loading={eventActionLoading === 'delete'}>
-                    Удалить
-                  </Button>
-                </>
-              ) : null}
-            </div>
-            <div className="control-schedule-modal__footer-side">
-              <Button type="button" variant="ghost" onClick={closeModal} disabled={saving || Boolean(eventActionLoading)}>
-                Отмена
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => void handleSave('DRAFT')} loading={saving}>
-                Сохранить в черновик
-              </Button>
-              <Button type="button" onClick={() => void handleSave('PLANNED')} loading={saving}>
-                Опубликовать сразу
-              </Button>
-            </div>
-          </div>
-        }
+        panelClassName={isMobileViewport ? 'control-schedule-modal__panel control-schedule-modal__panel--mobile' : 'control-schedule-modal__panel'}
+        footer={isMobileViewport ? mobileEditFooter : desktopEditFooter}
       >
         <div className="control-schedule-modal">
           <div className="auth-tabs">
@@ -1334,6 +1351,29 @@ export function ControlScheduleWorkspace() {
               <p className="control-schedule-modal__muted">Пересечений по текущему составу и площадке не найдено.</p>
             )}
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={mobileActionsOpen}
+        onClose={() => setMobileActionsOpen(false)}
+        title="Действия"
+        description="Дополнительные операции с событием."
+        panelClassName="mobile-action-sheet"
+      >
+        <div className="mobile-action-sheet__actions">
+          <Button type="button" variant="ghost" fullWidth onClick={() => { setMobileActionsOpen(false); handleDuplicate(); }}>
+            Дублировать
+          </Button>
+          <Button type="button" variant="ghost" fullWidth onClick={() => { setMobileActionsOpen(false); void handleSendReminderNow(); }} loading={eventActionLoading === 'remind'}>
+            Уведомить участников
+          </Button>
+          <Button type="button" variant="ghost" fullWidth onClick={() => { setMobileActionsOpen(false); void handleCancelEvent(); }} loading={eventActionLoading === 'cancel'}>
+            Отменить событие
+          </Button>
+          <Button type="button" variant="danger" fullWidth onClick={() => { setMobileActionsOpen(false); void handleDeleteEvent(); }} loading={eventActionLoading === 'delete'}>
+            Удалить
+          </Button>
         </div>
       </Modal>
 

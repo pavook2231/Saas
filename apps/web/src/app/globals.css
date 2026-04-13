@@ -273,7 +273,7 @@ img {
 .ui-card__content {
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-5);
+  padding: 20px;
 }
 
 .ui-card__header + .ui-card__content {
@@ -688,12 +688,13 @@ body.is-scroll-locked {
 .app-frame__main {
   min-width: 0;
   display: grid;
-  gap: 16px;
+  gap: 14px;
   align-content: start;
 }
 
 .app-frame__content {
   min-width: 0;
+  display: grid;
 }
 
 .app-sidebar {
@@ -852,8 +853,8 @@ body.is-scroll-locked {
 }
 
 .app-topbar {
-  min-height: 80px;
-  padding: 16px 18px;
+  min-height: 72px;
+  padding: 14px 16px;
   border: 1px solid rgba(219, 227, 239, 0.88);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.78);
@@ -888,20 +889,22 @@ body.is-scroll-locked {
 
 .app-page {
   display: grid;
-  gap: 24px;
+  gap: 18px;
+  width: min(100%, 1240px);
+  margin-inline: auto;
 }
 
 .feature-page-header {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
 }
 
 .feature-page-header__copy {
   display: grid;
-  gap: 10px;
-  max-width: 760px;
+  gap: 8px;
+  max-width: 700px;
 }
 
 .feature-page-header__eyebrow {
@@ -915,14 +918,14 @@ body.is-scroll-locked {
 
 .feature-page-header h1 {
   margin: 0;
-  font-size: clamp(1.9rem, 2.6vw, 3rem);
-  line-height: 1.02;
+  font-size: clamp(1.8rem, 2.35vw, 2.7rem);
+  line-height: 1;
 }
 
 .feature-page-header__copy > p:last-child {
   margin: 0;
   color: var(--text-muted);
-  line-height: 1.65;
+  line-height: 1.5;
 }
 
 .feature-page-header__actions,
@@ -1506,25 +1509,25 @@ body.is-scroll-locked {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px 16px;
-  padding: 12px 14px;
-  border: 1px solid rgba(219, 227, 239, 0.88);
-  border-radius: 18px;
+  gap: 10px 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(219, 227, 239, 0.84);
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.82);
 }
 
 .account-page__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .account-overview-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.92fr);
-  gap: 14px;
-  padding: 18px 20px;
+  grid-template-columns: minmax(0, 1.22fr) minmax(300px, 0.88fr);
+  gap: 12px;
+  padding: 16px 18px;
   border: 1px solid rgba(221, 210, 200, 0.9);
   border-radius: 28px;
   background:
@@ -1536,7 +1539,7 @@ body.is-scroll-locked {
 .account-overview-shell__identity,
 .account-overview-shell__stats {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .account-overview-shell__identity {
@@ -1551,8 +1554,8 @@ body.is-scroll-locked {
 }
 
 .account-overview-shell__copy strong {
-  font-size: clamp(1.35rem, 2vw, 1.8rem);
-  line-height: 1.05;
+  font-size: clamp(1.2rem, 1.75vw, 1.55rem);
+  line-height: 1.02;
 }
 
 .account-overview-shell__copy span {
@@ -1568,9 +1571,9 @@ body.is-scroll-locked {
   display: grid;
   gap: 4px;
   min-height: 100%;
-  padding: 13px 15px;
+  padding: 12px 14px;
   border: 1px solid rgba(205, 191, 179, 0.84);
-  border-radius: 20px;
+  border-radius: 18px;
   background: rgba(255, 250, 246, 0.82);
 }
 
@@ -1589,15 +1592,15 @@ body.is-scroll-locked {
 
 .account-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.92fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+  gap: 14px;
   align-items: start;
 }
 
 .account-layout__main,
 .account-layout__side {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
   align-content: start;
   align-items: stretch;
@@ -1607,13 +1610,13 @@ body.is-scroll-locked {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px 14px;
+  gap: 10px 12px;
 }
 
 .account-profile-card__identity {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -1641,16 +1644,16 @@ body.is-scroll-locked {
 
 .account-settings-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
-  gap: 16px;
-  margin-top: 16px;
+  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+  gap: 14px;
+  margin-top: 0;
   align-items: start;
 }
 
 .account-settings-card,
 .account-security-card {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   align-content: start;
 }
 
@@ -1662,7 +1665,7 @@ body.is-scroll-locked {
 
 .account-toggle-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .profile-item-card .resource-card__actions {
@@ -1678,7 +1681,7 @@ body.is-scroll-locked {
 .account-layout > * > .ui-card .ui-card__content,
 .account-settings-grid > .ui-card .ui-card__header,
 .account-settings-grid > .ui-card .ui-card__content {
-  padding: 18px;
+  padding: 16px;
 }
 
 .account-browser-push {
@@ -3681,8 +3684,8 @@ textarea.ui-field {
 
 .control-shell__header {
   display: grid;
-  gap: 18px;
-  padding: 24px;
+  gap: 14px;
+  padding: 20px;
   border-bottom: 1px solid rgba(219, 227, 239, 0.9);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 251, 0.9));
 }
@@ -3740,7 +3743,7 @@ textarea.ui-field {
 }
 
 .control-shell__body {
-  padding: 24px;
+  padding: 20px;
 }
 
 .control-kind-row {
@@ -6186,10 +6189,6 @@ textarea.ui-field {
     gap: 12px;
   }
 
-  .account-settings-grid {
-    margin-top: 12px;
-  }
-
   .account-page__actions {
     width: 100%;
     display: grid;
@@ -6451,20 +6450,22 @@ textarea.ui-field {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .plays-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 14px;
+  gap: 12px;
+  width: min(100%, 1080px);
+  margin-inline: auto;
 }
 
 .plays-list {
   display: grid;
-  gap: 14px;
-  max-width: 1560px;
+  gap: 10px;
+  max-width: 1080px;
   margin-inline: auto;
 }
 
@@ -6474,8 +6475,8 @@ textarea.ui-field {
 
 .plays-card {
   display: grid;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: 6px;
+  padding: 12px;
   border: 1px solid rgba(219, 227, 239, 0.92);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.96);
@@ -6500,15 +6501,15 @@ textarea.ui-field {
 
 .plays-card__top {
   display: grid;
-  grid-template-columns: minmax(190px, 230px) minmax(280px, 1fr) auto;
-  align-items: stretch;
-  gap: 12px;
+  grid-template-columns: minmax(170px, 220px) minmax(280px, 1fr) minmax(190px, 220px);
+  align-items: start;
+  gap: 10px;
 }
 
 .plays-card__identity,
 .plays-card__aside {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .plays-card__identity {
@@ -6517,15 +6518,16 @@ textarea.ui-field {
 }
 
 .plays-card__aside {
-  min-width: 164px;
+  min-width: 0;
   justify-items: end;
-  align-content: space-between;
+  align-content: start;
+  gap: 10px;
 }
 
 .plays-card__identity h3 {
   margin: 0;
-  font-size: 0.96rem;
-  line-height: 1.15;
+  font-size: 0.98rem;
+  line-height: 1.12;
 }
 
 .plays-card__identity p,
@@ -6548,23 +6550,24 @@ textarea.ui-field {
 
 .plays-card__summary {
   display: flex;
-  gap: 10px;
+  gap: 8px 10px;
   flex-wrap: wrap;
   font-size: 0.78rem;
+  line-height: 1.28;
 }
 
 .plays-card__roles {
   display: grid;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
 
 .plays-card__role-row {
   display: grid;
   gap: 3px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid rgba(226, 232, 240, 0.95);
-  border-radius: 14px;
+  border-radius: 12px;
   background: rgba(248, 250, 252, 0.92);
 }
 
@@ -6591,12 +6594,12 @@ textarea.ui-field {
 .plays-card__actions {
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 2px;
+  gap: 6px;
+  padding-top: 0;
 }
 
 .plays-empty-state {
-  min-height: 220px;
+  min-height: 180px;
   place-items: center;
 }
 
@@ -7012,6 +7015,11 @@ textarea.ui-field {
   .plays-toolbar,
   .plays-editor__grid {
     grid-template-columns: 1fr;
+  }
+
+  .plays-toolbar,
+  .plays-list {
+    max-width: none;
   }
 
   .plays-page__header,

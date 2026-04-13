@@ -288,6 +288,25 @@ export function CalendarWorkspace() {
 
   const canOpenControlPanel = canAccessControlPanel(activeRole);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const syncMobileModes = () => {
+      const isMobileViewport = window.innerWidth <= 760;
+      if (isMobileViewport) {
+        setViewMode('week');
+        setPanelMode('compact');
+      }
+    };
+
+    syncMobileModes();
+    window.addEventListener('resize', syncMobileModes);
+
+    return () => window.removeEventListener('resize', syncMobileModes);
+  }, []);
+
   const loadCalendar = useCallback(async () => {
     if (!accessToken || !activeOrganizationId) {
       setEvents([]);
@@ -945,12 +964,12 @@ export function CalendarWorkspace() {
         <section className="calendar-compact-mode">
           <div className="calendar-compact-mode__hero">
             <div className="calendar-compact-mode__hero-copy">
-              <p className="kicker">Компактный режим</p>
-              <h2>{todayEvents.length > 0 ? 'Сегодня под рукой' : 'Ближайшие события без шума'}</h2>
+              <p className="kicker">Компактный обзор</p>
+              <h2>{todayEvents.length > 0 ? 'Сегодня в работе' : 'Неделя без перегруза'}</h2>
               <p>
                 {todayEvents.length > 0
-                  ? `На сегодня запланировано ${todayEvents.length} ${todayEvents.length === 1 ? 'событие' : 'события'}. Можно быстро открыть детали или добавить новое.`
-                  : 'Показываем ближайшие события, быстрые действия и удобный обзор недели на одном экране.'}
+                  ? `На сегодня запланировано ${todayEvents.length} ${todayEvents.length === 1 ? 'событие' : 'события'}. Откройте карточку или добавьте слот без перехода в большой режим.`
+                  : 'Сверху только навигация, ниже вся неделя и ближайшие события. Без лишних блоков и перегруза.'}
               </p>
             </div>
             {canOpenControlPanel ? (

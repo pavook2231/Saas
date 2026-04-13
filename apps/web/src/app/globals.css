@@ -1,29 +1,32 @@
 ﻿:root {
-  --bg: #f4f7fb;
-  --bg-soft: #edf2f8;
-  --surface: rgba(255, 255, 255, 0.92);
-  --surface-strong: #ffffff;
-  --surface-muted: #f7f9fc;
-  --surface-accent: #eef4ff;
-  --text: #0f172a;
-  --text-muted: #5b667a;
-  --text-soft: #7b8798;
-  --border: #dbe3ef;
-  --border-strong: #c7d3e4;
-  --primary: #2563eb;
-  --primary-strong: #1d4ed8;
-  --primary-soft: rgba(37, 99, 235, 0.11);
-  --success: #0f9d69;
-  --success-soft: rgba(15, 157, 105, 0.12);
-  --warning: #d97706;
-  --warning-soft: rgba(217, 119, 6, 0.14);
-  --error: #dc2626;
-  --error-soft: rgba(220, 38, 38, 0.12);
-  --shadow-sm: 0 10px 30px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 22px 60px rgba(15, 23, 42, 0.1);
-  --radius-sm: 12px;
-  --radius-md: 18px;
-  --radius-lg: 24px;
+  --bg: #f3efea;
+  --bg-soft: #ede6df;
+  --surface-page: #f7f3ee;
+  --surface-panel: rgba(255, 252, 248, 0.94);
+  --surface-card: #fffdf9;
+  --surface-muted: #f1ebe4;
+  --surface-accent: #f3ebf1;
+  --surface: var(--surface-panel);
+  --surface-strong: var(--surface-card);
+  --text: #28231f;
+  --text-muted: #645a54;
+  --text-soft: #887b73;
+  --border: #ddd2c8;
+  --border-strong: #cdbfb3;
+  --primary: #5c2f4f;
+  --primary-strong: #44213a;
+  --primary-soft: rgba(92, 47, 79, 0.11);
+  --success: #2f6e68;
+  --success-soft: rgba(47, 110, 104, 0.12);
+  --warning: #b77928;
+  --warning-soft: rgba(183, 121, 40, 0.14);
+  --error: #8f2f3c;
+  --error-soft: rgba(143, 47, 60, 0.12);
+  --shadow-sm: 0 12px 28px rgba(46, 35, 29, 0.06);
+  --shadow-md: 0 28px 72px rgba(46, 35, 29, 0.12);
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 26px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -47,9 +50,10 @@ body {
   font-family: 'IBM Plex Sans', 'Avenir Next', 'Segoe UI', sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 28%),
-    radial-gradient(circle at right bottom, rgba(14, 165, 233, 0.1), transparent 24%),
-    linear-gradient(180deg, #f8fbff 0%, #f2f6fb 46%, #edf2f8 100%);
+    radial-gradient(circle at top left, rgba(92, 47, 79, 0.08), transparent 28%),
+    radial-gradient(circle at right bottom, rgba(196, 157, 108, 0.08), transparent 24%),
+    linear-gradient(180deg, #faf6f1 0%, #f5efe8 46%, #efe7df 100%);
+  overflow-x: hidden;
 }
 
 a {
@@ -134,15 +138,15 @@ img {
 .ui-button--primary {
   background: linear-gradient(135deg, var(--primary), var(--primary-strong));
   color: #fff;
-  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.22);
+  box-shadow: 0 12px 28px rgba(92, 47, 79, 0.2);
 }
 
 .ui-button--primary:hover {
-  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.26);
+  box-shadow: 0 16px 32px rgba(92, 47, 79, 0.24);
 }
 
 .ui-button--ghost {
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 253, 249, 0.82);
   color: var(--text);
   border-color: var(--border);
 }
@@ -160,14 +164,13 @@ img {
 
 .ui-card {
   background: var(--surface);
-  border: 1px solid rgba(219, 227, 239, 0.9);
+  border: 1px solid rgba(221, 210, 200, 0.9);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(18px);
 }
 
 .ui-card--subtle {
-  background: rgba(247, 249, 252, 0.82);
+  background: rgba(241, 235, 228, 0.72);
 }
 
 .ui-card--interactive {
@@ -204,11 +207,10 @@ img {
   align-items: start;
   gap: 12px;
   padding: 14px 14px 14px 12px;
-  border: 1px solid rgba(219, 227, 239, 0.9);
+  border: 1px solid rgba(221, 210, 200, 0.92);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.14);
+  background: rgba(255, 253, 249, 0.98);
+  box-shadow: 0 20px 48px rgba(46, 35, 29, 0.14);
   pointer-events: auto;
 }
 
@@ -471,7 +473,7 @@ textarea.ui-field:focus {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   z-index: 70;
   overflow: hidden;
   overscroll-behavior: contain;
@@ -481,7 +483,7 @@ textarea.ui-field:focus {
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(15, 23, 42, 0.52);
+  background: rgba(39, 30, 25, 0.42);
   cursor: pointer;
 }
 
@@ -489,16 +491,15 @@ textarea.ui-field:focus {
   position: relative;
   z-index: 1;
   width: min(100%, 720px);
-  max-height: min(calc(100dvh - 24px), 880px);
+  max-height: min(calc(var(--viewport-height, 100dvh) - 24px), 880px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
   overflow: hidden;
   border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.36);
-  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(221, 210, 200, 0.9);
+  background: var(--surface-card);
   box-shadow: var(--shadow-md);
-  backdrop-filter: blur(20px);
 }
 
 .ui-modal__panel--sm { max-width: 420px; }
@@ -516,7 +517,7 @@ textarea.ui-field:focus {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
-  border-bottom: 1px solid rgba(219, 227, 239, 0.84);
+  border-bottom: 1px solid rgba(221, 210, 200, 0.84);
 }
 
 .ui-modal__header h3 { margin: 0; font-size: 1.16rem; }
@@ -527,9 +528,10 @@ textarea.ui-field:focus {
   height: 40px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(247, 249, 252, 0.8);
+  background: rgba(241, 235, 228, 0.72);
   cursor: pointer;
   font-size: 1.1rem;
+  color: var(--text-muted);
 }
 
 .ui-modal__body {
@@ -546,13 +548,14 @@ textarea.ui-field:focus {
 body.is-scroll-locked {
   overscroll-behavior: none;
   touch-action: none;
+  width: 100%;
 }
 
 .ui-modal__footer {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-3);
-  border-top: 1px solid rgba(219, 227, 239, 0.84);
+  border-top: 1px solid rgba(221, 210, 200, 0.84);
 }
 
 .ui-multiselect {
@@ -4011,8 +4014,8 @@ textarea.ui-field {
 }
 
 .venue-badge.is-tour {
-  background: rgba(14, 165, 233, 0.14);
-  color: #0369a1;
+  background: rgba(183, 121, 40, 0.14);
+  color: #9a6118;
 }
 
 .calendar-simple__header {
@@ -4083,9 +4086,9 @@ textarea.ui-field {
 }
 
 .calendar-simple__view-modes button.is-active {
-  background: rgba(37, 99, 235, 0.1);
+  background: var(--primary-soft);
   color: var(--primary);
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(92, 47, 79, 0.12);
 }
 
 .calendar-compact-mode,
@@ -4101,10 +4104,10 @@ textarea.ui-field {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 20px;
-  border: 1px solid rgba(219, 227, 239, 0.92);
+  padding: 16px 18px;
+  border: 1px solid rgba(221, 210, 200, 0.92);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.96);
+  background: linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(248, 242, 236, 0.94));
   box-shadow: var(--shadow-sm);
   min-width: 0;
   overflow: clip;
@@ -4119,7 +4122,7 @@ textarea.ui-field {
 .calendar-compact-mode__hero-copy h2,
 .calendar-participants-mode__header h2 {
   margin: 0;
-  font-size: 1.18rem;
+  font-size: 1.05rem;
 }
 
 .calendar-compact-mode__hero-copy p:last-child,
@@ -4144,11 +4147,11 @@ textarea.ui-field {
 .calendar-compact-day {
   display: grid;
   gap: 6px;
-  padding: 14px;
+  padding: 12px 13px;
   text-align: left;
-  border: 1px solid rgba(219, 227, 239, 0.92);
+  border: 1px solid rgba(221, 210, 200, 0.92);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 253, 249, 0.96);
   box-shadow: var(--shadow-sm);
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
@@ -4159,8 +4162,8 @@ textarea.ui-field {
 }
 
 .calendar-compact-day.is-today {
-  border-color: rgba(37, 99, 235, 0.28);
-  background: linear-gradient(180deg, rgba(239, 246, 255, 0.98), rgba(255, 255, 255, 0.96));
+  border-color: rgba(92, 47, 79, 0.24);
+  background: linear-gradient(180deg, rgba(246, 236, 243, 0.98), rgba(255, 253, 249, 0.96));
 }
 
 .calendar-compact-day__label {
@@ -4224,9 +4227,9 @@ textarea.ui-field {
   gap: 6px;
   padding: 12px 14px;
   text-align: left;
-  border: 1px solid rgba(226, 232, 240, 0.92);
+  border: 1px solid rgba(221, 210, 200, 0.88);
   border-radius: 16px;
-  background: rgba(248, 250, 252, 0.9);
+  background: rgba(244, 238, 231, 0.72);
 }
 
 .calendar-upcoming-item > div {
@@ -4633,9 +4636,9 @@ textarea.ui-field {
 .theatre-week-view {
   min-width: 0;
   overflow-x: auto;
-  border: 1px solid rgba(199, 211, 228, 0.98);
+  border: 1px solid rgba(205, 191, 179, 0.94);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 253, 249, 0.94);
   box-shadow: var(--shadow-sm);
 }
 
@@ -4660,8 +4663,8 @@ textarea.ui-field {
 }
 
 .theatre-week-table__header {
-  border-bottom: 1px solid rgba(199, 211, 228, 0.98);
-  background: rgba(239, 244, 250, 0.98);
+  border-bottom: 1px solid rgba(205, 191, 179, 0.98);
+  background: rgba(241, 235, 228, 0.82);
 }
 
 .theatre-week-table__heading,
@@ -4693,18 +4696,18 @@ textarea.ui-field {
 }
 
 .theatre-week-table__heading-icon.is-performance {
-  background: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+  background: #8f2f3c;
+  box-shadow: 0 0 0 3px rgba(143, 47, 60, 0.14);
 }
 
 .theatre-week-table__heading-icon.is-rehearsal {
-  background: #16a34a;
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.14);
+  background: #2f6e68;
+  box-shadow: 0 0 0 3px rgba(47, 110, 104, 0.14);
 }
 
 .theatre-week-table__heading-icon.is-tour {
-  background: #7c3aed;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.14);
+  background: #b77928;
+  box-shadow: 0 0 0 3px rgba(183, 121, 40, 0.14);
 }
 
 .theatre-week-table__heading-icon.is-other {
@@ -4719,9 +4722,9 @@ textarea.ui-field {
   min-height: 54px;
   padding: 10px 14px;
   margin: 8px;
-  border: 1px solid rgba(199, 211, 228, 0.9);
+  border: 1px solid rgba(205, 191, 179, 0.9);
   border-radius: 12px;
-  background: rgba(246, 249, 253, 0.9);
+  background: rgba(244, 238, 231, 0.72);
   color: #4b5d73;
   font-size: 0.84rem;
   font-weight: 600;
@@ -4729,7 +4732,7 @@ textarea.ui-field {
 }
 
 .theatre-week-table__row {
-  border-bottom: 2px solid rgba(199, 211, 228, 0.92);
+  border-bottom: 1px solid rgba(205, 191, 179, 0.92);
   min-height: 94px;
 }
 
@@ -4738,43 +4741,43 @@ textarea.ui-field {
 }
 
 .theatre-week-table__row:nth-child(odd):not(.is-today) {
-  background: rgba(251, 253, 255, 0.78);
+  background: rgba(255, 252, 248, 0.78);
 }
 
 .theatre-week-table__row:nth-child(even):not(.is-today) {
-  background: rgba(245, 248, 252, 0.72);
+  background: rgba(246, 241, 235, 0.66);
 }
 
 .theatre-week-table__row.is-weekend:not(.is-today) {
-  background: rgba(242, 245, 250, 0.95);
+  background: rgba(242, 236, 229, 0.92);
 }
 
 .theatre-week-table__row.is-today {
-  background: rgba(37, 99, 235, 0.08);
+  background: rgba(92, 47, 79, 0.06);
 }
 
 .theatre-week-table__cell,
 .theatre-week-table__day {
   min-height: 94px;
   padding: 7px;
-  border-right: 1px solid rgba(199, 211, 228, 0.9);
+  border-right: 1px solid rgba(205, 191, 179, 0.9);
   min-width: 0;
   background-clip: padding-box;
 }
 
 .theatre-week-table__day {
-  border-right: 2px solid rgba(176, 190, 210, 0.98);
+  border-right: 1px solid rgba(190, 177, 166, 0.98);
   display: grid;
   align-content: center;
   justify-items: start;
   gap: 4px;
   text-align: left;
-  background: rgba(234, 240, 247, 0.98);
+  background: rgba(241, 235, 228, 0.92);
 }
 
 .theatre-week-table__row.is-today .theatre-week-table__day {
-  background: linear-gradient(180deg, rgba(235, 243, 255, 0.98), rgba(228, 238, 252, 0.98));
-  box-shadow: inset 4px 0 0 rgba(37, 99, 235, 0.9);
+  background: linear-gradient(180deg, rgba(247, 239, 244, 0.98), rgba(242, 233, 239, 0.98));
+  box-shadow: inset 4px 0 0 rgba(92, 47, 79, 0.9);
 }
 
 .theatre-week-table__day strong {
@@ -4798,7 +4801,7 @@ textarea.ui-field {
   min-height: 22px;
   padding: 0 8px;
   border-radius: 999px;
-  background: rgba(37, 99, 235, 0.14);
+  background: rgba(92, 47, 79, 0.12);
   color: var(--primary-strong);
   font-size: 0.7rem;
   font-weight: 800;
@@ -4816,16 +4819,16 @@ textarea.ui-field {
 }
 
 .theatre-week-table__cell--interactive:hover {
-  background: rgba(248, 251, 255, 0.98);
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+  background: rgba(250, 245, 240, 0.98);
+  box-shadow: inset 0 0 0 1px rgba(92, 47, 79, 0.1);
   transform: translateY(-1px);
 }
 
 .theatre-week-table__cell--interactive:focus-visible {
   outline: none;
   box-shadow:
-    inset 0 0 0 1px rgba(37, 99, 235, 0.16),
-    inset 0 0 0 3px rgba(37, 99, 235, 0.14);
+    inset 0 0 0 1px rgba(92, 47, 79, 0.16),
+    inset 0 0 0 3px rgba(92, 47, 79, 0.12);
 }
 
 .theatre-week-table__empty {
@@ -4885,9 +4888,9 @@ textarea.ui-field {
   min-width: 0;
   justify-self: stretch;
   padding: 8px 9px;
-  border: 1px solid rgba(197, 210, 228, 0.98);
+  border: 1px solid rgba(205, 191, 179, 0.94);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
+  background: rgba(255, 253, 249, 0.98);
   text-align: left;
   cursor: pointer;
   transition:
@@ -4898,81 +4901,81 @@ textarea.ui-field {
 }
 
 .theatre-event--performance {
-  border-color: rgba(251, 146, 60, 0.34);
+  border-color: rgba(143, 47, 60, 0.28);
   background:
-    linear-gradient(90deg, rgba(255, 237, 213, 0.92) 0, rgba(255, 237, 213, 0.92) 4px, rgba(255, 255, 255, 0.98) 4px),
-    rgba(255, 255, 255, 0.98);
+    linear-gradient(90deg, rgba(250, 232, 236, 0.92) 0, rgba(250, 232, 236, 0.92) 4px, rgba(255, 253, 249, 0.98) 4px),
+    rgba(255, 253, 249, 0.98);
 }
 
 .theatre-event--performance .theatre-event__time {
-  background: rgba(255, 237, 213, 0.96);
-  color: #9a3412;
+  background: rgba(250, 232, 236, 0.96);
+  color: #7a2231;
 }
 
 .theatre-event--performance .theatre-event__type {
-  color: #c2410c;
+  color: #8f2f3c;
 }
 
 .theatre-event--rehearsal {
-  border-color: rgba(74, 222, 128, 0.34);
+  border-color: rgba(47, 110, 104, 0.28);
   background:
-    linear-gradient(90deg, rgba(220, 252, 231, 0.92) 0, rgba(220, 252, 231, 0.92) 4px, rgba(255, 255, 255, 0.98) 4px),
-    rgba(255, 255, 255, 0.98);
+    linear-gradient(90deg, rgba(226, 241, 238, 0.92) 0, rgba(226, 241, 238, 0.92) 4px, rgba(255, 253, 249, 0.98) 4px),
+    rgba(255, 253, 249, 0.98);
 }
 
 .theatre-event--rehearsal .theatre-event__time {
-  background: rgba(220, 252, 231, 0.96);
-  color: #166534;
+  background: rgba(226, 241, 238, 0.96);
+  color: #245e59;
 }
 
 .theatre-event--rehearsal .theatre-event__type {
-  color: #15803d;
+  color: #2f6e68;
 }
 
 .theatre-event--tour {
-  border-color: rgba(96, 165, 250, 0.34);
+  border-color: rgba(183, 121, 40, 0.28);
   background:
-    linear-gradient(90deg, rgba(219, 234, 254, 0.92) 0, rgba(219, 234, 254, 0.92) 4px, rgba(255, 255, 255, 0.98) 4px),
-    rgba(255, 255, 255, 0.98);
+    linear-gradient(90deg, rgba(250, 240, 221, 0.92) 0, rgba(250, 240, 221, 0.92) 4px, rgba(255, 253, 249, 0.98) 4px),
+    rgba(255, 253, 249, 0.98);
 }
 
 .theatre-event--tour .theatre-event__time {
-  background: rgba(219, 234, 254, 0.96);
-  color: #1d4ed8;
+  background: rgba(250, 240, 221, 0.96);
+  color: #9a6118;
 }
 
 .theatre-event--tour .theatre-event__type {
-  color: #2563eb;
+  color: #b77928;
 }
 
 .theatre-event--event,
 .theatre-event--custom {
-  border-color: rgba(192, 132, 252, 0.34);
+  border-color: rgba(100, 116, 139, 0.28);
   background:
-    linear-gradient(90deg, rgba(243, 232, 255, 0.92) 0, rgba(243, 232, 255, 0.92) 4px, rgba(255, 255, 255, 0.98) 4px),
-    rgba(255, 255, 255, 0.98);
+    linear-gradient(90deg, rgba(238, 241, 245, 0.92) 0, rgba(238, 241, 245, 0.92) 4px, rgba(255, 253, 249, 0.98) 4px),
+    rgba(255, 253, 249, 0.98);
 }
 
 .theatre-event--event .theatre-event__time,
 .theatre-event--custom .theatre-event__time {
-  background: rgba(243, 232, 255, 0.96);
-  color: #7e22ce;
+  background: rgba(238, 241, 245, 0.96);
+  color: #536174;
 }
 
 .theatre-event--event .theatre-event__type,
 .theatre-event--custom .theatre-event__type {
-  color: #7c3aed;
+  color: #536174;
 }
 
 .theatre-event:hover {
   transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.28);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+  border-color: rgba(92, 47, 79, 0.22);
+  box-shadow: 0 14px 34px rgba(46, 35, 29, 0.08);
 }
 
 .theatre-event.is-selected {
-  border-color: rgba(37, 99, 235, 0.3);
-  box-shadow: 0 18px 36px rgba(37, 99, 235, 0.12);
+  border-color: rgba(92, 47, 79, 0.28);
+  box-shadow: 0 18px 36px rgba(92, 47, 79, 0.12);
 }
 
 .theatre-event.is-cancelled {
@@ -4995,15 +4998,15 @@ textarea.ui-field {
 }
 
 .theatre-event__marker--performance {
-  background: #ea580c;
+  background: #8f2f3c;
 }
 
 .theatre-event__marker--rehearsal {
-  background: #16a34a;
+  background: #2f6e68;
 }
 
 .theatre-event__marker--tour {
-  background: #2563eb;
+  background: #b77928;
 }
 
 .theatre-event__marker--event,
@@ -5072,9 +5075,9 @@ textarea.ui-field {
   display: grid;
   gap: 8px;
   padding: 12px;
-  border: 1px solid rgba(219, 227, 239, 0.88);
+  border: 1px solid rgba(221, 210, 200, 0.88);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 253, 249, 0.94);
   box-shadow: var(--shadow-sm);
 }
 
@@ -5097,13 +5100,13 @@ textarea.ui-field {
 
 .theatre-day-card.is-interactive:hover {
   transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.2);
-  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.08);
+  border-color: rgba(92, 47, 79, 0.18);
+  box-shadow: 0 14px 28px rgba(92, 47, 79, 0.08);
 }
 
 .theatre-day-card.is-today {
-  border-color: rgba(37, 99, 235, 0.24);
-  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(92, 47, 79, 0.22);
+  background: rgba(255, 252, 248, 0.98);
 }
 
 .theatre-day-card.is-weekend:not(.is-today) {
@@ -5133,14 +5136,14 @@ textarea.ui-field {
   justify-content: center;
   width: 30px;
   height: 30px;
-  border: 1px solid rgba(199, 211, 228, 0.96);
+  border: 1px solid rgba(205, 191, 179, 0.96);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.98);
+  background: rgba(255, 252, 248, 0.98);
   color: var(--primary);
   font-size: 1.05rem;
   font-weight: 700;
   line-height: 1;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 18px rgba(46, 35, 29, 0.08);
 }
 
 .theatre-day-card__count {
@@ -5199,23 +5202,23 @@ textarea.ui-field {
 }
 
 .theatre-day-card__summary-pill--performance {
-  background: rgba(255, 237, 213, 0.96);
-  color: #c2410c;
+  background: rgba(250, 232, 236, 0.96);
+  color: #8f2f3c;
 }
 
 .theatre-day-card__summary-pill--rehearsal {
-  background: rgba(220, 252, 231, 0.92);
-  color: #15803d;
+  background: rgba(226, 241, 238, 0.92);
+  color: #2f6e68;
 }
 
 .theatre-day-card__summary-pill--tour {
-  background: rgba(219, 234, 254, 0.94);
-  color: #2563eb;
+  background: rgba(250, 240, 221, 0.94);
+  color: #b77928;
 }
 
 .theatre-day-card__summary-pill--other {
-  background: rgba(243, 232, 255, 0.96);
-  color: #7c3aed;
+  background: rgba(238, 241, 245, 0.96);
+  color: #536174;
 }
 
 .theatre-day-card__timeline {
@@ -5228,22 +5231,22 @@ textarea.ui-field {
   --lane-accent: rgba(148, 163, 184, 0.18);
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid rgba(226, 232, 240, 0.92);
+  border: 1px solid rgba(221, 210, 200, 0.82);
   border-radius: 14px;
-  background: rgba(248, 250, 253, 0.8);
+  background: rgba(244, 238, 231, 0.62);
   box-shadow: inset 3px 0 0 var(--lane-accent);
 }
 
 .theatre-day-card__section--performance {
-  --lane-accent: rgba(220, 38, 38, 0.14);
+  --lane-accent: rgba(143, 47, 60, 0.14);
 }
 
 .theatre-day-card__section--rehearsal {
-  --lane-accent: rgba(22, 163, 74, 0.14);
+  --lane-accent: rgba(47, 110, 104, 0.14);
 }
 
 .theatre-day-card__section--tour {
-  --lane-accent: rgba(37, 99, 235, 0.14);
+  --lane-accent: rgba(183, 121, 40, 0.14);
 }
 
 .theatre-day-card__section--other {
@@ -5499,6 +5502,11 @@ textarea.ui-field {
 
   .ui-modal {
     place-items: end center;
+    padding:
+      max(8px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
   }
 
   .toast-viewport {
@@ -5520,9 +5528,9 @@ textarea.ui-field {
 
   .ui-modal__panel {
     width: min(100%, 680px);
-    max-height: min(calc(100dvh - 8px), 92dvh);
+    max-height: min(calc(var(--viewport-height, 100dvh) - 8px), 92dvh);
     align-self: end;
-    border-radius: 22px 22px 0 0;
+    border-radius: 24px 24px 0 0;
   }
 
   .app-topbar {
@@ -5592,7 +5600,7 @@ textarea.ui-field {
 
   .calendar-simple__actions {
     display: grid;
-    gap: 8px;
+    gap: 10px;
   }
 
   .calendar-simple__actions-main,
@@ -5616,7 +5624,7 @@ textarea.ui-field {
 
   .calendar-simple__view-modes {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 4px;
   }
 
@@ -5647,8 +5655,8 @@ textarea.ui-field {
   .calendar-participants-mode__header {
     display: grid;
     grid-template-columns: 1fr;
-    padding: 16px;
-    border-radius: 20px;
+    padding: 14px;
+    border-radius: 18px;
   }
 
   .calendar-compact-mode__hero-actions {
@@ -5660,8 +5668,16 @@ textarea.ui-field {
   }
 
   .calendar-compact-mode__quick-days {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(7, minmax(112px, 1fr));
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scroll-snap-type: x proximity;
+  }
+
+  .calendar-compact-day {
+    min-height: 112px;
+    scroll-snap-align: start;
   }
 
   .calendar-compact-mode__columns {
@@ -6761,15 +6777,15 @@ textarea.ui-field {
 
 @media (max-width: 760px) {
   .control-schedule-modal__panel {
-    width: min(100vw, 100%);
-    max-width: 100vw;
+    width: min(100%, 100vw);
+    max-width: 100%;
     margin: 0;
     align-self: end;
-    border-radius: 24px 24px 0 0;
+    border-radius: 26px 26px 0 0;
   }
 
   .control-schedule-modal__panel .ui-modal__body {
-    max-height: min(72vh, 720px);
+    max-height: min(calc(var(--viewport-height, 100dvh) * 0.74), 720px);
     overflow: auto;
   }
 
@@ -6780,5 +6796,10 @@ textarea.ui-field {
   .control-schedule-modal__section,
   .control-schedule-modal__summary {
     padding: 12px 14px;
+  }
+
+  .control-schedule-modal__summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 }

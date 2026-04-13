@@ -73,6 +73,29 @@ export function Modal({
   }, [open]);
 
   useEffect(() => {
+    if (!open || typeof document === 'undefined') {
+      return;
+    }
+
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+    const updateViewportHeight = () => {
+      const height = viewport?.height ?? window.innerHeight;
+      root.style.setProperty('--viewport-height', `${height}px`);
+    };
+
+    updateViewportHeight();
+    viewport?.addEventListener('resize', updateViewportHeight);
+    window.addEventListener('orientationchange', updateViewportHeight);
+
+    return () => {
+      viewport?.removeEventListener('resize', updateViewportHeight);
+      window.removeEventListener('orientationchange', updateViewportHeight);
+      root.style.removeProperty('--viewport-height');
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open) {
       return;
     }
@@ -123,7 +146,7 @@ export function Modal({
                 aria-label="Закрыть"
                 onClick={onClose}
               >
-                x
+                <span aria-hidden="true">×</span>
               </button>
             </div>
             <div className="ui-modal__body">{children}</div>

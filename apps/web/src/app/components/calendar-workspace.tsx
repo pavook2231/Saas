@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-import { notificationsApi, type NotificationItem } from '@/app/lib/api/notifications';
 import {
   operationsApi,
   participantDisplayName,
@@ -286,8 +285,6 @@ export function CalendarWorkspace() {
   const [composerSaving, setComposerSaving] = useState(false);
   const [composerErrorText, setComposerErrorText] = useState<string | null>(null);
   const [eventActionLoading, setEventActionLoading] = useState<'cancel' | 'delete' | null>(null);
-  const [scheduleChanges, setScheduleChanges] = useState<NotificationItem[]>([]);
-  const [scheduleChangesLoading, setScheduleChangesLoading] = useState(false);
 
   const canOpenControlPanel = canAccessControlPanel(activeRole);
 
@@ -362,46 +359,6 @@ export function CalendarWorkspace() {
   }, [loadCalendar]);
 
   useEffect(() => {
-    if (!accessToken || !activeOrganizationId) {
-      setScheduleChanges([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadScheduleChanges = async () => {
-      setScheduleChangesLoading(true);
-
-      try {
-        const response = await notificationsApi.listMyScheduleChanges({
-          accessToken,
-          limit: 6,
-        });
-
-        if (!cancelled) {
-          setScheduleChanges(response.items);
-        }
-
-        await notificationsApi.markScheduleChangesSeen({ accessToken });
-      } catch {
-        if (!cancelled) {
-          setScheduleChanges([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setScheduleChangesLoading(false);
-        }
-      }
-    };
-
-    void loadScheduleChanges();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, activeOrganizationId]);
-
-  useEffect(() => {
     const eventId = searchParams.get('eventId');
 
     if (!eventId || events.length === 0) {
@@ -427,28 +384,6 @@ export function CalendarWorkspace() {
   const selectedEvent = useMemo(
     () => events.find((event) => event.id === selectedEventId) ?? null,
     [events, selectedEventId],
-  );
-  const scheduleChangesPreview = useMemo(
-    () =>
-      scheduleChanges.map((item) => {
-        const payload = item.notification.payload ?? {};
-        const changedFields = Array.isArray(payload.changedFields)
-          ? payload.changedFields.filter((value): value is string => typeof value === 'string')
-          : [];
-
-        return {
-          ...item,
-          changedFields,
-          urgent: item.notification.type === 'EVENT_URGENT_CHANGE' || payload.urgent === true,
-          url:
-            typeof payload.url === 'string' && payload.url.length > 0
-              ? payload.url
-              : item.notification.eventId
-                ? `/calendar?eventId=${item.notification.eventId}`
-                : '/calendar',
-        };
-      }),
-    [scheduleChanges],
   );
 
   const selectedParticipants = useMemo(
@@ -1002,47 +937,6 @@ export function CalendarWorkspace() {
           ) : null}
         </div>
       </div>
-
-      <section className="calendar-change-feed">
-        <div className="calendar-change-feed__header">
-          <div>
-            <p className="kicker">Изменилось</p>
-            <h2>Что нового в вашем расписании</h2>
-          </div>
-          {scheduleChangesPreview.length > 0 ? (
-            <Badge variant="neutral">{scheduleChangesPreview.length}</Badge>
-          ) : null}
-        </div>
-        {scheduleChangesLoading ? (
-          <p className="empty-state">Проверяем последние изменения...</p>
-        ) : scheduleChangesPreview.length === 0 ? (
-          <div className="resource-empty-inline">
-            <strong>Новых изменений нет</strong>
-            <p>Здесь появятся переносы, отмены и срочные изменения после вашего прошлого входа.</p>
-          </div>
-        ) : (
-          <div className="calendar-change-feed__list">
-            {scheduleChangesPreview.map((item) => (
-              <a
-                key={item.recipientId}
-                href={item.url}
-                className={`calendar-change-feed__item${item.urgent ? ' is-urgent' : ''}`}
-              >
-                <div>
-                  <strong>{item.notification.title}</strong>
-                  <p>{item.notification.body}</p>
-                  {item.changedFields.length > 0 ? (
-                    <span>{item.changedFields.join(' · ')}</span>
-                  ) : null}
-                </div>
-                <Badge variant={item.urgent ? 'warning' : 'neutral'}>
-                  {item.urgent ? 'Срочно' : 'Новое'}
-                </Badge>
-              </a>
-            ))}
-          </div>
-        )}
-      </section>
 
       {errorText ? <p className="finance-error">{errorText}</p> : null}
       {loading ? <p className="empty-state">Загружаем расписание...</p> : null}

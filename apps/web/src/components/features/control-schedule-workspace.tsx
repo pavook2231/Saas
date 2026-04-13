@@ -970,10 +970,10 @@ export function ControlScheduleWorkspace() {
   );
 
   const desktopEditFooter = (
-    <div className="control-schedule-modal__footer">
-      <div className="control-schedule-modal__footer-side">
+    <div className="control-schedule-modal__footer control-schedule-modal__footer--board">
+      <div className="control-schedule-modal__footer-card control-schedule-modal__footer-card--secondary">
         {editingEventId ? (
-          <>
+          <div className="control-schedule-modal__footer-grid">
             <Button type="button" variant="ghost" onClick={handleDuplicate} disabled={saving || Boolean(eventActionLoading)}>
               Дублировать
             </Button>
@@ -986,10 +986,10 @@ export function ControlScheduleWorkspace() {
             <Button type="button" variant="danger" onClick={() => void handleDeleteEvent()} loading={eventActionLoading === 'delete'}>
               Удалить
             </Button>
-          </>
+          </div>
         ) : null}
       </div>
-      <div className="control-schedule-modal__footer-side">
+      <div className="control-schedule-modal__footer-card control-schedule-modal__footer-card--primary">
         <Button type="button" variant="ghost" onClick={closeModal} disabled={saving || Boolean(eventActionLoading)}>
           Отмена
         </Button>
@@ -1514,6 +1514,12 @@ export function ControlScheduleWorkspace() {
                 <p className="control-schedule-modal__muted">История пока пустая.</p>
               ) : (
                 <div className="schedule-history-list">
+                  <div className="schedule-history-table">
+                    <div className="schedule-history-table__head">
+                      <span>Фамилия</span>
+                      <span>Изменено</span>
+                    </div>
+                  </div>
                   {eventHistory.map((item) => {
                     const payload =
                       item.payload && typeof item.payload === 'object' && !Array.isArray(item.payload)
@@ -1525,17 +1531,15 @@ export function ControlScheduleWorkspace() {
                         : [];
 
                     return (
-                      <article key={item.id} className="schedule-history-item">
-                        <div>
-                          <strong>
-                            {item.actor
-                              ? `${item.actor.firstName} ${item.actor.lastName}`.trim() || item.actor.email || 'Пользователь'
-                              : 'Система'}
-                          </strong>
-                          <span>{item.description ?? item.action}</span>
-                          {changedFields.length > 0 ? <small>Изменено: {changedFields.join(', ')}</small> : null}
-                        </div>
-                        <small>{new Date(item.createdAt).toLocaleString('ru-RU')}</small>
+                      <article key={item.id} className="schedule-history-item schedule-history-item--compact">
+                        <strong>
+                          {item.actor?.lastName?.trim() || item.actor?.email || 'Система'}
+                        </strong>
+                        <span>
+                          {changedFields.length > 0
+                            ? changedFields.join(', ')
+                            : item.description ?? item.action}
+                        </span>
                       </article>
                     );
                   })}

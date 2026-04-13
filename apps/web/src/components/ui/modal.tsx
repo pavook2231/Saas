@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { useEffect, type PropsWithChildren, type ReactNode } from 'react';
+import { useEffect, useRef, type PropsWithChildren, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/cn';
@@ -27,6 +27,8 @@ export function Modal({
   children,
 }: ModalProps) {
   const prefersReducedMotion = useReducedMotion();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open || typeof document === 'undefined') {
@@ -81,7 +83,9 @@ export function Modal({
     const viewport = window.visualViewport;
     const updateViewportHeight = () => {
       const height = viewport?.height ?? window.innerHeight;
+      const keyboardOffset = Math.max(0, window.innerHeight - height - (viewport?.offsetTop ?? 0));
       root.style.setProperty('--viewport-height', `${height}px`);
+      root.style.setProperty('--keyboard-offset', `${keyboardOffset}px`);
     };
 
     updateViewportHeight();
@@ -92,6 +96,87 @@ export function Modal({
       viewport?.removeEventListener('resize', updateViewportHeight);
       window.removeEventListener('orientationchange', updateViewportHeight);
       root.style.removeProperty('--viewport-height');
+      root.style.removeProperty('--keyboard-offset');
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || typeof document === 'undefined') {
+      return;
+    }
+
+    const panelElement = panelRef.current;
+    const bodyElement = bodyRef.current;
+    const viewport = window.visualViewport;
+
+    if (!panelElement || !bodyElement) {
+      return;
+    }
+
+    const isFormField = (value: EventTarget | null): value is HTMLElement =>
+      value instanceof HTMLElement &&
+      (value.matches('input, textarea, select') || value.isContentEditable);
+
+    const revealField = (field: HTMLElement, behavior: ScrollBehavior) => {
+      window.requestAnimationFrame(() => {
+        if (!panelElement.contains(field)) {
+          return;
+        }
+
+        const bodyRect = bodyElement.getBoundingClientRect();
+        const fieldRect = field.getBoundingClientRect();
+        const viewportHeight = viewport?.height ?? window.innerHeight;
+        const viewportTop = viewport?.offsetTop ?? 0;
+        const visibleTop = Math.max(bodyRect.top + 12, viewportTop + 72);
+        const visibleBottom = Math.min(bodyRect.bottom - 12, viewportTop + viewportHeight - 88);
+
+        let nextScrollTop = bodyElement.scrollTop;
+
+        if (fieldRect.top < visibleTop) {
+          nextScrollTop -= visibleTop - fieldRect.top;
+        } else if (fieldRect.bottom > visibleBottom) {
+          nextScrollTop += fieldRect.bottom - visibleBottom;
+        }
+
+        bodyElement.scrollTo({
+          top: Math.max(0, nextScrollTop),
+          behavior,
+        });
+      });
+    };
+
+    const handleFocusIn = (event: FocusEvent) => {
+      if (!isFormField(event.target)) {
+        return;
+      }
+
+      const field = event.target;
+
+      window.setTimeout(() => {
+        revealField(field, 'smooth');
+      }, 140);
+    };
+
+    const handleViewportShift = () => {
+      const activeElement = document.activeElement;
+
+      if (!isFormField(activeElement) || !panelElement.contains(activeElement)) {
+        return;
+      }
+
+      window.setTimeout(() => {
+        revealField(activeElement, 'auto');
+      }, 40);
+    };
+
+    bodyElement.addEventListener('focusin', handleFocusIn);
+    viewport?.addEventListener('resize', handleViewportShift);
+    window.addEventListener('orientationchange', handleViewportShift);
+
+    return () => {
+      bodyElement.removeEventListener('focusin', handleFocusIn);
+      viewport?.removeEventListener('resize', handleViewportShift);
+      window.removeEventListener('orientationchange', handleViewportShift);
     };
   }, [open]);
 
@@ -130,6 +215,7 @@ export function Modal({
           />
           <motion.div
             className={cn('ui-modal__panel', `ui-modal__panel--${size}`, panelClassName)}
+            ref={panelRef}
             initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
@@ -149,7 +235,9 @@ export function Modal({
                 <span aria-hidden="true">×</span>
               </button>
             </div>
-            <div className="ui-modal__body">{children}</div>
+            <div className="ui-modal__body" ref={bodyRef}>
+              {children}
+            </div>
             {footer ? <div className="ui-modal__footer">{footer}</div> : null}
           </motion.div>
         </div>

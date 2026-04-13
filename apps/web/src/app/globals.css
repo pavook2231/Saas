@@ -473,7 +473,11 @@ textarea.ui-field:focus {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    calc(max(12px, env(safe-area-inset-bottom)) + var(--keyboard-offset, 0px))
+    max(12px, env(safe-area-inset-left));
   z-index: 70;
   overflow: hidden;
   overscroll-behavior: contain;
@@ -543,11 +547,17 @@ textarea.ui-field:focus {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y pinch-zoom;
+  scroll-padding: 88px 0 calc(132px + var(--keyboard-offset, 0px));
+}
+
+.ui-modal__body .ui-field,
+.ui-modal__body .ui-select,
+.ui-modal__body textarea {
+  scroll-margin-block: 104px;
 }
 
 body.is-scroll-locked {
   overscroll-behavior: none;
-  touch-action: none;
   width: 100%;
 }
 
@@ -4284,10 +4294,10 @@ textarea.ui-field {
 .calendar-simple__header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  padding: 18px 20px;
+  gap: 12px;
+  padding: 14px 16px;
   border: 1px solid rgba(221, 210, 200, 0.88);
-  border-radius: 28px;
+  border-radius: 24px;
   background: linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(244, 236, 228, 0.9));
   box-shadow: var(--shadow-sm);
 }
@@ -4299,8 +4309,8 @@ textarea.ui-field {
 }
 
 .calendar-simple__header h1 {
-  margin: 6px 0 0;
-  font-size: clamp(1.9rem, 4vw, 2.5rem);
+  margin: 2px 0 0;
+  font-size: clamp(1.55rem, 3.6vw, 2.1rem);
   line-height: 1.02;
 }
 
@@ -4308,14 +4318,14 @@ textarea.ui-field {
   display: grid;
   justify-items: end;
   align-content: space-between;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
 .calendar-simple__actions-main {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   flex-wrap: wrap;
 }
@@ -5916,8 +5926,8 @@ textarea.ui-field {
 
   .calendar-simple__header {
     grid-template-columns: 1fr;
-    gap: 12px;
-    padding: 16px;
+    gap: 10px;
+    padding: 14px;
   }
 
   .calendar-simple__intro {
@@ -5931,7 +5941,7 @@ textarea.ui-field {
 
   .calendar-simple__header h1 {
     margin-top: 2px;
-    font-size: 1.48rem;
+    font-size: 1.28rem;
   }
 
   .calendar-page--compact .period-label {
@@ -5940,7 +5950,7 @@ textarea.ui-field {
 
   .calendar-simple__actions {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     justify-items: stretch;
   }
 
@@ -5955,7 +5965,7 @@ textarea.ui-field {
 
   .calendar-simple__actions-main {
     display: grid;
-    gap: 8px;
+    gap: 6px;
   }
 
   .calendar-simple__actions .segmented {
@@ -5970,9 +5980,9 @@ textarea.ui-field {
   }
 
   .calendar-simple__view-modes button {
-    min-height: 44px;
+    min-height: 40px;
     padding-inline: 8px;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
   }
 
   .calendar-simple__actions .nav-controls {
@@ -5986,6 +5996,9 @@ textarea.ui-field {
     width: 100%;
     justify-content: center;
     min-width: 0;
+    min-height: 38px;
+    padding-inline: 6px;
+    font-size: 0.74rem;
   }
 
   .calendar-simple__actions-cta {
@@ -5996,6 +6009,7 @@ textarea.ui-field {
 
   .calendar-simple__actions-cta > .ui-button {
     min-width: 0;
+    min-height: 40px;
   }
 
   .calendar-compact-mode__hero,

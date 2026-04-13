@@ -11,7 +11,6 @@ import { canAccessControlPanel } from '@/lib/organization-access';
 import { useAuth } from '../../app/providers/auth-provider';
 import { useActiveWorkspace } from '../features/use-active-workspace';
 import { useMobileViewport } from '../features/use-mobile-viewport';
-import { Select } from '../ui/select';
 import { AppSidebar } from './app-sidebar';
 import { AppTopbar } from './app-topbar';
 import { CalendarIcon, EventIcon, ParticipantsIcon, SettingsIcon } from './nav-icons';
@@ -204,25 +203,6 @@ export function AppShell({ children }: PropsWithChildren) {
                 </Link>
               ) : null}
             </div>
-            <Select
-              aria-label="Активная организация"
-              className="mobile-app-header__org-select"
-              value={activeOrganizationId ?? ''}
-              onChange={(event) => setActiveOrganizationId(event.target.value)}
-              disabled={organizationsLoading || organizations.length === 0}
-            >
-              {organizations.length === 0 ? (
-                <option value="">
-                  {organizationsLoading ? 'Загружаем организации...' : 'Организация не выбрана'}
-                </option>
-              ) : (
-                organizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}
-                  </option>
-                ))
-              )}
-            </Select>
           </header>
         ) : (
           <AppTopbar

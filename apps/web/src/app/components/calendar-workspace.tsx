@@ -523,17 +523,6 @@ export function CalendarWorkspace() {
       .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
   }, [events]);
 
-  const todayEvents = useMemo(
-    () => upcomingEvents.filter((event) => isSameDay(new Date(event.startsAt), new Date())),
-    [upcomingEvents],
-  );
-
-  const weekEventCount = useMemo(
-    () => weekDays.reduce((count, day) => count + (monthEventMap.get(toDayKey(day))?.length ?? 0), 0),
-    [monthEventMap, weekDays],
-  );
-  const nextEvent = upcomingEvents[0] ?? null;
-
   const periodLabel = useMemo(() => {
     if (viewMode === 'month') {
       return monthTitleFormat.format(cursorDate);
@@ -1021,21 +1010,6 @@ export function CalendarWorkspace() {
 
       {showMainWeekView ? (
         <>
-        <section className="theatre-week-summary">
-          <div className="theatre-week-summary__card">
-            <span>Неделя</span>
-            <strong>{weekEventCount} событий</strong>
-          </div>
-          <div className="theatre-week-summary__card">
-            <span>Сегодня</span>
-            <strong>{todayEvents.length > 0 ? `${todayEvents.length} в работе` : 'Свободно'}</strong>
-          </div>
-          <div className="theatre-week-summary__card theatre-week-summary__card--wide">
-            <span>Ближайшее</span>
-            <strong>{nextEvent ? nextEvent.title : 'Новых событий нет'}</strong>
-            <small>{nextEvent ? `${weekdayLongFormat.format(new Date(nextEvent.startsAt))} · ${getEventScheduleRange(nextEvent)}` : 'Добавьте слот, чтобы неделя ожила.'}</small>
-          </div>
-        </section>
         <section className="theatre-week-view theatre-week-view--desktop">
           <div className="theatre-week-table">
             <div className="theatre-week-table__header">

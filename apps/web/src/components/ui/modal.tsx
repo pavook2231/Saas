@@ -29,6 +29,50 @@ export function Modal({
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
+    if (!open || typeof document === 'undefined') {
+      return;
+    }
+
+    const { body, documentElement } = document;
+    const nextLockCount = Number(body.dataset.modalLockCount ?? '0') + 1;
+    body.dataset.modalLockCount = String(nextLockCount);
+
+    if (nextLockCount === 1) {
+      const scrollY = window.scrollY;
+      body.dataset.modalScrollY = String(scrollY);
+      body.classList.add('is-scroll-locked');
+      body.style.position = 'fixed';
+      body.style.top = `-${scrollY}px`;
+      body.style.left = '0';
+      body.style.right = '0';
+      body.style.width = '100%';
+      body.style.overflow = 'hidden';
+      documentElement.style.overflow = 'hidden';
+    }
+
+    return () => {
+      const currentCount = Number(body.dataset.modalLockCount ?? '1') - 1;
+
+      if (currentCount <= 0) {
+        const storedScrollY = Number(body.dataset.modalScrollY ?? '0');
+        delete body.dataset.modalLockCount;
+        delete body.dataset.modalScrollY;
+        body.classList.remove('is-scroll-locked');
+        body.style.position = '';
+        body.style.top = '';
+        body.style.left = '';
+        body.style.right = '';
+        body.style.width = '';
+        body.style.overflow = '';
+        documentElement.style.overflow = '';
+        window.scrollTo(0, storedScrollY);
+      } else {
+        body.dataset.modalLockCount = String(currentCount);
+      }
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open) {
       return;
     }

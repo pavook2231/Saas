@@ -1487,7 +1487,8 @@ export class EventsService {
     const replacementDetected =
       existing.type === EventType.PERFORMANCE &&
       updatedEvent.type === EventType.PERFORMANCE &&
-      existing.title !== updatedEvent.title;
+      templateChanged &&
+      existing.templateId !== updatedEvent.templateId;
 
     if (existing.status === EventStatus.DRAFT && updatedEvent.status === EventStatus.DRAFT) {
       return updatedEvent;

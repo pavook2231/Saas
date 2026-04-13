@@ -278,6 +278,7 @@ export function CalendarWorkspace() {
   const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedMonthDayKey, setSelectedMonthDayKey] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [composerState, setComposerState] = useState<CalendarComposerState | null>(null);
   const [composerEditingEventId, setComposerEditingEventId] = useState<string | null>(null);
@@ -433,6 +434,11 @@ export function CalendarWorkspace() {
     return Array.from({ length: 42 }, (_, index) => addDays(start, index));
   }, [cursorDate]);
 
+  const selectedMonthDay = useMemo(
+    () => (selectedMonthDayKey ? monthDays.find((day) => toDayKey(day) === selectedMonthDayKey) ?? null : null),
+    [monthDays, selectedMonthDayKey],
+  );
+
   const monthEventMap = useMemo(() => {
     const map = new Map<string, EventRecord[]>();
 
@@ -445,6 +451,11 @@ export function CalendarWorkspace() {
 
     return map;
   }, [events]);
+
+  const selectedMonthDayEvents = useMemo(
+    () => (selectedMonthDayKey ? monthEventMap.get(selectedMonthDayKey) ?? [] : []),
+    [monthEventMap, selectedMonthDayKey],
+  );
 
   const theatreWeekMap = useMemo(() => {
     const map = new Map<string, Record<TheatreLane, EventRecord[]>>();
@@ -535,6 +546,10 @@ export function CalendarWorkspace() {
 
   const navigate = (direction: number) => {
     setCursorDate((current) => addDays(current, viewMode === 'month' ? direction * 28 : direction * 7));
+  };
+
+  const openMonthDayDetails = (day: Date) => {
+    setSelectedMonthDayKey(toDayKey(day));
   };
 
   const showMainMonthView = !loading && viewMode === 'month';
@@ -955,23 +970,19 @@ export function CalendarWorkspace() {
               return (
                 <article
                   key={key}
-                  className={`month-cell${isOutside ? ' outside' : ''}${isToday ? ' today' : ''}${canCreateOnDay ? ' is-interactive' : ''}`}
-                  onClick={canCreateOnDay ? () => openComposer(day) : undefined}
-                  role={canCreateOnDay ? 'button' : undefined}
-                  tabIndex={canCreateOnDay ? 0 : undefined}
+                  className={`month-cell${isOutside ? ' outside' : ''}${isToday ? ' today' : ''} is-interactive`}
+                  onClick={() => openMonthDayDetails(day)}
+                  role="button"
+                  tabIndex={0}
                   onKeyDown={
-                    canCreateOnDay
-                      ? (event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            openComposer(day);
-                          }
-                        }
-                      : undefined
+                    (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openMonthDayDetails(day);
+                      }
+                    }
                   }
-                  aria-label={
-                    canCreateOnDay ? `Открыть создание события на ${weekdayLongFormat.format(day)}` : undefined
-                  }
+                  aria-label={`Открыть события на ${weekdayLongFormat.format(day)}`}
                 >
                   <div className="month-cell-header">
                     <span>{day.getDate()}</span>
@@ -1173,6 +1184,7 @@ export function CalendarWorkspace() {
             : undefined
         }
         size="lg"
+        panelClassName={isMobileViewport ? 'calendar-composer-modal__panel' : undefined}
         footer={
           composerState ? (
             <>
@@ -1367,6 +1379,48 @@ export function CalendarWorkspace() {
             </label>
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(selectedMonthDay)}
+        onClose={() => setSelectedMonthDayKey(null)}
+        title={selectedMonthDay ? weekdayLongFormat.format(selectedMonthDay) : 'День'}
+        description={
+          selectedMonthDayEvents.length > 0
+            ? `Событий: ${selectedMonthDayEvents.length}`
+            : 'В этот день ничего нет.'
+        }
+        panelClassName={isMobileViewport ? 'calendar-day-modal__panel' : undefined}
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setSelectedMonthDayKey(null)}>
+              Закрыть
+            </Button>
+            {selectedMonthDay && canOpenControlPanel ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  setSelectedMonthDayKey(null);
+                  openComposer(selectedMonthDay);
+                }}
+              >
+                Создать событие
+              </Button>
+            ) : null}
+          </>
+        }
+      >
+        <div className="calendar-day-modal">
+          {selectedMonthDayEvents.length > 0 ? (
+            <div className="calendar-day-modal__list">
+              {selectedMonthDayEvents.map((event) =>
+                renderTheatreEvent(event, { showTypeLabel: !isMobileViewport, mobileStream: isMobileViewport }),
+              )}
+            </div>
+          ) : (
+            <div className="calendar-day-modal__empty">В этот день ничего нет.</div>
+          )}
+        </div>
       </Modal>
 
       <Modal

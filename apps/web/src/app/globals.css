@@ -5915,7 +5915,9 @@ textarea.ui-field {
   }
 
   .calendar-simple__header {
+    grid-template-columns: 1fr;
     gap: 12px;
+    padding: 16px;
   }
 
   .calendar-simple__intro {
@@ -5939,6 +5941,7 @@ textarea.ui-field {
   .calendar-simple__actions {
     display: grid;
     gap: 10px;
+    justify-items: stretch;
   }
 
   .calendar-simple__actions-main,
@@ -5975,18 +5978,24 @@ textarea.ui-field {
   .calendar-simple__actions .nav-controls {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .calendar-simple__actions .segmented button,
   .calendar-simple__actions .nav-controls button {
     width: 100%;
     justify-content: center;
+    min-width: 0;
   }
 
   .calendar-simple__actions-cta {
     border-left: 0;
     margin-left: 0;
     padding-left: 0;
+  }
+
+  .calendar-simple__actions-cta > .ui-button {
+    min-width: 0;
   }
 
   .calendar-compact-mode__hero,
@@ -6164,14 +6173,15 @@ textarea.ui-field {
   .hour-row { grid-template-columns: 58px repeat(7, minmax(120px, 1fr)); }
   .week-grid-body { overflow: auto; }
   .month-weekday-row,
-  .month-grid { gap: 4px; }
+  .month-grid { gap: 6px; }
   .month-cell {
-    min-height: 82px;
-    padding: 5px;
-    border-radius: 12px;
+    min-height: 92px;
+    padding: 8px 6px;
+    border-radius: 14px;
+    overflow: hidden;
   }
   .month-cell-header {
-    align-items: center;
+    align-items: flex-start;
     gap: 4px;
   }
   .month-cell-header span {
@@ -6179,6 +6189,7 @@ textarea.ui-field {
   }
   .month-cell-header__actions {
     gap: 4px;
+    min-width: 0;
   }
   .month-cell-header__actions > small {
     display: none;
@@ -6202,6 +6213,9 @@ textarea.ui-field {
     display: block;
     font-size: 0.66rem;
     line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .month-events__list {
     display: none;
@@ -7067,6 +7081,15 @@ textarea.ui-field {
   width: 100%;
 }
 
+.calendar-composer-modal__panel,
+.calendar-day-modal__panel {
+  width: min(100%, 100vw);
+  max-width: 100%;
+  margin: 0;
+  align-self: end;
+  border-radius: 26px 26px 0 0;
+}
+
 @media (max-width: 900px) {
   .plays-toolbar,
   .plays-editor__grid {
@@ -7239,6 +7262,33 @@ textarea.ui-field {
   .control-schedule-modal__summary {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .calendar-composer-modal__panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .calendar-composer-modal__panel .ui-modal__body {
+    max-height: min(calc(var(--viewport-height, 100dvh) * 0.68), 620px);
+    overflow-y: auto;
+    scroll-padding-block: 88px;
+  }
+
+  .calendar-composer .ui-field,
+  .calendar-composer .ui-select,
+  .calendar-composer textarea {
+    scroll-margin-block: 96px;
+  }
+
+  .calendar-day-modal__list {
+    display: grid;
+    gap: 0;
+  }
+
+  .calendar-day-modal__empty {
+    color: var(--text-muted);
+    font-size: 0.92rem;
   }
 }
 /* Mobile-first shell and stacked workspace patterns */
@@ -7493,12 +7543,26 @@ textarea.ui-field {
 }
 @media (max-width: 760px) {
   .theatre-week-mobile__list {
-    gap: 24px;
+    gap: 16px;
   }
 
   .theatre-mobile-day {
     display: grid;
-    gap: 12px;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 22px;
+    background: rgba(255, 252, 248, 0.96);
+    border: 1px solid rgba(221, 210, 200, 0.72);
+    box-shadow: 0 10px 26px rgba(72, 39, 20, 0.06);
+  }
+
+  .theatre-mobile-day.is-today {
+    background: rgba(255, 250, 245, 0.98);
+    border-color: rgba(92, 47, 79, 0.16);
+  }
+
+  .theatre-mobile-day.is-empty {
+    background: rgba(252, 250, 247, 0.94);
   }
 
   .theatre-mobile-day__header {
@@ -7506,6 +7570,7 @@ textarea.ui-field {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+    padding-bottom: 2px;
   }
 
   .theatre-mobile-day__day strong {
@@ -7540,7 +7605,7 @@ textarea.ui-field {
   .theatre-mobile-day__empty {
     color: var(--text-muted);
     font-size: 0.84rem;
-    padding-bottom: 4px;
+    padding: 6px 0 2px;
   }
 
   .theatre-event--stream {

@@ -2628,6 +2628,8 @@ body.is-scroll-locked {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .week-day-card.today {
@@ -2670,6 +2672,8 @@ body.is-scroll-locked {
   display: grid;
   align-content: start;
   gap: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .week-day-card__empty {
@@ -6845,11 +6849,10 @@ textarea.ui-field {
 }
 
 .control-schedule-board__toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 18px 24px;
 }
 
 .control-schedule-board__toolbar-main,
@@ -6875,6 +6878,11 @@ textarea.ui-field {
   flex-wrap: wrap;
 }
 
+.control-schedule-board__toolbar-main,
+.control-schedule-board__toolbar-aside {
+  min-width: 0;
+}
+
 .control-schedule-board__publish-actions {
   display: flex;
   align-items: center;
@@ -6893,15 +6901,15 @@ textarea.ui-field {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px;
+  padding: 3px;
   border: 1px solid rgba(219, 227, 239, 0.92);
   border-radius: 999px;
   background: rgba(248, 250, 252, 0.92);
 }
 
 .control-schedule-board__view-switcher button {
-  min-height: 36px;
-  padding: 0 14px;
+  min-height: 34px;
+  padding: 0 13px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -6917,16 +6925,17 @@ textarea.ui-field {
 
 .control-schedule-board__period {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .control-schedule-board__period strong {
-  font-size: 1rem;
+  font-size: 0.98rem;
 }
 
 .control-schedule-board__period span {
   color: var(--text-soft);
-  font-size: 0.82rem;
+  font-size: 0.79rem;
+  line-height: 1.4;
 }
 
 .control-schedule-board__skeletons {
@@ -6939,7 +6948,7 @@ textarea.ui-field {
 }
 
 .control-schedule-board__calendar {
-  padding: 18px;
+  padding: 16px;
 }
 
 .control-schedule-board__week {
@@ -6948,6 +6957,8 @@ textarea.ui-field {
 
 .control-schedule-event-chip {
   position: relative;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .control-schedule-event-chip.is-draft {
@@ -6956,6 +6967,12 @@ textarea.ui-field {
 
 .control-schedule-event-chip__top {
   align-items: flex-start;
+  min-width: 0;
+}
+
+.control-schedule-event-chip__top > .chip-title {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .control-schedule-event__warning {
@@ -7271,6 +7288,10 @@ textarea.ui-field {
   .control-schedule-board__toolbar-aside,
   .control-schedule-modal__footer {
     align-items: stretch;
+  }
+
+  .control-schedule-board__toolbar {
+    grid-template-columns: 1fr;
   }
 
   .control-schedule-board__toolbar-main,

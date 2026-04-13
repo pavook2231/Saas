@@ -25,8 +25,7 @@ import { canAccessControlPanel } from '@/lib/organization-access';
 import { isVenueName, venueLabelMap, venueOptions, venueToneClass, type VenueName } from '@/lib/venues';
 
 type ViewMode = 'week' | 'month';
-type CalendarPanelMode = 'main' | 'compact' | 'participants';
-type ParticipantCalendarMode = 'regular' | 'compact';
+type CalendarPanelMode = 'main' | 'compact';
 type TheatreLane = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'OTHER';
 type CalendarComposerKind = 'PERFORMANCE' | 'REHEARSAL' | 'TOUR' | 'EVENT';
 type CalendarComposerState = {
@@ -274,8 +273,6 @@ export function CalendarWorkspace() {
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [panelMode, setPanelMode] = useState<CalendarPanelMode>('main');
-  const [participantCalendarMode, setParticipantCalendarMode] = useState<ParticipantCalendarMode>('regular');
-  const [participantFilter, setParticipantFilter] = useState<string>('all');
   const [cursorDate, setCursorDate] = useState<Date>(() => startOfDay(new Date()));
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [templates, setTemplates] = useState<TemplateRecord[]>([]);
@@ -506,24 +503,6 @@ export function CalendarWorkspace() {
     [theatreWeekMap, weekDays],
   );
 
-  const activeParticipantOptions = useMemo(
-    () =>
-      participants
-        .filter((participant) => events.some((event) => event.participants.some((item) => item.participantId === participant.id)))
-        .sort((left, right) => participantDisplayName(left).localeCompare(participantDisplayName(right), 'ru-RU')),
-    [events, participants],
-  );
-
-  useEffect(() => {
-    if (participantFilter === 'all') {
-      return;
-    }
-
-    if (!activeParticipantOptions.some((participant) => participant.id === participantFilter)) {
-      setParticipantFilter('all');
-    }
-  }, [activeParticipantOptions, participantFilter]);
-
   const upcomingEvents = useMemo(() => {
     const now = Date.now();
     return events
@@ -550,42 +529,6 @@ export function CalendarWorkspace() {
         };
       }),
     [monthEventMap, weekDays],
-  );
-
-  const participantViewDays = useMemo(
-    () =>
-      weekDays.map((day) => {
-        const dayKey = toDayKey(day);
-        const dayEvents = (monthEventMap.get(dayKey) ?? []).filter((event) => {
-          if (participantFilter === 'all') {
-            return event.participants.length > 0;
-          }
-
-          return event.participants.some((item) => item.participantId === participantFilter);
-        });
-
-        const rows =
-          participantFilter === 'all'
-            ? activeParticipantOptions
-                .map((participant) => ({
-                  participant,
-                  events: dayEvents.filter((event) =>
-                    event.participants.some((item) => item.participantId === participant.id),
-                  ),
-                }))
-                .filter((row) => row.events.length > 0)
-            : [];
-
-        return {
-          day,
-          dayKey,
-          totalEvents: dayEvents.length,
-          rows,
-          events: dayEvents,
-          isToday: isSameDay(day, new Date()),
-        };
-      }),
-    [activeParticipantOptions, monthEventMap, participantFilter, weekDays],
   );
 
   const periodLabel = useMemo(() => {
@@ -966,13 +909,6 @@ export function CalendarWorkspace() {
             >
               Компактно
             </button>
-            <button
-              type="button"
-              className={panelMode === 'participants' ? 'is-active' : ''}
-              onClick={() => setPanelMode('participants')}
-            >
-              Участники
-            </button>
           </div>
           {canOpenControlPanel ? (
             <div className="calendar-simple__actions-cta">
@@ -1037,8 +973,11 @@ export function CalendarWorkspace() {
                 className={`calendar-compact-day${isToday ? ' is-today' : ''}`}
                 onClick={() => {
                   setCursorDate(startOfDay(day));
-                  setPanelMode('main');
-                  setViewMode('week');
+                  if (firstEvent) {
+                    setSelectedEventId(firstEvent.id);
+                    return;
+                  }
+
                   if (count === 0 && canOpenControlPanel) {
                     openComposer(day);
                   }
@@ -1104,173 +1043,6 @@ export function CalendarWorkspace() {
               </CardContent>
             </Card>
           </div>
-        </section>
-      ) : null}
-
-      {!loading && panelMode === 'participants' ? (
-        <section className="calendar-participants-mode">
-          <div className="calendar-participants-mode__header">
-            <div>
-              <p className="kicker">Календарь участников</p>
-              <h2>Кто и когда занят</h2>
-              <p>Свайпать не нужно: можно быстро открыть общий вид или переключиться на конкретного человека.</p>
-            </div>
-            {canOpenControlPanel ? (
-              <Button type="button" variant="ghost" onClick={() => openComposer(startOfDay(new Date()))}>
-                Добавить событие
-              </Button>
-            ) : null}
-          </div>
-
-          <div className="calendar-participants-mode__chips" role="tablist" aria-label="Участники">
-            <button
-              type="button"
-              className={participantFilter === 'all' ? 'is-active' : ''}
-              onClick={() => setParticipantFilter('all')}
-            >
-              Все
-            </button>
-            {activeParticipantOptions.map((participant) => (
-              <button
-                key={participant.id}
-                type="button"
-                className={participantFilter === participant.id ? 'is-active' : ''}
-                onClick={() => setParticipantFilter(participant.id)}
-              >
-                {participantDisplayName(participant)}
-              </button>
-            ))}
-          </div>
-
-          <div className="calendar-participants-mode__view-switcher" role="tablist" aria-label="Вид календаря участников">
-            <button
-              type="button"
-              className={participantCalendarMode === 'regular' ? 'is-active' : ''}
-              onClick={() => setParticipantCalendarMode('regular')}
-            >
-              Обычный
-            </button>
-            <button
-              type="button"
-              className={participantCalendarMode === 'compact' ? 'is-active' : ''}
-              onClick={() => setParticipantCalendarMode('compact')}
-            >
-              Компактный
-            </button>
-          </div>
-
-          {participantCalendarMode === 'compact' ? (
-            <div className="calendar-participants-mode__compact-week">
-              {participantViewDays.map(({ day, dayKey, totalEvents, rows, events: dayEvents, isToday }) => (
-                <article
-                  key={`participant-compact-day-${dayKey}`}
-                  className={`calendar-participant-compact-day${isToday ? ' is-today' : ''}${totalEvents === 0 ? ' is-empty' : ''}`}
-                >
-                  <div className="calendar-participant-compact-day__head">
-                    <div>
-                      <strong>{formatDayName(day)}</strong>
-                      <span>{weekDayNumberFormat.format(day)}</span>
-                    </div>
-                    <small>{totalEvents > 0 ? `${totalEvents} ${totalEvents === 1 ? 'событие' : 'события'}` : 'Свободно'}</small>
-                  </div>
-
-                  {participantFilter === 'all' ? (
-                    rows.length > 0 ? (
-                      <div className="calendar-participant-compact-day__content">
-                        {rows.map((row) => (
-                          <div key={`${dayKey}-compact-${row.participant.id}`} className="calendar-participant-compact-row">
-                            <strong>{participantDisplayName(row.participant)}</strong>
-                            <div className="calendar-participant-compact-row__events">
-                              {row.events.map((event) => (
-                                <button
-                                  key={`compact-${event.id}`}
-                                  type="button"
-                                  className={`calendar-participant-compact-pill calendar-participant-compact-pill--${event.type.toLowerCase()}`}
-                                  onClick={() => setSelectedEventId(event.id)}
-                                >
-                                  <span>{event.title}</span>
-                                  <small>{getEventScheduleRange(event)}</small>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="calendar-participant-compact-day__empty">Никто не занят.</div>
-                    )
-                  ) : dayEvents.length > 0 ? (
-                    <div className="calendar-participant-compact-day__content">
-                      {dayEvents.map((event) => (
-                        <button
-                          key={`compact-event-${event.id}`}
-                          type="button"
-                          className={`calendar-participant-compact-pill calendar-participant-compact-pill--${event.type.toLowerCase()}`}
-                          onClick={() => setSelectedEventId(event.id)}
-                        >
-                          <span>{event.title}</span>
-                          <small>{getEventScheduleRange(event)}</small>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="calendar-participant-compact-day__empty">Свободно</div>
-                  )}
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="calendar-participants-mode__days">
-              {participantViewDays.map(({ day, dayKey, totalEvents, rows, events: dayEvents, isToday }) => (
-                <Card key={`participant-day-${dayKey}`} className={`calendar-participant-day${isToday ? ' is-today' : ''}`}>
-                  <CardContent className="calendar-participant-day__body">
-                    <div className="calendar-participant-day__header">
-                      <div>
-                        <strong>{formatDayName(day)}</strong>
-                        <span>{weekDayNumberFormat.format(day)}</span>
-                      </div>
-                      <Badge variant={isToday ? 'primary' : 'neutral'}>
-                        {totalEvents > 0 ? `${totalEvents} ${totalEvents === 1 ? 'событие' : 'события'}` : 'Свободно'}
-                      </Badge>
-                    </div>
-
-                    {participantFilter === 'all' ? (
-                      rows.length > 0 ? (
-                        <div className="calendar-participant-day__rows">
-                          {rows.map((row) => (
-                            <div key={`${dayKey}-${row.participant.id}`} className="calendar-participant-row">
-                              <div className="calendar-participant-row__name">{participantDisplayName(row.participant)}</div>
-                              <div className="calendar-participant-row__events">
-                                {row.events.map((event) => (
-                                  <button
-                                    key={event.id}
-                                    type="button"
-                                    className="calendar-participant-pill"
-                                    onClick={() => setSelectedEventId(event.id)}
-                                  >
-                                    <strong>{event.title}</strong>
-                                    <span>{getEventScheduleRange(event)}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="calendar-participant-day__empty">Никто не занят.</div>
-                      )
-                    ) : dayEvents.length > 0 ? (
-                        <div className="calendar-participant-day__events">
-                          {dayEvents.map((event) => renderTheatreEvent(event, { showTypeLabel: false }))}
-                        </div>
-                    ) : (
-                      <div className="calendar-participant-day__empty">У этого участника в этот день событий нет.</div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
         </section>
       ) : null}
 

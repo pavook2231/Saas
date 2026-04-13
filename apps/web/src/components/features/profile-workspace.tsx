@@ -16,6 +16,7 @@ import { CreateOrganizationAction } from './create-organization-action';
 import { EventReminderSettings } from './event-reminder-settings';
 import { PageHeader } from './page-header';
 import { useActiveWorkspace } from './use-active-workspace';
+import { useMobileViewport } from './use-mobile-viewport';
 import { useToastFeedback } from './use-toast-feedback';
 
 const formatDateTime = (value?: string | null) =>
@@ -43,6 +44,7 @@ const buildDisplayName = (firstName?: string | null, lastName?: string | null, e
 export function ProfileWorkspace() {
   const { user, logoutAll, changePassword, getTwoFactorStatus, beginTotpSetup, enableTotp, disableTotp, updateProfile, refreshSession } = useAuth();
   const { accessToken, organizations, activeOrganizationId, setActiveOrganizationId, refreshOrganizations } = useActiveWorkspace();
+  const isMobileViewport = useMobileViewport();
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
@@ -62,6 +64,10 @@ export function ProfileWorkspace() {
   useToastFeedback({ noticeText, errorText, noticeTitle: 'Профиль', errorTitle: 'Профиль' });
 
   const displayName = useMemo(() => buildDisplayName(user?.firstName, user?.lastName, user?.email), [user?.email, user?.firstName, user?.lastName]);
+  const activeOrganization = useMemo(
+    () => organizations.find((organization) => organization.id === activeOrganizationId) ?? null,
+    [activeOrganizationId, organizations],
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -152,6 +158,141 @@ export function ProfileWorkspace() {
       setNoticeText('Пароль обновлен.');
     }).catch((error: unknown) => setErrorText(error instanceof Error ? error.message : 'Не удалось изменить пароль.'))} loading={processingId === 'password'}>Обновить пароль</Button>
   </>;
+
+  if (isMobileViewport) {
+    return (
+      <section className="app-page profile-mobile-layout">
+        {noticeText ? <p className="finance-notice">{noticeText}</p> : null}
+        {errorText ? <p className="finance-error">{errorText}</p> : null}
+
+        <Card className="profile-mobile-user-card">
+          <CardContent className="profile-mobile-user-card__content">
+            <div className="profile-mobile-user-card__identity">
+              <Avatar name={displayName} src={user?.avatarUrl} size="lg" />
+              <div className="resource-inline-info">
+                <strong>{displayName}</strong>
+                <span>{user?.email ?? '—'}</span>
+              </div>
+            </div>
+            <div className="profile-action-row">
+              <Button type="button" variant="ghost" onClick={() => setProfileModalOpen(true)}>Редактировать</Button>
+              <CreateOrganizationAction />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Активная организация</CardTitle>
+            <CardDescription>Текущее рабочее пространство и быстрые действия.</CardDescription>
+          </CardHeader>
+          <CardContent className="profile-stack">
+            {activeOrganization ? (
+              <div className="profile-section-card">
+                <div className="resource-inline-info">
+                  <strong>{activeOrganization.name}</strong>
+                  <span>{roleLabels[activeOrganization.role]} · {activeOrganization.slug}</span>
+                </div>
+                <Badge variant="primary">Активная</Badge>
+              </div>
+            ) : null}
+            <div className="profile-card-list">
+              {organizations.map((organization) => (
+                <article key={organization.id} className="profile-section-card">
+                  <div className="resource-inline-info">
+                    <strong>{organization.name}</strong>
+                    <span>{roleLabels[organization.role]} · {organization.slug}</span>
+                  </div>
+                  <div className="profile-action-row">
+                    {activeOrganizationId === organization.id ? (
+                      <Badge variant="primary">Активная</Badge>
+                    ) : (
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setActiveOrganizationId(organization.id)}>Сделать активной</Button>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Приглашения</CardTitle>
+            <CardDescription>Текущие приглашения в организации.</CardDescription>
+          </CardHeader>
+          <CardContent className="profile-stack">
+            {loading ? (
+              <p className="empty-state">Загружаем приглашения...</p>
+            ) : invitations.length === 0 ? (
+              <div className="resource-empty-inline">
+                <strong>Новых приглашений нет</strong>
+                <p>Когда вас пригласят в организацию, карточка появится здесь.</p>
+              </div>
+            ) : (
+              invitations.map((invitation) => (
+                <article key={invitation.invitationId} className="profile-section-card">
+                  <div className="resource-inline-info">
+                    <strong>{invitation.organization.name}</strong>
+                    <span>Роль: {roleLabels[invitation.role]}</span>
+                    <span>Действует до {formatDateTime(invitation.expiresAt)}</span>
+                  </div>
+                  <div className="profile-action-row">
+                    <Button type="button" size="sm" variant="ghost" onClick={() => void withProcessing(invitation.invitationId, async () => {
+                      await organizationsApi.declineInvitation({ accessToken: accessToken!, invitationId: invitation.invitationId });
+                      await loadProfileData();
+                      setNoticeText(`Приглашение в «${invitation.organization.name}» отклонено.`);
+                    })} loading={processingId === invitation.invitationId}>Отклонить</Button>
+                    <Button type="button" size="sm" onClick={() => void withProcessing(invitation.invitationId, async () => {
+                      await organizationsApi.acceptInvitation({ accessToken: accessToken!, invitationId: invitation.invitationId });
+                      await refreshSession();
+                      await refreshOrganizations();
+                      setActiveOrganizationId(invitation.organization.id);
+                      await loadProfileData();
+                      setNoticeText(`Вы вступили в организацию «${invitation.organization.name}».`);
+                    })} loading={processingId === invitation.invitationId}>Принять</Button>
+                  </div>
+                </article>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Безопасность</CardTitle>
+            <CardDescription>{securityDescription}</CardDescription>
+          </CardHeader>
+          <CardContent className="profile-stack">
+            <div className="profile-action-row">
+              <Button type="button" variant="ghost" onClick={() => setSecurityModalOpen(true)}>Сменить пароль</Button>
+              {twoFactorStatus?.enabled ? (
+                <Button type="button" variant="ghost" onClick={() => { setTotpMode('disable'); setTotpSetupData(null); setTotpForm({ currentPassword: '', code: '' }); setTotpModalOpen(true); }}>Отключить TOTP</Button>
+              ) : (
+                <Button type="button" variant="ghost" onClick={() => { setTotpMode('setup'); setTotpSetupData(null); setTotpForm({ currentPassword: '', code: '' }); setTotpModalOpen(true); }}>Настроить TOTP</Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Уведомления</CardTitle>
+            <CardDescription>Календарь, напоминания и push-статус этого устройства.</CardDescription>
+          </CardHeader>
+          <CardContent className="profile-mobile-notifications">
+            <CalendarSyncSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} />
+            <EventReminderSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} />
+            <BrowserNotificationsSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} />
+          </CardContent>
+        </Card>
+
+        <Modal open={profileModalOpen} onClose={() => setProfileModalOpen(false)} title="Редактировать профиль" description="Обновите имя и аватар. Почта используется как логин." footer={profileFooter}><div className="profile-stack"><div className="account-profile-preview"><Avatar name={buildDisplayName(profileForm.firstName, profileForm.lastName, user?.email)} src={profileForm.avatarUrl || null} size="lg" /><div className="resource-inline-info"><strong>{buildDisplayName(profileForm.firstName, profileForm.lastName, user?.email)}</strong><span>{user?.email ?? '—'}</span></div></div><div className="account-form-grid"><Input label="Имя" value={profileForm.firstName} onChange={(event) => setProfileForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Имя" /><Input label="Фамилия" value={profileForm.lastName} onChange={(event) => setProfileForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Фамилия" /></div><Input label="Ссылка на аватар" value={profileForm.avatarUrl} onChange={(event) => setProfileForm((current) => ({ ...current, avatarUrl: event.target.value }))} placeholder="https://..." hint="Если оставить пустым, останутся инициалы." /><Input label="Почта" value={user?.email ?? ''} disabled hint="Почта используется для входа и пока не редактируется." /></div></Modal>
+        <Modal open={totpModalOpen} onClose={() => { setTotpModalOpen(false); setTotpSetupData(null); setTotpForm({ currentPassword: '', code: '' }); }} title={totpMode === 'setup' ? 'Настроить TOTP' : 'Отключить TOTP'} description={totpMode === 'setup' ? totpSetupData ? 'Добавьте секрет в приложение-аутентификатор и подтвердите его шестизначным кодом.' : 'Сначала подтвердите текущий пароль, затем мы покажем секрет для приложения-аутентификатора.' : 'Подтвердите текущий пароль и код из приложения, чтобы отключить TOTP.'} footer={<><Button type="button" variant="ghost" onClick={() => { setTotpModalOpen(false); setTotpSetupData(null); setTotpForm({ currentPassword: '', code: '' }); }}>Отмена</Button>{totpMode === 'setup' ? totpSetupData ? <Button type="button" onClick={() => void withProcessing('totp-enable', async () => { const status = await enableTotp({ currentPassword: totpForm.currentPassword || undefined, code: totpForm.code.trim() }); setTwoFactorStatus(status); await refreshSession(); setTotpModalOpen(false); setTotpSetupData(null); setTotpForm({ currentPassword: '', code: '' }); setNoticeText('TOTP включён для этого аккаунта.'); })} loading={processingId === 'totp-enable'}>Включить TOTP</Button> : <Button type="button" onClick={() => void withProcessing('totp-setup-start', async () => { const response = await beginTotpSetup({ currentPassword: totpForm.currentPassword || undefined }); setTotpSetupData({ manualEntryKey: response.manualEntryKey, issuer: response.issuer, accountName: response.accountName }); setNoticeText('Секрет TOTP готов. Добавьте его в приложение и подтвердите кодом.'); })} loading={processingId === 'totp-setup-start'}>Показать секрет</Button> : <Button type="button" variant="danger" onClick={() => void withProcessing('totp-disable', async () => { const status = await disableTotp({ currentPassword: totpForm.currentPassword || undefined, code: totpForm.code.trim() }); setTwoFactorStatus(status); await refreshSession(); setTotpModalOpen(false); setTotpSetupData(null); setTotpForm({ currentPassword: '', code: '' }); setNoticeText('TOTP отключён для этого аккаунта.'); })} loading={processingId === 'totp-disable'}>Отключить</Button>}</>}><div className="profile-stack"><Input label="Текущий пароль" type="password" value={totpForm.currentPassword} onChange={(event) => setTotpForm((current) => ({ ...current, currentPassword: event.target.value }))} hint="Нужен для настройки и отключения TOTP." />{totpSetupData ? <><Input label="Секрет для приложения" value={totpSetupData.manualEntryKey} disabled hint={`${totpSetupData.issuer} · ${totpSetupData.accountName}`} /><Input label="Код из приложения" value={totpForm.code} onChange={(event) => setTotpForm((current) => ({ ...current, code: event.target.value }))} placeholder="123456" /></> : totpMode === 'disable' ? <Input label="Код из приложения" value={totpForm.code} onChange={(event) => setTotpForm((current) => ({ ...current, code: event.target.value }))} placeholder="123456" /> : null}</div></Modal>
+        <Modal open={securityModalOpen} onClose={() => setSecurityModalOpen(false)} title="Сменить пароль" description="Если раньше вход был только через OAuth, здесь можно задать новый пароль." footer={passwordFooter}><div className="profile-stack"><Input label="Текущий пароль" type="password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))} hint="Если пароля раньше не было, поле можно оставить пустым." /><Input label="Новый пароль" type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))} /><Input label="Повторите новый пароль" type="password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))} /></div></Modal>
+      </section>
+    );
+  }
 
   return (
     <section className="app-page">

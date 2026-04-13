@@ -1,16 +1,22 @@
-﻿'use client';
+'use client';
 
+import Link from 'next/link';
+import type { Route } from 'next';
 import { usePathname, useRouter } from 'next/navigation';
 import { type PropsWithChildren, useEffect, useMemo, useState } from 'react';
 
 import { cn } from '@/lib/cn';
 import { canAccessControlPanel } from '@/lib/organization-access';
 
-import { useActiveWorkspace } from '../features/use-active-workspace';
 import { useAuth } from '../../app/providers/auth-provider';
+import { useActiveWorkspace } from '../features/use-active-workspace';
+import { useMobileViewport } from '../features/use-mobile-viewport';
+import { Select } from '../ui/select';
 import { AppSidebar } from './app-sidebar';
-import { PageTransition } from './page-transition';
 import { AppTopbar } from './app-topbar';
+import { CalendarIcon, EventIcon, ParticipantsIcon, PointsIcon, SettingsIcon } from './nav-icons';
+import { MobileShellNav, type MobileShellNavItem } from './mobile-shell-nav';
+import { PageTransition } from './page-transition';
 
 const SIDEBAR_STORAGE_KEY = 'saas.ui.sidebar-collapsed';
 
@@ -21,6 +27,35 @@ const displayNameFromUser = (
 ) => {
   const fullName = `${firstName ?? ''} ${lastName ?? ''}`.trim();
   return fullName.length > 0 ? fullName : email;
+};
+
+const mobileShellMeta = (pathname: string) => {
+  if (pathname.startsWith('/control/participants')) {
+    return { title: 'Участники', eyebrow: 'Мобильный режим' };
+  }
+
+  if (pathname.startsWith('/control/plays')) {
+    return { title: 'Спектакли', eyebrow: 'Мобильный режим' };
+  }
+
+  if (pathname.startsWith('/control/schedule')) {
+    return {
+      title: 'Планирование',
+      eyebrow: 'Мобильный режим',
+      actionHref: '/control/plays' as Route,
+      actionLabel: 'Спектакли',
+    };
+  }
+
+  if (pathname.startsWith('/points')) {
+    return { title: 'Баллы', eyebrow: 'Мобильный режим' };
+  }
+
+  if (pathname.startsWith('/profile')) {
+    return { title: 'Ещё', eyebrow: 'Профиль и настройки' };
+  }
+
+  return { title: 'Расписание', eyebrow: 'Мобильный режим' };
 };
 
 export function AppShell({ children }: PropsWithChildren) {
@@ -38,6 +73,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const isMobileViewport = useMobileViewport();
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -96,6 +132,28 @@ export function AppShell({ children }: PropsWithChildren) {
     return displayNameFromUser(user.firstName, user.lastName, user.email);
   }, [user]);
 
+  const shellMeta = useMemo(() => mobileShellMeta(pathname), [pathname]);
+  const hasControlAccess = Boolean(
+    activeOrganizationId && canAccessControlPanel(activeRole as never),
+  );
+  const mobileNavItems = useMemo<MobileShellNavItem[]>(() => {
+    const items: MobileShellNavItem[] = [{ href: '/calendar', label: 'Календарь', icon: CalendarIcon }];
+
+    if (hasControlAccess) {
+      items.push(
+        { href: '/control/plays', label: 'Спектакли', icon: EventIcon },
+        { href: '/control/participants', label: 'Люди', icon: ParticipantsIcon },
+      );
+    }
+
+    items.push(
+      { href: '/points', label: 'Баллы', icon: PointsIcon },
+      { href: '/profile', label: 'Ещё', icon: SettingsIcon },
+    );
+
+    return items;
+  }, [hasControlAccess]);
+
   const handleToggleSidebar = () => {
     setSidebarCollapsed((current) => {
       const next = !current;
@@ -141,23 +199,58 @@ export function AppShell({ children }: PropsWithChildren) {
       />
 
       <div className="app-frame__main">
-        <AppTopbar
-          onOpenMenu={() => setMenuOpen(true)}
-          userName={userDisplayName}
-          userEmail={user?.email ?? ''}
-          userAvatar={user?.avatarUrl}
-          activeRole={activeRole}
-          organizations={organizations.map((organization) => ({
-            id: organization.id,
-            name: organization.name,
-            role: organization.role,
-          }))}
-          organizationsLoading={organizationsLoading}
-          activeOrganizationId={activeOrganizationId}
-          onOrganizationChange={setActiveOrganizationId}
-          compactCalendarMobile={pathname === '/calendar'}
-        />
-        <main className="app-frame__content">
+        {isMobileViewport ? (
+          <header className="mobile-app-header">
+            <div className="mobile-app-header__main">
+              <div className="mobile-app-header__copy">
+                <span>{shellMeta.eyebrow}</span>
+                <strong>{shellMeta.title}</strong>
+              </div>
+              {shellMeta.actionHref && shellMeta.actionLabel ? (
+                <Link className="mobile-app-header__action" href={shellMeta.actionHref}>
+                  {shellMeta.actionLabel}
+                </Link>
+              ) : null}
+            </div>
+            <Select
+              aria-label="Активная организация"
+              className="mobile-app-header__org-select"
+              value={activeOrganizationId ?? ''}
+              onChange={(event) => setActiveOrganizationId(event.target.value)}
+              disabled={organizationsLoading || organizations.length === 0}
+            >
+              {organizations.length === 0 ? (
+                <option value="">
+                  {organizationsLoading ? 'Загружаем организации...' : 'Организация не выбрана'}
+                </option>
+              ) : (
+                organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name}
+                  </option>
+                ))
+              )}
+            </Select>
+          </header>
+        ) : (
+          <AppTopbar
+            onOpenMenu={() => setMenuOpen(true)}
+            userName={userDisplayName}
+            userEmail={user?.email ?? ''}
+            userAvatar={user?.avatarUrl}
+            activeRole={activeRole}
+            organizations={organizations.map((organization) => ({
+              id: organization.id,
+              name: organization.name,
+              role: organization.role,
+            }))}
+            organizationsLoading={organizationsLoading}
+            activeOrganizationId={activeOrganizationId}
+            onOrganizationChange={setActiveOrganizationId}
+            compactCalendarMobile={pathname === '/calendar'}
+          />
+        )}
+        <main className={cn('app-frame__content', isMobileViewport && 'app-frame__content--mobile')}>
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
@@ -189,7 +282,8 @@ export function AppShell({ children }: PropsWithChildren) {
           />
         </div>
       </div>
+
+      {isMobileViewport ? <MobileShellNav items={mobileNavItems} pathname={pathname} /> : null}
     </div>
   );
 }
-

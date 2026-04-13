@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -11,12 +11,13 @@ import { canAccessControlPanel, roleLabels } from '@/lib/organization-access';
 
 import { PageHeader } from './page-header';
 import { useActiveWorkspace } from './use-active-workspace';
+import { useMobileViewport } from './use-mobile-viewport';
 import { WorkspaceOrgEmpty } from './workspace-org-empty';
 
 const sections = [
   { href: '/control/participants' as Route, label: 'Участники' },
   { href: '/control/plays' as Route, label: 'Спектакли' },
-  { href: '/control/schedule' as Route, label: 'Составить расписание' },
+  { href: '/control/schedule' as Route, label: 'План' },
 ];
 
 type ManagementShellProps = PropsWithChildren<{
@@ -29,6 +30,7 @@ export function ManagementShell({ title, description, children }: ManagementShel
   const router = useRouter();
   const { activeOrganization, activeOrganizationId, activeRole } = useActiveWorkspace();
   const hasAccess = Boolean(activeOrganizationId && canAccessControlPanel(activeRole));
+  const isMobileViewport = useMobileViewport();
 
   useEffect(() => {
     if (!hasAccess) {
@@ -39,7 +41,9 @@ export function ManagementShell({ title, description, children }: ManagementShel
   if (!activeOrganizationId) {
     return (
       <section className="app-page">
-        <PageHeader eyebrow="Панель управления" title={title} description={description} />
+        {isMobileViewport ? null : (
+          <PageHeader eyebrow="Панель управления" title={title} description={description} />
+        )}
         <WorkspaceOrgEmpty />
       </section>
     );
@@ -47,6 +51,36 @@ export function ManagementShell({ title, description, children }: ManagementShel
 
   if (!hasAccess) {
     return null;
+  }
+
+  if (isMobileViewport) {
+    return (
+      <section className="app-page management-mobile-shell">
+        <div className="management-mobile-shell__meta">
+          <div>
+            <span>Панель управления</span>
+            <strong>{activeOrganization?.name}</strong>
+          </div>
+          <Badge variant="primary">
+            {roleLabels[activeRole as keyof typeof roleLabels] ?? activeRole}
+          </Badge>
+        </div>
+
+        <div className="management-mobile-tabs">
+          {sections.map((section) => (
+            <Link
+              key={section.href}
+              href={section.href}
+              className={`management-mobile-tabs__item${pathname === section.href ? ' is-active' : ''}`}
+            >
+              {section.label}
+            </Link>
+          ))}
+        </div>
+
+        {children}
+      </section>
+    );
   }
 
   return (
@@ -86,5 +120,3 @@ export function ManagementShell({ title, description, children }: ManagementShel
     </section>
   );
 }
-
-

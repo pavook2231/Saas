@@ -17,6 +17,7 @@ import { canManageInvitations, canManageMembers, roleLabels } from '@/lib/organi
 
 import { ManagementShell } from './management-shell';
 import { useActiveWorkspace } from './use-active-workspace';
+import { useMobileViewport } from './use-mobile-viewport';
 import { useToastFeedback } from './use-toast-feedback';
 
 const displayMemberName = (member: OrganizationMember) => {
@@ -43,6 +44,7 @@ const formatDateTime = (value: string | null | undefined) => {
 
 export function ControlParticipantsWorkspace() {
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
+  const isMobileViewport = useMobileViewport();
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [invitations, setInvitations] = useState<OrganizationOutgoingInvitation[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -207,8 +209,8 @@ export function ControlParticipantsWorkspace() {
       {noticeText ? <p className="finance-notice">{noticeText}</p> : null}
       {errorText ? <p className="finance-error">{errorText}</p> : null}
 
-      <div className="page-grid page-grid--two">
-        <Card>
+      <div className="page-grid page-grid--two participants-layout">
+        <Card className="participants-members-card">
           <CardHeader>
             <CardTitle>Состав организации</CardTitle>
             <CardDescription>Меняйте роли, ищите участников и удаляйте лишних без лишних экранов.</CardDescription>
@@ -222,6 +224,62 @@ export function ControlParticipantsWorkspace() {
               <div className="resource-empty-inline">
                 <strong>Участников не найдено</strong>
                 <p>Измените поиск или пригласите нового человека справа.</p>
+              </div>
+            ) : isMobileViewport ? (
+              <div className="participants-mobile-list">
+                {filteredMembers.map((member) => (
+                  <article key={member.id} className="participants-mobile-card">
+                    <div className="participants-mobile-card__head">
+                      <div className="participants-mobile-card__identity">
+                        <strong>{displayMemberName(member)}</strong>
+                        <span>{member.user.email}</span>
+                      </div>
+                      <Badge variant={member.status === 'ACTIVE' ? 'success' : 'neutral'}>
+                        {member.status === 'ACTIVE' ? 'Активен' : member.status}
+                      </Badge>
+                    </div>
+
+                    <div className="participants-mobile-card__body">
+                      <div className="participants-mobile-card__row">
+                        <span>Роль</span>
+                        {canEditMembers ? (
+                          <Select
+                            aria-label={`Роль ${displayMemberName(member)}`}
+                            value={member.role}
+                            onChange={(event) =>
+                              void handleRoleChange(member, event.target.value as OrganizationRole)
+                            }
+                            disabled={processingId === member.id}
+                          >
+                            {roleOptions.map((role) => (
+                              <option key={role} value={role}>
+                                {roleLabels[role]}
+                              </option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <Badge variant="neutral">{roleLabels[member.role]}</Badge>
+                        )}
+                      </div>
+
+                      <div className="participants-mobile-card__actions">
+                        {canEditMembers ? (
+                          <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            onClick={() => void handleRemoveMember(member)}
+                            loading={processingId === member.id}
+                          >
+                            Удалить
+                          </Button>
+                        ) : (
+                          <span className="table-muted-copy">Только просмотр</span>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                ))}
               </div>
             ) : (
               <div className="data-table-wrap">
@@ -268,7 +326,7 @@ export function ControlParticipantsWorkspace() {
           </CardContent>
         </Card>
 
-        <div className="profile-stack">
+        <div className="profile-stack participants-side-column">
           <Card>
             <CardHeader>
               <CardTitle>Пригласить в организацию</CardTitle>

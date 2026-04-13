@@ -21,6 +21,7 @@ import { isVenueName, venueLabelMap, venueOptions, venueToneClass, type VenueNam
 
 import { ManagementShell } from './management-shell';
 import { useActiveWorkspace } from './use-active-workspace';
+import { useMobileViewport } from './use-mobile-viewport';
 import { useToastFeedback } from './use-toast-feedback';
 
 type PlayRoleDraft = {
@@ -239,6 +240,7 @@ const templateHasAlternateCast = (template: TemplateRecord) =>
 
 export function ControlPlaysWorkspace() {
   const { accessToken, activeOrganizationId } = useActiveWorkspace();
+  const isMobileViewport = useMobileViewport();
   const [plays, setPlays] = useState<TemplateRecord[]>([]);
   const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
   const [form, setForm] = useState<PlayFormState>(initialFormState);
@@ -247,6 +249,7 @@ export function ControlPlaysWorkspace() {
   const [modalOpen, setModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<PlayStatusFilter>('ALL');
+  const [mobileActionPlayId, setMobileActionPlayId] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -312,6 +315,11 @@ export function ControlPlaysWorkspace() {
       );
     });
   }, [participantNames, plays, searchQuery, statusFilter]);
+
+  const mobileActionPlay = useMemo(
+    () => plays.find((play) => play.id === mobileActionPlayId) ?? null,
+    [mobileActionPlayId, plays],
+  );
 
   const loadData = useCallback(async () => {
     if (!accessToken || !activeOrganizationId) {
@@ -506,6 +514,63 @@ export function ControlPlaysWorkspace() {
                   : 'Смените фильтры или поисковый запрос.'}
               </p>
             </div>
+          ) : isMobileViewport ? (
+            <div className="plays-mobile-list">
+              {filteredPlays.map((play) => {
+                const groupedRoles = groupTemplateRoles(play, participantNames);
+                const venue = isVenueName(play.location) ? play.location : null;
+                const actorsCount = new Set(groupedRoles.flatMap((role) => [...role.primary, ...role.alternate])).size;
+
+                return (
+                  <article key={play.id} className="plays-mobile-card">
+                    <div className="plays-mobile-card__head">
+                      <div>
+                        <h3>{play.name}</h3>
+                        <p>
+                          {formatDurationLabel(play.durationMinutes)}
+                          {venue ? ` · ${venueLabelMap[venue]}` : ''}
+                        </p>
+                      </div>
+                      <Badge variant={play.isActive ? 'success' : 'neutral'}>
+                        {play.isActive ? 'Активен' : 'Скрыт'}
+                      </Badge>
+                    </div>
+
+                    <div className="plays-mobile-card__meta">
+                      <span>{groupedRoles.length} ролей</span>
+                      <span>{actorsCount} участников</span>
+                      {templateHasAlternateCast(play) ? <span>1/2 состав</span> : null}
+                    </div>
+
+                    <div className="plays-mobile-card__roles">
+                      {groupedRoles.slice(0, 2).map((role) => (
+                        <div key={`${play.id}-${role.name}`} className="plays-mobile-card__role">
+                          <strong>{role.name}</strong>
+                          <span>{role.primary.length > 0 ? role.primary.join(', ') : 'Основной состав не заполнен'}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="plays-mobile-card__actions">
+                      <Link
+                        className="ui-button ui-button--primary ui-button--sm"
+                        href={`/control/schedule?playId=${play.id}` as Route}
+                      >
+                        <span className="ui-button__content">В расписание</span>
+                      </Link>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setMobileActionPlayId(play.id)}
+                      >
+                        Ещё
+                      </Button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           ) : (
             <div className="plays-list">
               {filteredPlays.map((play) => {
@@ -570,6 +635,48 @@ export function ControlPlaysWorkspace() {
           )}
         </CardContent>
       </Card>
+
+      <Modal
+        open={Boolean(mobileActionPlay)}
+        onClose={() => setMobileActionPlayId(null)}
+        title={mobileActionPlay?.name}
+        description="Выберите действие для карточки спектакля."
+        panelClassName="mobile-action-sheet"
+      >
+        {mobileActionPlay ? (
+          <div className="mobile-action-sheet__actions">
+            <Button
+              type="button"
+              fullWidth
+              onClick={() => {
+                setMobileActionPlayId(null);
+                openEditModal(mobileActionPlay);
+              }}
+            >
+              Редактировать
+            </Button>
+            <Link
+              className="ui-button ui-button--ghost ui-button--md ui-button--full"
+              href={`/control/schedule?playId=${mobileActionPlay.id}` as Route}
+              onClick={() => setMobileActionPlayId(null)}
+            >
+              <span className="ui-button__content">Открыть в расписании</span>
+            </Link>
+            <Button
+              type="button"
+              variant="danger"
+              fullWidth
+              onClick={() => {
+                setMobileActionPlayId(null);
+                void handleArchivePlay(mobileActionPlay);
+              }}
+              loading={saving}
+            >
+              Удалить
+            </Button>
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         open={modalOpen}

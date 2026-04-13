@@ -539,6 +539,34 @@ export function CalendarWorkspace() {
     [upcomingEvents],
   );
 
+  const overdueEvents = useMemo(() => {
+    const now = Date.now();
+    const weekStart = startOfWeek(new Date()).getTime();
+
+    return events
+      .filter((event) => {
+        const endsAt = new Date(event.endsAt).getTime();
+        return event.status !== 'CANCELLED' && endsAt < now && endsAt >= weekStart;
+      })
+      .sort((left, right) => new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime());
+  }, [events]);
+
+  const tomorrowEvents = useMemo(() => {
+    const tomorrow = addDays(startOfDay(new Date()), 1);
+    return upcomingEvents.filter((event) => isSameDay(new Date(event.startsAt), tomorrow));
+  }, [upcomingEvents]);
+
+  const weekRemainderEvents = useMemo(() => {
+    const todayKey = toDayKey(startOfDay(new Date()));
+    const tomorrowKey = toDayKey(addDays(startOfDay(new Date()), 1));
+    const weekKeys = new Set(weekDays.map((day) => toDayKey(day)));
+
+    return upcomingEvents.filter((event) => {
+      const dayKey = toDayKey(new Date(event.startsAt));
+      return weekKeys.has(dayKey) && dayKey !== todayKey && dayKey !== tomorrowKey;
+    });
+  }, [upcomingEvents, weekDays]);
+
   const compactUpcomingEvents = useMemo(() => upcomingEvents.slice(0, 6), [upcomingEvents]);
   const weekEventCount = useMemo(
     () => weekDays.reduce((count, day) => count + (monthEventMap.get(toDayKey(day))?.length ?? 0), 0),
@@ -1043,23 +1071,48 @@ export function CalendarWorkspace() {
           </div>
 
           <div className="calendar-compact-mode__columns">
-            <Card className="calendar-compact-section">
-              <CardContent className="calendar-compact-section__body">
-                <div className="calendar-compact-section__head">
-                  <strong>Сегодня</strong>
-                  <span>{todayEvents.length > 0 ? `${todayEvents.length} в работе` : 'Свободно'}</span>
-                </div>
-                <div className="calendar-compact-section__list">
-                  {todayEvents.length > 0 ? (
-                    todayEvents.map((event) => renderTheatreEvent(event))
-                  ) : (
-                    <div className="calendar-compact-section__empty">
-                      {canOpenControlPanel ? 'Можно быстро добавить событие на сегодня.' : 'На сегодня событий нет.'}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            {[
+              {
+                title: 'Просрочено',
+                subtitle: overdueEvents.length > 0 ? `${overdueEvents.length} требует внимания` : 'Пусто',
+                events: overdueEvents.slice(0, 4),
+                empty: 'Просроченных событий за эту неделю нет.',
+              },
+              {
+                title: 'Сегодня',
+                subtitle: todayEvents.length > 0 ? `${todayEvents.length} в работе` : 'Свободно',
+                events: todayEvents,
+                empty: canOpenControlPanel ? 'Можно быстро добавить событие на сегодня.' : 'На сегодня событий нет.',
+              },
+              {
+                title: 'Завтра',
+                subtitle: tomorrowEvents.length > 0 ? `${tomorrowEvents.length} запланировано` : 'Свободно',
+                events: tomorrowEvents,
+                empty: canOpenControlPanel ? 'Можно подготовить завтрашний день заранее.' : 'На завтра событий нет.',
+              },
+              {
+                title: 'На неделе',
+                subtitle: weekRemainderEvents.length > 0 ? `Ещё ${weekRemainderEvents.length}` : 'Больше ничего',
+                events: weekRemainderEvents.slice(0, 6),
+                empty: 'Остальная неделя пока свободна.',
+              },
+            ].map((section) => (
+              <Card key={section.title} className="calendar-compact-section">
+                <CardContent className="calendar-compact-section__body">
+                  <div className="calendar-compact-section__head">
+                    <strong>{section.title}</strong>
+                    <span>{section.subtitle}</span>
+                  </div>
+                  <div className="calendar-compact-section__list">
+                    {section.events.length > 0 ? (
+                      section.events.map((event) => renderTheatreEvent(event))
+                    ) : (
+                      <div className="calendar-compact-section__empty">{section.empty}</div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
 
             <Card className="calendar-compact-section">
               <CardContent className="calendar-compact-section__body">

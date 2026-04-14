@@ -186,18 +186,20 @@ const eventTypeLabelMap: Record<EventType, string> = {
   CUSTOM: 'Событие',
 };
 
-const eventNotificationDateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
-  weekday: 'short',
-  day: '2-digit',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
 const eventNotificationWeekDateFormat = new Intl.DateTimeFormat('ru-RU', {
   day: '2-digit',
   month: 'short',
 });
+
+const buildEventNotificationDateTimeFormat = (timezone: string) =>
+  new Intl.DateTimeFormat('ru-RU', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone,
+  });
 
 type NormalizedTemplateRoleInput = {
   name: string;
@@ -268,6 +270,7 @@ type EventNotificationSnapshot = {
   title: string;
   startsAt: Date;
   endsAt: Date;
+  timezone: string | null;
   type: EventType;
   status: EventStatus;
   location: string | null;
@@ -1224,6 +1227,7 @@ export class EventsService {
         startsAt: true,
         endsAt: true,
         assemblyAt: true,
+        timezone: true,
         location: true,
         performanceCastNumber: true,
         performanceCastLocked: true,
@@ -1563,6 +1567,7 @@ export class EventsService {
         status: true,
         startsAt: true,
         endsAt: true,
+        timezone: true,
         location: true,
         participants: {
           select: {
@@ -1691,6 +1696,7 @@ export class EventsService {
         type: true,
         status: true,
         startsAt: true,
+        timezone: true,
         location: true,
         deletedAt: true,
         participants: {
@@ -2823,6 +2829,7 @@ export class EventsService {
     title: string;
     startsAt: Date;
     endsAt?: Date;
+    timezone?: string | null;
     type: EventType;
     status: EventStatus;
     location: string | null;
@@ -2832,6 +2839,7 @@ export class EventsService {
       title: event.title,
       startsAt: event.startsAt,
       endsAt: event.endsAt ?? event.startsAt,
+      timezone: this.trimOrNull(event.timezone),
       type: event.type,
       status: event.status,
       location: event.location,
@@ -3002,7 +3010,7 @@ export class EventsService {
   private getEventNotificationSummary(event: EventNotificationSnapshot): string {
     const parts = [
       `${eventTypeLabelMap[event.type]} «${event.title}»`,
-      eventNotificationDateTimeFormat.format(event.startsAt),
+      buildEventNotificationDateTimeFormat(event.timezone ?? 'UTC').format(event.startsAt),
     ];
 
     if (event.location) {

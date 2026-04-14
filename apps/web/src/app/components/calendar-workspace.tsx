@@ -63,6 +63,7 @@ const timeFormat = new Intl.DateTimeFormat('ru-RU', {
   minute: '2-digit',
   hour12: false,
 });
+const MOSCOW_TIMEZONE = 'Europe/Moscow';
 
 const addDays = (date: Date, amount: number): Date => {
   const clone = new Date(date);
@@ -683,6 +684,7 @@ export function CalendarWorkspace() {
         status: 'PLANNED' as const,
         startsAt: startsAtIso,
         endsAt: endsAtIso,
+        timezone: MOSCOW_TIMEZONE,
         assemblyAt: composerState.kind === 'TOUR' && composerState.assemblyAt ? toIso(composerState.date, composerState.assemblyAt) : undefined,
         location: composerState.location,
         description: composerState.description.trim() || undefined,

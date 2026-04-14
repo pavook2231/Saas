@@ -191,6 +191,8 @@ const eventNotificationWeekDateFormat = new Intl.DateTimeFormat('ru-RU', {
   month: 'short',
 });
 
+const DEFAULT_EVENT_TIMEZONE = 'Europe/Moscow';
+
 const buildEventNotificationDateTimeFormat = (timezone: string) =>
   new Intl.DateTimeFormat('ru-RU', {
     weekday: 'short',
@@ -1110,7 +1112,7 @@ export class EventsService {
           endsAt: range.endsAt,
           assemblyAt,
           durationMinutes: range.durationMinutes,
-          timezone: this.trimOrNull(dto.timezone) ?? 'UTC',
+          timezone: this.resolveEventTimezone(dto.timezone),
           location: this.trimOrNull(dto.location),
           performanceCastNumber: resolvedCast.castNumber,
           performanceCastLocked: resolvedCast.castLocked,
@@ -1373,7 +1375,7 @@ export class EventsService {
             dto.startsAt !== undefined || dto.endsAt !== undefined
               ? range.durationMinutes
               : undefined,
-          timezone: dto.timezone !== undefined ? this.trimOrNull(dto.timezone) ?? 'UTC' : undefined,
+          timezone: dto.timezone !== undefined ? this.resolveEventTimezone(dto.timezone) : undefined,
           location: dto.location !== undefined ? this.trimOrNull(dto.location) : undefined,
           performanceCastNumber: resolvedCast.castNumber,
           performanceCastLocked: resolvedCast.castLocked,
@@ -1920,7 +1922,7 @@ export class EventsService {
       };
     }
 
-    const timezone = this.trimOrNull(event.timezone) ?? 'UTC';
+    const timezone = this.resolveEventTimezone(event.timezone);
     const result = await this.notificationsService.notifyUsers({
       organizationId,
       eventId: event.id,
@@ -2839,7 +2841,7 @@ export class EventsService {
       title: event.title,
       startsAt: event.startsAt,
       endsAt: event.endsAt ?? event.startsAt,
-      timezone: this.trimOrNull(event.timezone),
+      timezone: this.resolveEventTimezone(event.timezone),
       type: event.type,
       status: event.status,
       location: event.location,
@@ -3010,7 +3012,7 @@ export class EventsService {
   private getEventNotificationSummary(event: EventNotificationSnapshot): string {
     const parts = [
       `${eventTypeLabelMap[event.type]} «${event.title}»`,
-      buildEventNotificationDateTimeFormat(event.timezone ?? 'UTC').format(event.startsAt),
+      buildEventNotificationDateTimeFormat(this.resolveEventTimezone(event.timezone)).format(event.startsAt),
     ];
 
     if (event.location) {
@@ -3273,13 +3275,22 @@ export class EventsService {
     return assemblyAt;
   }
 
+  private resolveEventTimezone(timezone?: string | null): string {
+    const normalized = this.trimOrNull(timezone);
+    if (!normalized || normalized.toUpperCase() === 'UTC') {
+      return DEFAULT_EVENT_TIMEZONE;
+    }
+
+    return normalized;
+  }
+
   private formatReminderDateTime(date: Date, timezone: string): string {
     return new Intl.DateTimeFormat('ru-RU', {
       day: '2-digit',
       month: 'long',
       hour: '2-digit',
       minute: '2-digit',
-      timeZone: timezone,
+      timeZone: this.resolveEventTimezone(timezone),
     }).format(date);
   }
 

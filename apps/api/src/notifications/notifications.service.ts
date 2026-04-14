@@ -38,6 +38,8 @@ type NotifyUsersInput = {
   userIds: string[];
 };
 
+const DEFAULT_EVENT_TIMEZONE = 'Europe/Moscow';
+
 type EventReminderDispatchResult = {
   processed: number;
   sent: number;
@@ -708,6 +710,7 @@ export class NotificationsService {
         organizationId: true,
         title: true,
         startsAt: true,
+        timezone: true,
         participants: {
           where: {
             attendanceStatus: {
@@ -805,7 +808,7 @@ export class NotificationsService {
           eventId: event.id,
           type: NotificationType.EVENT_REMINDER,
           title: `Reminder: ${event.title}`,
-          body: `Event starts at ${event.startsAt.toISOString()}`,
+          body: `Событие начнётся ${this.formatReminderDateTime(event.startsAt, this.resolveEventTimezone(event.timezone))}.`,
           payload: {
             eventId: event.id,
             eventTitle: event.title,
@@ -918,7 +921,7 @@ export class NotificationsService {
     };
 
     for (const event of events) {
-      const timezone = this.trimOrNull(event.timezone) ?? 'UTC';
+      const timezone = this.resolveEventTimezone(event.timezone);
       const reminderAt = this.resolveDayBeforeReminderAt(event.startsAt, timezone, reminderHourLocal);
 
       if (reminderAt < lowerBound || reminderAt > now) {
@@ -1364,8 +1367,17 @@ export class NotificationsService {
       month: 'long',
       hour: '2-digit',
       minute: '2-digit',
-      timeZone: timezone,
+      timeZone: this.resolveEventTimezone(timezone),
     }).format(date);
+  }
+
+  private resolveEventTimezone(timezone?: string | null): string {
+    const normalized = this.trimOrNull(timezone);
+    if (!normalized || normalized.toUpperCase() === 'UTC') {
+      return DEFAULT_EVENT_TIMEZONE;
+    }
+
+    return normalized;
   }
 
   private resolvePushUrl(input: NotifyUsersInput): string {

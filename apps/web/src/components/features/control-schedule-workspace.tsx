@@ -62,6 +62,7 @@ const weekDayNumberFormat = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', m
 const weekDayNameFormat = new Intl.DateTimeFormat('ru-RU', { weekday: 'short' });
 const weekdayLongFormat = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
 const timeFormat = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false });
+const MOSCOW_TIMEZONE = 'Europe/Moscow';
 
 const defaultDurationByKind: Record<ScheduleKind, number> = {
   PERFORMANCE: 120,
@@ -733,6 +734,7 @@ export function ControlScheduleWorkspace() {
       status,
       startsAt: startsAtIso,
       endsAt: endsAtIso,
+      timezone: MOSCOW_TIMEZONE,
       assemblyAt: payloadType === 'TOUR' && form.assemblyAt ? toIso(dateValue, form.assemblyAt) : undefined,
       location: form.location,
       description: form.description.trim() || undefined,
@@ -1052,10 +1054,6 @@ export function ControlScheduleWorkspace() {
             </div>
 
             <div className="control-schedule-board__toolbar-aside">
-              <div className="control-schedule-board__period">
-                <strong>{viewMode === 'month' ? monthTitleFormat.format(cursorDate) : publicationWeek.label}</strong>
-                <span>Соберите события в черновики и опубликуйте неделю одним подтверждением.</span>
-              </div>
               <div className="control-schedule-board__publish-actions">
                 <Badge
                   variant={weekDraftEvents.length > 0 ? 'warning' : 'success'}
@@ -1091,6 +1089,9 @@ export function ControlScheduleWorkspace() {
         ) : viewMode === 'month' ? (
           <Card>
             <CardContent className="month-view control-schedule-board__calendar">
+              <div className="control-schedule-board__calendar-head">
+                <strong>{monthTitleFormat.format(cursorDate)}</strong>
+              </div>
               <div className="month-weekday-row">
                 {weekDayLabels.map((label) => (
                   <div key={label}>{label}</div>
@@ -1140,7 +1141,11 @@ export function ControlScheduleWorkspace() {
             </CardContent>
           </Card>
         ) : (
-          <div className="week-strip control-schedule-board__week">
+          <div className="control-schedule-board__week-shell">
+            <div className="control-schedule-board__calendar-head control-schedule-board__calendar-head--week">
+              <strong>{publicationWeek.label}</strong>
+            </div>
+            <div className="week-strip control-schedule-board__week">
             {weekDays.map((day) => {
               const dayKey = formatDateInput(day);
               const items = eventsByDay.get(dayKey) ?? [];
@@ -1162,6 +1167,7 @@ export function ControlScheduleWorkspace() {
                 </Card>
               );
             })}
+            </div>
           </div>
         )}
       </div>

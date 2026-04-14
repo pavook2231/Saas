@@ -64,6 +64,7 @@ const dateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
   dateStyle: 'medium',
   timeStyle: 'short',
 });
+const MOSCOW_TIMEZONE = 'Europe/Moscow';
 
 const durationPresets = [60, 90, 120, 180];
 
@@ -486,6 +487,7 @@ export function EventsWorkspace() {
           status: 'PLANNED',
           startsAt: startsAt.toISOString(),
           endsAt: endsAt.toISOString(),
+          timezone: MOSCOW_TIMEZONE,
           location: form.location.trim() || undefined,
           templateId: form.templateId || undefined,
           ignoreConflicts,

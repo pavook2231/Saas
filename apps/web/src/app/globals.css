@@ -7443,6 +7443,14 @@ textarea.ui-field {
 }
 
 @media (max-width: 760px) {
+  .control-schedule-board__toolbar-card {
+    border-radius: 18px;
+  }
+
+  .control-schedule-board__toolbar {
+    gap: 10px;
+  }
+
   .control-schedule-modal__panel {
     width: min(100%, 100vw);
     max-width: 100%;
@@ -7478,6 +7486,15 @@ textarea.ui-field {
     padding: 14px;
   }
 
+  .control-schedule-board__calendar-head {
+    margin-bottom: 10px;
+  }
+
+  .control-schedule-board__calendar-head strong {
+    font-size: 1rem;
+    line-height: 1.2;
+  }
+
   .control-schedule-modal__section,
   .control-schedule-modal__summary {
     padding: 12px 14px;
@@ -7486,6 +7503,73 @@ textarea.ui-field {
   .control-schedule-modal__summary {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .control-schedule-board__toolbar,
+  .control-schedule-board__toolbar-main,
+  .control-schedule-board__toolbar-aside {
+    gap: 10px;
+  }
+
+  .control-schedule-board__toolbar-main {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .control-schedule-board__toolbar-aside,
+  .control-schedule-board__publish-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .control-schedule-board__view-switcher {
+    width: auto;
+    justify-content: flex-start;
+    padding: 2px;
+  }
+
+  .control-schedule-board__view-switcher button {
+    min-height: 32px;
+    padding-inline: 12px;
+    flex: 0 0 auto;
+  }
+
+  .control-schedule-board__nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+
+  .control-schedule-board__nav .ui-button {
+    width: 100%;
+    min-height: 36px;
+    padding-inline: 10px;
+  }
+
+  .control-schedule-board__publish-actions {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .control-schedule-board__publish-counter {
+    width: auto;
+    min-width: 0;
+    justify-content: center;
+    padding-inline: 12px;
+    font-size: 0.76rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .control-schedule-board__publish-actions .ui-button {
+    width: auto;
+    min-height: 38px;
+    padding-inline: 14px;
+    white-space: nowrap;
   }
 
   .calendar-composer-modal__panel {

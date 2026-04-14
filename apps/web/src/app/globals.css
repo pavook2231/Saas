@@ -6938,6 +6938,32 @@ textarea.ui-field {
   line-height: 1.4;
 }
 
+@media (max-width: 1240px) {
+  .control-schedule-board__toolbar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .control-schedule-board__toolbar-main,
+  .control-schedule-board__toolbar-aside {
+    justify-content: flex-start;
+  }
+
+  .control-schedule-board__toolbar-aside {
+    gap: 14px 18px;
+  }
+
+  .control-schedule-board__period {
+    flex: 1 1 260px;
+    min-width: min(100%, 260px);
+  }
+
+  .control-schedule-board__publish-actions {
+    flex: 1 1 320px;
+    justify-content: flex-start;
+  }
+}
+
 .control-schedule-board__skeletons {
   display: grid;
   gap: 14px;

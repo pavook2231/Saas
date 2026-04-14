@@ -89,11 +89,6 @@ export function ManagementShell({ title, description, children }: ManagementShel
         eyebrow="Панель управления"
         title={title}
         description={description}
-        actions={
-          <Badge variant="primary">
-            {roleLabels[activeRole as keyof typeof roleLabels] ?? activeRole}
-          </Badge>
-        }
       />
 
       <Card className="control-shell">

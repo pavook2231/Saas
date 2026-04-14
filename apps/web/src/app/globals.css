@@ -6020,68 +6020,80 @@ textarea.ui-field {
   }
 
   .calendar-simple__actions {
-    display: grid;
-    gap: 6px;
-    justify-items: stretch;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-items: initial;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding-bottom: 2px;
   }
 
-  .calendar-simple__actions-main,
-  .calendar-simple__actions .segmented,
-  .calendar-simple__actions .nav-controls,
-  .calendar-simple__view-modes,
-  .calendar-simple__actions-cta,
-  .calendar-simple__actions-cta > .ui-button {
-    width: 100%;
+  .calendar-simple__actions::-webkit-scrollbar {
+    display: none;
   }
 
   .calendar-simple__actions-main {
-    display: grid;
-    gap: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    min-width: max-content;
   }
 
   .calendar-simple__actions .segmented {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: inline-grid;
+    grid-template-columns: repeat(2, minmax(72px, auto));
+    width: auto;
+    flex: 0 0 auto;
   }
 
   .calendar-simple__view-modes {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: inline-grid;
+    grid-template-columns: repeat(2, minmax(72px, auto));
     gap: 3px;
+    width: auto;
   }
 
   .calendar-simple__view-modes button {
     min-height: 34px;
-    padding-inline: 6px;
+    padding-inline: 10px;
     font-size: 0.72rem;
   }
 
   .calendar-simple__actions .nav-controls {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: inline-grid;
+    grid-template-columns: repeat(3, minmax(72px, auto));
     gap: 6px;
+    width: auto;
+    flex: 0 0 auto;
   }
 
   .calendar-simple__actions .segmented button,
   .calendar-simple__actions .nav-controls button {
-    width: 100%;
+    width: auto;
     justify-content: center;
     min-width: 0;
     min-height: 34px;
-    padding-inline: 4px;
+    padding-inline: 10px;
     font-size: 0.7rem;
+    white-space: nowrap;
   }
 
   .calendar-simple__actions-cta {
     border-left: 0;
     margin-left: 0;
     padding-left: 0;
+    flex: 0 0 auto;
   }
 
   .calendar-simple__actions-cta > .ui-button {
     min-width: 0;
     min-height: 36px;
     font-size: 0.76rem;
+    width: auto;
+    white-space: nowrap;
   }
 
   .calendar-compact-mode__hero,

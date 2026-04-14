@@ -937,7 +937,7 @@ export function CalendarWorkspace() {
               <button onClick={() => navigate(1)} type="button">Вперед</button>
             </div>
           </div>
-          {canOpenControlPanel ? (
+          {canOpenControlPanel && !isMobileViewport ? (
             <div className="calendar-simple__actions-cta">
               <Link className="ui-button ui-button--primary ui-button--md" href="/control/schedule">
                 <span className="ui-button__content">Составить расписание</span>

@@ -6938,7 +6938,33 @@ textarea.ui-field {
   line-height: 1.4;
 }
 
-@media (max-width: 1240px) {
+@media (min-width: 761px) {
+  .control-schedule-board__toolbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .control-schedule-board__toolbar-main {
+    align-items: flex-start;
+    flex-wrap: nowrap;
+  }
+
+  .control-schedule-board__toolbar-aside {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .control-schedule-board__period {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .control-schedule-board__publish-actions {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 1240px) and (min-width: 761px) {
   .control-schedule-board__toolbar {
     grid-template-columns: 1fr;
     align-items: stretch;
@@ -6949,13 +6975,26 @@ textarea.ui-field {
     justify-content: flex-start;
   }
 
+  .control-schedule-board__toolbar-main {
+    display: grid;
+    justify-items: flex-start;
+    align-content: start;
+    gap: 12px;
+  }
+
   .control-schedule-board__toolbar-aside {
+    align-items: flex-start;
     gap: 14px 18px;
   }
 
   .control-schedule-board__period {
     flex: 1 1 260px;
     min-width: min(100%, 260px);
+  }
+
+  .control-schedule-board__nav {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .control-schedule-board__publish-actions {

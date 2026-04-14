@@ -29,7 +29,7 @@ import { useMobileViewport } from './use-mobile-viewport';
 import { useToastFeedback } from './use-toast-feedback';
 
 type ViewMode = 'month' | 'week';
-type ScheduleKind = 'PERFORMANCE' | 'REHEARSAL' | 'EVENT';
+type ScheduleKind = 'PERFORMANCE' | 'TOUR' | 'REHEARSAL' | 'EVENT';
 type PerformanceCastMode = 'AUTO' | 'CAST_1' | 'CAST_2';
 type SaveIntent = 'PLANNED' | 'DRAFT';
 
@@ -65,6 +65,7 @@ const timeFormat = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '
 
 const defaultDurationByKind: Record<ScheduleKind, number> = {
   PERFORMANCE: 120,
+  TOUR: 120,
   REHEARSAL: 120,
   EVENT: 90,
 };
@@ -173,6 +174,7 @@ const formatTimeOnly = (value: string) => timeFormat.format(new Date(value));
 
 const eventKindFromType = (type: EventType): ScheduleKind => {
   if (type === 'PERFORMANCE') return 'PERFORMANCE';
+  if (type === 'TOUR') return 'TOUR';
   if (type === 'REHEARSAL') return 'REHEARSAL';
   return 'EVENT';
 };
@@ -257,7 +259,10 @@ const predictPerformanceCastNumber = (
 const mapEventToForm = (event: EventRecord): ScheduleFormState => ({
   kind: eventKindFromType(event.type),
   playId: event.templateId ?? '',
-  title: event.type === 'PERFORMANCE' ? event.template?.name ?? event.title : event.title,
+  title:
+    event.type === 'PERFORMANCE' || event.type === 'TOUR'
+      ? event.template?.name ?? event.title
+      : event.title,
   date: event.startsAt.slice(0, 10),
   startsAt: formatTimeInputValue(event.startsAt),
   assemblyAt: event.assemblyAt ? formatTimeInputValue(event.assemblyAt) : '',
@@ -328,6 +333,7 @@ const computeConflictMap = (events: EventRecord[]) => {
 const getEventTone = (event: EventRecord) => {
   if (event.type === 'PERFORMANCE') return 'performance';
   if (event.type === 'REHEARSAL') return 'rehearsal';
+  if (event.type === 'TOUR') return 'performance';
   return 'event';
 };
 
@@ -481,6 +487,7 @@ export function ControlScheduleWorkspace() {
 
   const selectedPlay = useMemo(() => plays.find((play) => play.id === form.playId) ?? null, [form.playId, plays]);
   const selectedPlayHasAlternateCast = useMemo(() => playHasAlternateCast(selectedPlay), [selectedPlay]);
+  const usesPlayTemplate = form.kind === 'PERFORMANCE' || form.kind === 'TOUR';
   const effectivePerformanceCastNumber = useMemo<1 | 2 | null>(() => {
     if (form.kind !== 'PERFORMANCE' || !selectedPlay || !selectedPlayHasAlternateCast) {
       return null;
@@ -517,22 +524,33 @@ export function ControlScheduleWorkspace() {
   );
 
   useEffect(() => {
-    if (form.kind !== 'PERFORMANCE' || !selectedPlay) {
+    if (!usesPlayTemplate || !selectedPlay) {
       return;
     }
 
-    const nextParticipantIds = mapPlayParticipants(selectedPlay, effectivePerformanceCastNumber);
+    const nextParticipantIds =
+      form.kind === 'PERFORMANCE'
+        ? mapPlayParticipants(selectedPlay, effectivePerformanceCastNumber)
+        : mapPlayParticipants(selectedPlay);
     setForm((current) => ({
       ...current,
       title: selectedPlay.name,
-      location: venueOptions.includes(selectedPlay.location as VenueName) ? (selectedPlay.location as VenueName) : current.location,
+      location:
+        form.kind === 'TOUR'
+          ? 'Выезд'
+          : venueOptions.includes(selectedPlay.location as VenueName)
+            ? (selectedPlay.location as VenueName)
+            : current.location,
       participantIds: nextParticipantIds,
     }));
-  }, [effectivePerformanceCastNumber, form.kind, selectedPlay]);
+  }, [effectivePerformanceCastNumber, form.kind, selectedPlay, usesPlayTemplate]);
 
   const effectiveDurationMinutes = useMemo(
-    () => (form.kind === 'PERFORMANCE' ? selectedPlay?.durationMinutes ?? defaultDurationByKind.PERFORMANCE : form.durationMinutes),
-    [form.durationMinutes, form.kind, selectedPlay],
+    () =>
+      usesPlayTemplate
+        ? selectedPlay?.durationMinutes ?? defaultDurationByKind[form.kind]
+        : form.durationMinutes,
+    [form.durationMinutes, form.kind, selectedPlay, usesPlayTemplate],
   );
   const computedEndsAtIso = useMemo(
     () => (form.date && form.startsAt ? plusMinutesIso(toIso(form.date, form.startsAt), Math.max(effectiveDurationMinutes, 15)) : null),

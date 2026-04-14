@@ -405,6 +405,7 @@ export function CalendarWorkspace() {
     () => templateHasAlternateCast(composerSelectedPlay),
     [composerSelectedPlay],
   );
+  const composerUsesPlayTemplate = composerState?.kind === 'PERFORMANCE' || composerState?.kind === 'TOUR';
 
   const composerDurationMinutes = useMemo(() => {
     if (!composerState) {
@@ -558,7 +559,10 @@ export function CalendarWorkspace() {
               ? 'TOUR'
               : 'EVENT',
       playId: event.templateId ?? '',
-      title: event.type === 'PERFORMANCE' ? event.template?.name ?? event.title : event.title,
+      title:
+        event.type === 'PERFORMANCE' || event.type === 'TOUR'
+          ? event.template?.name ?? event.title
+          : event.title,
       date: formatDateInput(new Date(event.startsAt)),
       startsAt: formatTimeInputValue(event.startsAt),
       assemblyAt: event.assemblyAt ? formatTimeInputValue(event.assemblyAt) : '',
@@ -612,7 +616,7 @@ export function CalendarWorkspace() {
         ? {
             ...current,
             kind,
-            playId: kind === 'PERFORMANCE' ? current.playId : '',
+            playId: kind === 'PERFORMANCE' || kind === 'TOUR' ? current.playId : '',
             title:
               kind === 'TOUR'
                 ? 'Гастроли'
@@ -621,9 +625,12 @@ export function CalendarWorkspace() {
                   : kind === 'PERFORMANCE'
                     ? ''
                     : current.title,
-            durationMinutes: kind === 'PERFORMANCE' ? current.durationMinutes : defaultDurationByKind[kind],
+            durationMinutes:
+              kind === 'PERFORMANCE' || kind === 'TOUR'
+                ? current.durationMinutes
+                : defaultDurationByKind[kind],
             location: kind === 'REHEARSAL' ? 'Реп зал' : kind === 'TOUR' ? 'Выезд' : current.location,
-            participantIds: kind === 'PERFORMANCE' ? [] : current.participantIds,
+            participantIds: kind === 'PERFORMANCE' || kind === 'TOUR' ? [] : current.participantIds,
           }
         : current,
     );
@@ -638,7 +645,7 @@ export function CalendarWorkspace() {
             ...current,
             playId,
             title: play?.name ?? '',
-            location: isVenueName(play?.location) ? play.location : current.location,
+            location: current.kind === 'TOUR' ? 'Выезд' : isVenueName(play?.location) ? play.location : current.location,
             participantIds:
               play && !templateHasAlternateCast(play)
                 ? mapPlayParticipants(play)
@@ -666,11 +673,11 @@ export function CalendarWorkspace() {
             : 'EVENT'
           : composerState.kind;
       const title =
-        composerState.kind === 'PERFORMANCE'
+        composerState.kind === 'PERFORMANCE' || composerState.kind === 'TOUR'
           ? composerSelectedPlay?.name ?? ''
           : composerState.title.trim();
 
-      if (composerState.kind === 'PERFORMANCE' && !composerState.playId) {
+      if ((composerState.kind === 'PERFORMANCE' || composerState.kind === 'TOUR') && !composerState.playId) {
         throw new Error('Выберите спектакль.');
       }
 
@@ -688,9 +695,9 @@ export function CalendarWorkspace() {
         assemblyAt: composerState.kind === 'TOUR' && composerState.assemblyAt ? toIso(composerState.date, composerState.assemblyAt) : undefined,
         location: composerState.location,
         description: composerState.description.trim() || undefined,
-        templateId: composerState.kind === 'PERFORMANCE' ? composerState.playId : undefined,
+        templateId: composerState.kind === 'PERFORMANCE' || composerState.kind === 'TOUR' ? composerState.playId : undefined,
         participants:
-          composerState.kind === 'PERFORMANCE'
+          composerState.kind === 'PERFORMANCE' || composerState.kind === 'TOUR'
             ? undefined
             : composerState.participantIds.map((participantId) => ({
                 participantId,
@@ -1190,9 +1197,9 @@ export function CalendarWorkspace() {
                 ))}
               </Select>
 
-              {composerState.kind === 'PERFORMANCE' ? (
+              {composerUsesPlayTemplate ? (
                 <Select
-                  label="Спектакль"
+                  label={composerState.kind === 'TOUR' ? 'Спектакль в гастролях' : 'Спектакль'}
                   value={composerState.playId}
                   onChange={(event) => handleComposerPlayChange(event.target.value)}
                 >
@@ -1250,7 +1257,7 @@ export function CalendarWorkspace() {
                   }
                 />
               ) : null}
-              {composerState.kind === 'PERFORMANCE' ? (
+              {composerUsesPlayTemplate ? (
                 <div className="calendar-composer__summary">
                   <span>Длительность</span>
                   <strong>{formatDurationLabel(composerDurationMinutes)} по спектаклю</strong>
@@ -1303,7 +1310,7 @@ export function CalendarWorkspace() {
               </Select>
             </div>
 
-            {composerState.kind === 'PERFORMANCE' ? (
+            {composerUsesPlayTemplate ? (
               <Card tone="subtle" className="resource-inline-panel">
                 <CardContent className="resource-inline-panel__content">
                   <div className="resource-inline-info">

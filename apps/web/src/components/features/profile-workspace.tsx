@@ -14,6 +14,7 @@ import { BrowserNotificationsSettings } from './browser-notifications-settings';
 import { CalendarSyncSettings } from './calendar-sync-settings';
 import { CreateOrganizationAction } from './create-organization-action';
 import { EventReminderSettings } from './event-reminder-settings';
+import { NotificationsInboxCard } from './notifications-inbox-card';
 import { PageHeader } from './page-header';
 import { useActiveWorkspace } from './use-active-workspace';
 import { useMobileViewport } from './use-mobile-viewport';
@@ -278,12 +279,13 @@ export function ProfileWorkspace() {
         <Card>
           <CardHeader>
             <CardTitle>Уведомления</CardTitle>
-            <CardDescription>Календарь телефона, напоминания, установка на экран и проверка push именно для этого устройства.</CardDescription>
+            <CardDescription>Календарь, напоминания, установка на экран и push-статус этого устройства.</CardDescription>
           </CardHeader>
           <CardContent className="profile-mobile-notifications">
             <CalendarSyncSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} />
             <EventReminderSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} />
             <BrowserNotificationsSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} />
+            <NotificationsInboxCard accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} />
           </CardContent>
         </Card>
 
@@ -314,7 +316,7 @@ export function ProfileWorkspace() {
         </div>
       </div>
       <div className="account-settings-grid">
-        <Card><CardHeader><CardTitle>Уведомления</CardTitle><CardDescription>Здесь вся настройка доставки: календарь телефона, напоминания, установка на экран и push для текущего устройства.</CardDescription></CardHeader><CardContent className="account-settings-card"><div className="account-toggle-list"><CalendarSyncSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} /><EventReminderSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} /><BrowserNotificationsSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} /></div></CardContent></Card>
+        <Card><CardHeader><CardTitle>Уведомления</CardTitle><CardDescription>Только нужное: синхронизация календаря, напоминания, установка на экран, push-статус и живая лента уведомлений.</CardDescription></CardHeader><CardContent className="account-settings-card"><div className="account-toggle-list"><CalendarSyncSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} /><EventReminderSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} /><BrowserNotificationsSettings accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} /><NotificationsInboxCard accessToken={accessToken} onNotice={setNoticeText} onError={setErrorText} /></div></CardContent></Card>
         <Card><CardHeader><CardTitle>Безопасность</CardTitle><CardDescription>Пароль, TOTP и завершение всех активных сессий.</CardDescription></CardHeader><CardContent className="account-security-card"><div className="account-security-card__group"><strong>{user?.email ?? '—'}</strong><span>Почта используется как логин и пока не редактируется.</span></div><div className="account-security-card__group"><strong>TOTP {twoFactorStatus?.enabled ? 'включен' : 'не включен'}</strong><span>{securityDescription}</span></div><div className="resource-card__actions"><Button type="button" variant="ghost" onClick={() => setSecurityModalOpen(true)}>Сменить пароль</Button>{twoFactorStatus?.enabled ? <Button type="button" variant="ghost" onClick={() => { setTotpMode('disable'); setTotpSetupData(null); setTotpForm({ currentPassword: '', code: '' }); setTotpModalOpen(true); }}>Отключить TOTP</Button> : <Button type="button" variant="ghost" onClick={() => { setTotpMode('setup'); setTotpSetupData(null); setTotpForm({ currentPassword: '', code: '' }); setTotpModalOpen(true); }}>Настроить TOTP</Button>}<Button type="button" variant="danger" onClick={() => void withProcessing('logout-all', async () => { if (!window.confirm('Выйти со всех устройств? Текущая сессия тоже завершится.')) return; await logoutAll(); })} loading={processingId === 'logout-all'}>Выйти со всех устройств</Button></div></CardContent></Card>
       </div>
       <Modal open={profileModalOpen} onClose={() => setProfileModalOpen(false)} title="Редактировать профиль" description="Обновите имя и аватар. Почта используется как логин и пока не меняется." footer={profileFooter}><div className="profile-stack"><div className="account-profile-preview"><Avatar name={buildDisplayName(profileForm.firstName, profileForm.lastName, user?.email)} src={profileForm.avatarUrl || null} size="lg" /><div className="resource-inline-info"><strong>{buildDisplayName(profileForm.firstName, profileForm.lastName, user?.email)}</strong><span>{user?.email ?? '—'}</span></div></div><div className="account-form-grid"><Input label="Имя" value={profileForm.firstName} onChange={(event) => setProfileForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Имя" /><Input label="Фамилия" value={profileForm.lastName} onChange={(event) => setProfileForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Фамилия" /></div><Input label="Ссылка на аватар" value={profileForm.avatarUrl} onChange={(event) => setProfileForm((current) => ({ ...current, avatarUrl: event.target.value }))} placeholder="https://..." hint="Если оставить пустым, останутся инициалы." /><Input label="Почта" value={user?.email ?? ''} disabled hint="Эта почта используется для входа и пока не редактируется." /></div></Modal>
@@ -323,4 +325,3 @@ export function ProfileWorkspace() {
     </section>
   );
 }
-

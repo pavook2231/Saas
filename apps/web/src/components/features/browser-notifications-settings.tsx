@@ -4,12 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   notificationsApi,
-  type TestWebPushResponse,
   type WebPushClientConfig,
   type WebPushSubscriptionItem,
 } from '@/app/lib/api/notifications';
 import { browserPush } from '@/app/lib/notifications/browser-push';
-import { usePwaInstallPrompt } from '@/app/providers/pwa-install-provider';
 import { Modal } from '@/components/ui/modal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,12 +18,12 @@ type BrowserNotificationsSettingsProps = {
   onError: (message: string) => void;
 };
 
-type BrowserInstallGuide = {
-  browserLabel: string;
-  note: string;
-  menuStep: string;
-  actionStep: string;
-  confirmStep: string;
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{
+    outcome: 'accepted' | 'dismissed';
+    platform: string;
+  }>;
 };
 
 const detectDeviceLabel = () => {
@@ -97,100 +95,6 @@ const detectPushPlatform = () => {
   };
 };
 
-const detectInstallGuide = (): BrowserInstallGuide => {
-  if (typeof navigator === 'undefined') {
-    return {
-      browserLabel: 'Браузер',
-      note: 'Если браузер не показывает системную установку, добавить сайт можно через его меню.',
-      menuStep: 'Откройте меню браузера на этой странице.',
-      actionStep: 'Найдите пункт «Установить приложение» или «Добавить на экран домой».',
-      confirmStep: 'Подтвердите добавление сайта.',
-    };
-  }
-
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isIphone = /iphone/.test(userAgent);
-  const isIpad =
-    /ipad/.test(userAgent) ||
-    (/macintosh/.test(userAgent) &&
-      typeof document !== 'undefined' &&
-      'ontouchend' in document);
-  const isAndroid = /android/.test(userAgent);
-  const isEdge = /edg|edgios|edga/.test(userAgent);
-  const isSamsung = /samsungbrowser/.test(userAgent);
-  const isFirefox = /firefox|fxios/.test(userAgent);
-  const isChrome = /chrome|crios/.test(userAgent) && !isEdge && !isSamsung && !/opr|opera/.test(userAgent);
-  const isSafari = /safari/.test(userAgent) && !isChrome && !isAndroid && !isEdge;
-
-  if (isIphone || isIpad) {
-    return {
-      browserLabel: 'Safari на iPhone / iPad',
-      note: 'На iPhone и iPad системный prompt не открывается кнопкой сайта, поэтому добавление делается через меню Safari.',
-      menuStep: 'Нажмите кнопку «Поделиться» в Safari.',
-      actionStep: 'Выберите «На экран Домой».',
-      confirmStep: 'Подтвердите добавление и потом открывайте сервис уже с иконки на экране.',
-    };
-  }
-
-  if (isSamsung) {
-    return {
-      browserLabel: 'Samsung Internet',
-      note: 'В Samsung Internet установка сайта чаще всего доступна прямо в меню браузера.',
-      menuStep: 'Откройте меню Samsung Internet.',
-      actionStep: 'Найдите пункт «Добавить страницу на» или «Установить приложение».',
-      confirmStep: 'Подтвердите добавление на главный экран.',
-    };
-  }
-
-  if (isEdge) {
-    return {
-      browserLabel: 'Microsoft Edge',
-      note: 'Edge обычно предлагает установку сам, но её можно открыть и вручную через меню браузера.',
-      menuStep: 'Откройте меню Edge.',
-      actionStep: 'Выберите «Приложения» и затем «Установить этот сайт как приложение».',
-      confirmStep: 'Подтвердите установку.',
-    };
-  }
-
-  if (isFirefox) {
-    return {
-      browserLabel: isAndroid ? 'Firefox на Android' : 'Firefox',
-      note: 'В Firefox поддержка установки и web push зависит от платформы, поэтому иногда доступно только добавление ярлыка.',
-      menuStep: 'Откройте меню Firefox.',
-      actionStep: 'Найдите «Добавить на главный экран» или похожий пункт с ярлыком сайта.',
-      confirmStep: 'Подтвердите добавление и затем проверьте push на этом устройстве.',
-    };
-  }
-
-  if (isChrome) {
-    return {
-      browserLabel: isAndroid ? 'Chrome на Android' : 'Chrome',
-      note: 'Chrome обычно умеет и системную установку, и ручное добавление сайта через меню.',
-      menuStep: 'Откройте меню Chrome.',
-      actionStep: 'Выберите «Установить приложение» или «Добавить на главный экран».',
-      confirmStep: 'Подтвердите добавление и откройте сервис уже с домашнего экрана.',
-    };
-  }
-
-  if (isSafari) {
-    return {
-      browserLabel: 'Safari',
-      note: 'В Safari способ установки зависит от устройства, но чаще всего это делается через меню браузера.',
-      menuStep: 'Откройте меню Safari или кнопку «Поделиться».',
-      actionStep: 'Найдите «Добавить на экран Домой».',
-      confirmStep: 'Подтвердите добавление сайта.',
-    };
-  }
-
-  return {
-    browserLabel: 'Текущий браузер',
-    note: 'Если браузер не показывает системную установку, добавить сайт можно через его меню.',
-    menuStep: 'Откройте меню браузера на этой странице.',
-    actionStep: 'Найдите пункт «Установить приложение» или «Добавить на экран домой».',
-    confirmStep: 'Подтвердите добавление сайта.',
-  };
-};
-
 const isIosFamily = () => {
   if (typeof navigator === 'undefined') {
     return false;
@@ -205,6 +109,15 @@ const isIosFamily = () => {
       'ontouchend' in document);
 
   return isIphone || isIpad;
+};
+
+const getStandaloneMode = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const nav = navigator as Navigator & { standalone?: boolean };
+  return window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
 };
 
 const permissionLabel: Record<NotificationPermission | 'unsupported', string> = {
@@ -266,45 +179,32 @@ export function BrowserNotificationsSettings({
   const [loading, setLoading] = useState(false);
   const [subscriptions, setSubscriptions] = useState<WebPushSubscriptionItem[]>([]);
   const [config, setConfig] = useState<WebPushClientConfig | null>(null);
-  const [configState, setConfigState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [permission, setPermission] = useState(browserPush.getPermission());
-  const [hasBrowserSubscription, setHasBrowserSubscription] = useState(false);
+  const [hasDeviceSubscription, setHasDeviceSubscription] = useState(false);
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [installModalOpen, setInstallModalOpen] = useState(false);
+  const [standaloneMode, setStandaloneMode] = useState(getStandaloneMode);
   const [testingNotification, setTestingNotification] = useState(false);
-  const { installPromptEvent, standaloneMode } = usePwaInstallPrompt();
 
   const supported = browserPush.isSupported();
   const platformInfo = useMemo(() => detectPushPlatform(), []);
-  const installGuide = useMemo(() => detectInstallGuide(), []);
   const iosFamily = useMemo(() => isIosFamily(), []);
-  const currentDeviceId = useMemo(() => browserPush.getClientDeviceId(), []);
-  const hasServerDeviceSubscription = useMemo(
-    () =>
-      subscriptions.some(
-        (subscription) =>
-          subscription.isActive &&
-          subscription.clientDeviceId !== null &&
-          subscription.clientDeviceId === currentDeviceId,
-      ),
-    [currentDeviceId, subscriptions],
-  );
-  const hasDeviceSubscription = hasBrowserSubscription && hasServerDeviceSubscription;
 
   const syncDeviceSubscription = useCallback(async () => {
     if (!supported) {
       setPermission(browserPush.getPermission());
-      setHasBrowserSubscription(false);
+      setHasDeviceSubscription(false);
       return null;
     }
 
     try {
       const subscription = await browserPush.getSubscription();
       setPermission(browserPush.getPermission());
-      setHasBrowserSubscription(Boolean(subscription));
+      setHasDeviceSubscription(Boolean(subscription));
       return subscription;
     } catch {
       setPermission(browserPush.getPermission());
-      setHasBrowserSubscription(false);
+      setHasDeviceSubscription(false);
       return null;
     }
   }, [supported]);
@@ -312,18 +212,14 @@ export function BrowserNotificationsSettings({
   const loadConfig = useCallback(async () => {
     if (!accessToken) {
       setConfig(null);
-      setConfigState('idle');
       return null;
     }
 
     try {
-      setConfigState('loading');
       const nextConfig = await notificationsApi.getWebPushConfig({ accessToken });
       setConfig(nextConfig);
-      setConfigState('ready');
       return nextConfig;
     } catch (error) {
-      setConfigState('error');
       onError(
         error instanceof Error
           ? error.message
@@ -351,14 +247,48 @@ export function BrowserNotificationsSettings({
     if (!accessToken) {
       setSubscriptions([]);
       setConfig(null);
-      setConfigState('idle');
-      setHasBrowserSubscription(false);
+      setHasDeviceSubscription(false);
       setPermission(browserPush.getPermission());
       return;
     }
 
     void Promise.all([loadConfig(), loadSubscriptions(), syncDeviceSubscription()]);
   }, [accessToken, loadConfig, loadSubscriptions, syncDeviceSubscription]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    const syncStandaloneMode = () => {
+      setStandaloneMode(getStandaloneMode());
+    };
+
+    syncStandaloneMode();
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+      syncStandaloneMode();
+    };
+
+    const handleInstalled = () => {
+      setInstallPromptEvent(null);
+      syncStandaloneMode();
+      onNotice('Сайт добавлен на экран домой. Лучше открывать сервис именно оттуда.');
+    };
+
+    mediaQuery.addEventListener('change', syncStandaloneMode);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleInstalled);
+
+    return () => {
+      mediaQuery.removeEventListener('change', syncStandaloneMode);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleInstalled);
+    };
+  }, [onNotice]);
 
   const handleToggle = async (nextValue: boolean) => {
     if (!accessToken) {
@@ -437,6 +367,8 @@ export function BrowserNotificationsSettings({
         }
       } catch (error) {
         onError(error instanceof Error ? error.message : 'Не удалось открыть установку сайта.');
+      } finally {
+        setInstallPromptEvent(null);
       }
 
       return;
@@ -446,47 +378,38 @@ export function BrowserNotificationsSettings({
   };
 
   const handleTestNotification = async () => {
-    if (!accessToken) {
-      onError('Нужна активная сессия.');
+    if (!supported) {
+      onError('Этот браузер не поддерживает web push-уведомления.');
       return;
     }
 
-    if (configState === 'loading') {
-      onError('Подождите, пока загрузятся настройки push.');
+    if (!hasDeviceSubscription) {
+      onError('Сначала включите push-уведомления для этого устройства.');
       return;
     }
 
-    if (configState === 'error' || !config?.enabled || !config?.publicKey) {
-      onError('Сервер web push сейчас не готов.');
+    if (permission !== 'granted') {
+      onError('Браузер пока не выдал разрешение на уведомления.');
       return;
     }
 
     setTestingNotification(true);
 
     try {
-      const response: TestWebPushResponse = await notificationsApi.sendTestWebPush({
-        accessToken,
-        clientDeviceId: browserPush.getClientDeviceId() ?? undefined,
+      const registration = await browserPush.ensureServiceWorker();
+      await registration.showNotification('Тест уведомлений', {
+        body: 'Это локальная проверка web push. Если карточка видна, устройство готово к уведомлениям.',
+        tag: 'local-web-push-test',
+        requireInteraction: false,
+        icon: '/calendar-icon',
+        badge: '/calendar-icon',
+        data: {
+          url: '/profile',
+        },
       });
-
-      if (!response.hasActiveSubscription) {
-        onError('Для этого устройства нет активной push-подписки. Сначала включите уведомления.');
-        return;
-      }
-
-      if (response.success) {
-        onNotice('Тестовое уведомление отправлено именно на это устройство. Если push включен, оно должно прийти как обычное системное уведомление.');
-        return;
-      }
-
-      if (response.pendingCount > 0) {
-        onNotice('Тест отправлен на это устройство, но провайдер еще не подтвердил доставку. Проверь уведомления через несколько секунд.');
-        return;
-      }
-
-      onError('Сервер попробовал отправить тест, но доставка не подтвердилась.');
+      onNotice('Тестовое уведомление отправлено на это устройство.');
     } catch (error) {
-      onError(error instanceof Error ? error.message : 'Не удалось отправить тестовое уведомление.');
+      onError(error instanceof Error ? error.message : 'Не удалось показать тестовое уведомление.');
     } finally {
       setTestingNotification(false);
     }
@@ -497,14 +420,6 @@ export function BrowserNotificationsSettings({
       return 'Этот браузер не поддерживает push-уведомления.';
     }
 
-    if (configState === 'loading') {
-      return 'Проверяем настройки push на сервере.';
-    }
-
-    if (configState === 'error') {
-      return 'Не удалось загрузить настройки push с сервера.';
-    }
-
     if (config && (!config.enabled || !config.publicKey)) {
       return 'Push-уведомления еще не настроены на сервере.';
     }
@@ -513,14 +428,10 @@ export function BrowserNotificationsSettings({
       return 'Разрешение на уведомления заблокировано в браузере.';
     }
 
-    if (hasBrowserSubscription && !hasServerDeviceSubscription) {
-      return 'На устройстве есть локальная подписка, но серверу нужна перепривязка. Включите push заново.';
-    }
-
     return hasDeviceSubscription
       ? 'Push-уведомления подключены на этом устройстве.'
       : 'Push-уведомления пока не подключены.';
-  }, [config, configState, hasBrowserSubscription, hasDeviceSubscription, hasServerDeviceSubscription, permission, supported]);
+  }, [config, hasDeviceSubscription, permission, supported]);
 
   const toggleHint = useMemo(() => {
     if (!accessToken) {
@@ -531,14 +442,6 @@ export function BrowserNotificationsSettings({
       return 'Недоступно в этом браузере';
     }
 
-    if (configState === 'loading') {
-      return 'Проверяем настройки сервера';
-    }
-
-    if (configState === 'error') {
-      return 'Не удалось проверить сервер push';
-    }
-
     if (config && (!config.enabled || !config.publicKey)) {
       return 'Сервер push еще не настроен';
     }
@@ -547,20 +450,14 @@ export function BrowserNotificationsSettings({
       return 'Разрешение заблокировано в браузере';
     }
 
-    if (hasBrowserSubscription && !hasServerDeviceSubscription) {
-      return 'Нажмите, чтобы перепривязать это устройство к серверу push';
-    }
-
     return hasDeviceSubscription
       ? 'Нажмите, чтобы выключить'
       : 'Нажмите, чтобы включить';
-  }, [accessToken, config, configState, hasBrowserSubscription, hasDeviceSubscription, hasServerDeviceSubscription, permission, supported]);
+  }, [accessToken, config, hasDeviceSubscription, permission, supported]);
 
   const canToggle =
     Boolean(accessToken) &&
     supported &&
-    configState !== 'loading' &&
-    configState !== 'error' &&
     permission !== 'denied' &&
     !(config && (!config.enabled || !config.publicKey));
 
@@ -569,8 +466,8 @@ export function BrowserNotificationsSettings({
     : installPromptEvent
       ? 'Можно установить прямо из этого блока'
       : iosFamily
-        ? `Покажем шаги именно для ${installGuide.browserLabel}`
-        : `Если системной кнопки нет, покажем шаги для ${installGuide.browserLabel}`;
+        ? 'Нужна инструкция через меню "Поделиться"'
+        : 'Если браузер не показал кнопку, откроем инструкцию';
 
   const statusItems = [
     {
@@ -600,18 +497,9 @@ export function BrowserNotificationsSettings({
     },
     {
       label: 'Сервер push',
-      value:
-        configState === 'loading'
-          ? 'Проверяем'
-          : configState === 'error'
-            ? 'Ошибка проверки'
-            : config && (!config.enabled || !config.publicKey)
-              ? 'Не настроен'
-              : 'Готов',
+      value: config && (!config.enabled || !config.publicKey) ? 'Не настроен' : 'Готов',
       tone:
-        configState === 'loading'
-          ? ('neutral' as const)
-          : configState === 'error' || (config && (!config.enabled || !config.publicKey))
+        config && (!config.enabled || !config.publicKey)
           ? ('error' as const)
           : ('success' as const),
     },
@@ -678,16 +566,12 @@ export function BrowserNotificationsSettings({
         </div>
 
         <div className="account-browser-push__summary">
-          <strong>Как настроить уведомления без путаницы</strong>
-          <span>1. Добавьте сайт на экран домой, если кнопка выше это предлагает.</span>
-          <span>2. Включите push именно на этом устройстве и дайте браузеру разрешение.</span>
-          <span>3. Нажмите тест: он проверяет серверную доставку только для текущего телефона или браузера.</span>
-          <span>{`4. Инструкция ниже подобрана именно для ${installGuide.browserLabel}.`}</span>
+          <strong>Что придет на телефон</strong>
+          <span>Изменения расписания, срочные переносы и публикация новой недели.</span>
+          <span>Напоминания приходят отдельно и зависят от переключателя выше.</span>
         </div>
 
         <div className="account-browser-push__meta">
-          <span>На телефон приходят изменения расписания, срочные переносы и публикация новой недели.</span>
-          <span>Напоминания о событиях включаются отдельным переключателем в этом же разделе.</span>
           {permission === 'default' ? (
             <span>После включения браузер попросит разрешение на уведомления.</span>
           ) : null}
@@ -725,7 +609,7 @@ export function BrowserNotificationsSettings({
             variant="ghost"
             onClick={() => void handleTestNotification()}
             loading={testingNotification}
-            disabled={testingNotification || !accessToken || configState === 'loading'}
+            disabled={!hasDeviceSubscription || permission !== 'granted'}
           >
             Тест уведомления
           </Button>
@@ -745,7 +629,7 @@ export function BrowserNotificationsSettings({
         open={installModalOpen}
         onClose={() => setInstallModalOpen(false)}
         title="Добавить на экран домой"
-        description={`Шаги ниже подобраны для ${installGuide.browserLabel}. Так сервис удобнее открывать как приложение, а web push на телефоне работает стабильнее.`}
+        description="Так сервис удобнее открывать как приложение, а web push на телефоне работает стабильнее."
         footer={
           <Button type="button" variant="ghost" onClick={() => setInstallModalOpen(false)}>
             Понятно
@@ -754,13 +638,23 @@ export function BrowserNotificationsSettings({
       >
         <div className="account-browser-push__guide">
           <div className="account-browser-push__guide-note">
-            <Badge variant={iosFamily ? 'warning' : 'neutral'}>{installGuide.browserLabel}</Badge>
-            <span>{installGuide.note}</span>
+            <Badge variant={iosFamily ? 'warning' : 'neutral'}>
+              {iosFamily ? 'iPhone / iPad' : 'Браузер'}
+            </Badge>
+            <span>
+              {iosFamily
+                ? 'В iPhone браузер не дает открыть установку кнопкой сайта, поэтому добавление делается через меню Safari.'
+                : 'Если браузер не показал системное окно установки, можно добавить сайт вручную через меню браузера.'}
+            </span>
           </div>
           <ol className="account-browser-push__guide-steps">
-            <li>{installGuide.menuStep}</li>
-            <li>{installGuide.actionStep}</li>
-            <li>{installGuide.confirmStep}</li>
+            <li>Откройте меню браузера на этой странице.</li>
+            <li>
+              {iosFamily
+                ? 'Нажмите "Поделиться".'
+                : 'Найдите пункт "Установить приложение" или "Добавить на экран домой".'}
+            </li>
+            <li>{iosFamily ? 'Выберите "На экран Домой".' : 'Подтвердите добавление сайта.'}</li>
             <li>Потом открывайте сервис уже с иконки на домашнем экране.</li>
           </ol>
         </div>
@@ -768,5 +662,3 @@ export function BrowserNotificationsSettings({
     </>
   );
 }
-
-

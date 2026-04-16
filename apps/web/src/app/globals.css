@@ -871,6 +871,7 @@ body.is-scroll-locked {
 
 .participant-picker-modal {
   width: min(100%, 720px);
+  max-width: 100%;
 }
 
 .participant-picker-modal__section {
@@ -8612,21 +8613,83 @@ textarea.ui-field {
     padding: 10px 12px;
   }
 
+  .participant-picker-modal {
+    width: min(100vw, 100%);
+  }
+
+  .participant-picker-modal.ui-modal__panel {
+    height: min(calc(var(--viewport-height, 100dvh) - 16px), 720px);
+    max-height: calc(var(--viewport-height, 100dvh) - 16px);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .participant-picker-modal .ui-modal__body {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .participant-picker-modal__content {
+    min-height: 0;
+    height: 100%;
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .participant-picker-modal__section {
+    min-height: 0;
+  }
+
   .participant-picker-modal__section--selected {
     padding: 10px;
   }
 
   .participant-picker-modal__list {
-    max-height: min(34dvh, 260px);
+    max-height: none;
+    min-height: 0;
   }
 
   .participant-picker-modal__option {
-    align-items: flex-start;
-    padding: 10px;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 7px;
+    min-height: 58px;
+    padding: 9px 10px;
+    overflow: visible;
+  }
+
+  .participant-picker-modal__option-main {
+    width: 100%;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .participant-picker-modal__option-main .ui-avatar {
+    flex: 0 0 auto;
+  }
+
+  .participant-picker-modal__option-copy {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .participant-picker-modal__option-copy strong {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.94rem;
+  }
+
+  .participant-picker-modal__option-copy span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .participant-picker-modal__option-side {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 10px;
+    padding-left: 42px;
+    font-size: 0.82rem;
   }
 }

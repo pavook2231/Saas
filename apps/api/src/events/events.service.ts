@@ -3367,37 +3367,86 @@ export class EventsService {
       },
     });
 
-    for (const membership of activeMemberships) {
-      if (!membership.user) {
-        continue;
-      }
+    const membershipsWithUsers = activeMemberships.filter((membership) => membership.user);
+    const userIds = membershipsWithUsers.map((membership) => membership.userId);
 
-      await this.prisma.participant.upsert({
-        where: {
-          organizationId_userId: {
+    if (userIds.length === 0) {
+      return;
+    }
+
+    const existingParticipants = await this.prisma.participant.findMany({
+      where: {
+        organizationId,
+        userId: {
+          in: userIds,
+        },
+      },
+      select: {
+        id: true,
+        userId: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        deletedAt: true,
+        invitationStatus: true,
+      },
+    });
+    const existingByUserId = new Map(
+      existingParticipants
+        .filter((participant) => participant.userId)
+        .map((participant) => [participant.userId as string, participant]),
+    );
+
+    await Promise.all(
+      membershipsWithUsers.map(async (membership) => {
+        const user = membership.user;
+
+        if (!user) {
+          return;
+        }
+
+        const nextFirstName = user.firstName?.trim() || user.email;
+        const nextLastName = user.lastName?.trim() || ' ';
+        const existing = existingByUserId.get(membership.userId);
+        const shouldUpdate =
+          !existing ||
+          existing.firstName !== nextFirstName ||
+          existing.lastName !== nextLastName ||
+          existing.email !== user.email ||
+          existing.deletedAt !== null ||
+          existing.invitationStatus !== ParticipantInviteStatus.ACCEPTED;
+
+        if (!shouldUpdate) {
+          return;
+        }
+
+        await this.prisma.participant.upsert({
+          where: {
+            organizationId_userId: {
+              organizationId,
+              userId: membership.userId,
+            },
+          },
+          update: {
+            firstName: nextFirstName,
+            lastName: nextLastName,
+            email: user.email,
+            linkedAt: new Date(),
+            deletedAt: null,
+            invitationStatus: ParticipantInviteStatus.ACCEPTED,
+          },
+          create: {
             organizationId,
             userId: membership.userId,
+            firstName: nextFirstName,
+            lastName: nextLastName,
+            email: user.email,
+            linkedAt: new Date(),
+            invitationStatus: ParticipantInviteStatus.ACCEPTED,
           },
-        },
-        update: {
-          firstName: membership.user.firstName?.trim() || membership.user.email,
-          lastName: membership.user.lastName?.trim() || ' ',
-          email: membership.user.email,
-          linkedAt: new Date(),
-          deletedAt: null,
-          invitationStatus: ParticipantInviteStatus.ACCEPTED,
-        },
-        create: {
-          organizationId,
-          userId: membership.userId,
-          firstName: membership.user.firstName?.trim() || membership.user.email,
-          lastName: membership.user.lastName?.trim() || ' ',
-          email: membership.user.email,
-          linkedAt: new Date(),
-          invitationStatus: ParticipantInviteStatus.ACCEPTED,
-        },
-      });
-    }
+        });
+      }),
+    );
   }
 
   private generateInviteToken(): { rawToken: string; tokenHash: string } {

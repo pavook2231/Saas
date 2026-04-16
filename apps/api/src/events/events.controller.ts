@@ -180,6 +180,11 @@ export class EventsController {
   }
 
   @Post('events/conflicts/check')
+  @RequireOrgRoles(
+    OrganizationRole.ADMIN,
+    OrganizationRole.DIRECTOR,
+    OrganizationRole.ASSISTANT,
+  )
   async checkEventConflicts(
     @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
     organizationId: string,

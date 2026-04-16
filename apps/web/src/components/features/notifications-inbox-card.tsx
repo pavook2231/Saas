@@ -109,7 +109,6 @@ export function NotificationsInboxCard({
     }
 
     const socket = io(`${defaultSocketBaseUrl}/notifications`, {
-      transports: ['websocket'],
       auth: {
         token: accessToken,
       },

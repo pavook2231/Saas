@@ -18,6 +18,7 @@ import { ListMyNotificationsQueryDto } from './dto/list-my-notifications-query.d
 import { ListScheduleChangeFeedQueryDto } from './dto/list-schedule-change-feed-query.dto';
 import { RegisterPushDeviceDto } from './dto/register-push-device.dto';
 import { RegisterWebPushSubscriptionDto } from './dto/register-web-push-subscription.dto';
+import { TestWebPushDto } from './dto/test-web-push.dto';
 import { UnregisterPushDeviceDto } from './dto/unregister-push-device.dto';
 import { UnregisterWebPushSubscriptionDto } from './dto/unregister-web-push-subscription.dto';
 import { UpdateReminderPreferencesDto } from './dto/update-reminder-preferences.dto';
@@ -111,5 +112,13 @@ export class NotificationsController {
     @Body() dto: UnregisterWebPushSubscriptionDto,
   ) {
     return this.notificationsService.unregisterWebPushSubscription(user.sub, dto);
+  }
+
+  @Post('push/web/test')
+  async sendTestWebPush(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: TestWebPushDto,
+  ) {
+    return this.notificationsService.sendTestWebPush(user.sub, dto.clientDeviceId);
   }
 }

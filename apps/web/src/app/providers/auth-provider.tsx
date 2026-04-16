@@ -14,7 +14,7 @@ import {
 import { sanitizeInternalPath } from '@/lib/safe-url';
 
 import { AuthApiError, authApi } from '../lib/auth/api';
-import { authStorage } from '../lib/auth/storage';
+import { AUTH_SESSION_CHANGED_EVENT, authStorage } from '../lib/auth/storage';
 import {
   AuthResponse,
   AuthSuccessResponse,
@@ -98,6 +98,14 @@ const parseExpiresAt = (value: string): number | null => {
 };
 
 const isAuthApiError = (error: unknown): error is AuthApiError => error instanceof AuthApiError;
+const shouldRefreshSoon = (candidate: StoredSession | null): boolean => {
+  if (!candidate?.accessTokenExpiresAt) {
+    return false;
+  }
+
+  const expiresAt = parseExpiresAt(candidate.accessTokenExpiresAt);
+  return expiresAt !== null && expiresAt <= Date.now() + ACCESS_TOKEN_REFRESH_SKEW_MS;
+};
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [status, setStatus] = useState<AuthStatus>('loading');
@@ -447,6 +455,31 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [applySession, clearSession, refreshFromToken]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const syncFromStorage = () => {
+      const storedSession = authStorage.load();
+
+      if (storedSession) {
+        setSession(storedSession);
+        setStatus('authenticated');
+        return;
+      }
+
+      setSession(null);
+      setStatus('unauthenticated');
+    };
+
+    window.addEventListener(AUTH_SESSION_CHANGED_EVENT, syncFromStorage);
+
+    return () => {
+      window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, syncFromStorage);
+    };
+  }, []);
+
+  useEffect(() => {
     if (refreshTimeoutRef.current) {
       clearTimeout(refreshTimeoutRef.current);
       refreshTimeoutRef.current = null;
@@ -487,6 +520,40 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
     };
   }, [clearSession, refreshSession, session?.accessTokenExpiresAt, status]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const refreshOnResume = async () => {
+      if (document.visibilityState === 'hidden' || status !== 'authenticated' || !shouldRefreshSoon(session)) {
+        return;
+      }
+
+      try {
+        await refreshSession();
+      } catch (error) {
+        if (isAuthApiError(error) && (error.status === 401 || error.status === 403)) {
+          clearSession();
+        }
+      }
+    };
+
+    const handleResume = () => {
+      void refreshOnResume();
+    };
+
+    document.addEventListener('visibilitychange', handleResume);
+    window.addEventListener('focus', handleResume);
+    window.addEventListener('pageshow', handleResume);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleResume);
+      window.removeEventListener('focus', handleResume);
+      window.removeEventListener('pageshow', handleResume);
+    };
+  }, [clearSession, refreshSession, session, status]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

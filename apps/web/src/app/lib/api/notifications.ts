@@ -39,6 +39,7 @@ export type WebPushSubscriptionItem = {
   endpointFingerprint: string;
   userAgent: string | null;
   deviceLabel: string | null;
+  clientDeviceId: string | null;
   isActive: boolean;
   lastSeenAt: string | null;
   createdAt: string;
@@ -52,6 +53,15 @@ export type WebPushClientConfig = {
 
 export type ReminderPreferences = {
   enabled: boolean;
+};
+
+export type TestWebPushResponse = {
+  success: boolean;
+  notificationId: string | null;
+  hasActiveSubscription: boolean;
+  deliveredCount: number;
+  failedCount: number;
+  pendingCount: number;
 };
 
 export const notificationsApi = {
@@ -188,6 +198,21 @@ export const notificationsApi = {
       path: '/notifications/push/web/unsubscribe',
       body: {
         endpoint: params.endpoint,
+        clientDeviceId: params.clientDeviceId,
+      },
+    });
+  },
+
+  sendTestWebPush(
+    params: AuthenticatedRequest & {
+      clientDeviceId?: string;
+    },
+  ) {
+    return apiRequest<TestWebPushResponse>({
+      accessToken: params.accessToken,
+      method: 'POST',
+      path: '/notifications/push/web/test',
+      body: {
         clientDeviceId: params.clientDeviceId,
       },
     });

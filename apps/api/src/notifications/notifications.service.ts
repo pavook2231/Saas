@@ -193,6 +193,7 @@ export class NotificationsService {
         endpoint: true,
         userAgent: true,
         deviceLabel: true,
+        clientDeviceId: true,
         isActive: true,
         lastSeenAt: true,
         createdAt: true,
@@ -208,6 +209,7 @@ export class NotificationsService {
       ),
       userAgent: item.userAgent,
       deviceLabel: item.deviceLabel,
+      clientDeviceId: item.clientDeviceId,
       isActive: item.isActive,
       lastSeenAt: item.lastSeenAt,
       createdAt: item.createdAt,
@@ -315,6 +317,92 @@ export class NotificationsService {
     return {
       success: true as const,
       disabledCount: updated.count,
+    };
+  }
+
+  async sendTestWebPush(userId: string, clientDeviceId?: string | null) {
+    const normalizedClientDeviceId = this.trimOrNull(clientDeviceId);
+    const activeSubscriptions = await this.prisma.webPushSubscription.findMany({
+      where: {
+        userId,
+        isActive: true,
+        ...(normalizedClientDeviceId
+          ? {
+              clientDeviceId: normalizedClientDeviceId,
+            }
+          : {}),
+      },
+      select: {
+        endpoint: true,
+        endpointHash: true,
+        p256dh: true,
+        auth: true,
+      },
+    });
+
+    if (activeSubscriptions.length === 0) {
+      return {
+        success: false,
+        notificationId: null,
+        hasActiveSubscription: false,
+        deliveredCount: 0,
+        failedCount: 0,
+        pendingCount: 0,
+      };
+    }
+
+    const results = await this.webPushService.sendToSubscriptions({
+      subscriptions: activeSubscriptions.map((item) => ({
+        endpoint: this.dataEncryptionService.decrypt(item.endpoint, `web-push:${userId}`),
+        p256dh: this.dataEncryptionService.decrypt(item.p256dh, `web-push:${userId}`),
+        auth: this.dataEncryptionService.decrypt(item.auth, `web-push:${userId}`),
+      })),
+      title: 'Тест уведомлений',
+      body: 'Это тест серверной web push-доставки. Если уведомление пришло, устройство настроено правильно.',
+      data: {
+        url: '/profile',
+        source: 'test-web-push',
+      },
+    });
+
+    const invalidEndpointHashes = new Set<string>();
+    for (const result of results) {
+      if (!result.success && this.isInactiveWebPushError(result.statusCode)) {
+        const subscription = activeSubscriptions.find((item) => {
+          const endpoint = this.dataEncryptionService.decrypt(item.endpoint, `web-push:${userId}`);
+          return endpoint === result.endpoint;
+        });
+
+        if (subscription?.endpointHash) {
+          invalidEndpointHashes.add(subscription.endpointHash);
+        }
+      }
+    }
+
+    if (invalidEndpointHashes.size > 0) {
+      await this.prisma.webPushSubscription.updateMany({
+        where: {
+          endpointHash: {
+            in: Array.from(invalidEndpointHashes),
+          },
+        },
+        data: {
+          isActive: false,
+        },
+      });
+    }
+
+    const deliveredCount = results.filter((result) => result.success).length;
+    const failedCount = results.filter((result) => !result.success).length;
+    const pendingCount = 0;
+
+    return {
+      success: deliveredCount > 0,
+      notificationId: null,
+      hasActiveSubscription: true,
+      deliveredCount,
+      failedCount,
+      pendingCount,
     };
   }
 
@@ -444,35 +532,40 @@ export class NotificationsService {
       },
     };
 
-    const items = await this.prisma.notificationRecipient.findMany({
-      where,
-      select: {
-        id: true,
-        status: true,
-        deliveredAt: true,
-        readAt: true,
-        createdAt: true,
-        notification: {
-          select: {
-            id: true,
-            organizationId: true,
-            eventId: true,
-            actorUserId: true,
-            type: true,
-            title: true,
-            body: true,
-            payload: true,
-            createdAt: true,
+    const [items, unreadCount] = await Promise.all([
+      this.prisma.notificationRecipient.findMany({
+        where,
+        select: {
+          id: true,
+          status: true,
+          deliveredAt: true,
+          readAt: true,
+          createdAt: true,
+          notification: {
+            select: {
+              id: true,
+              organizationId: true,
+              eventId: true,
+              actorUserId: true,
+              type: true,
+              title: true,
+              body: true,
+              payload: true,
+              createdAt: true,
+            },
           },
         },
-      },
-      orderBy: [{ createdAt: 'desc' }],
-      take: limit,
-    });
+        orderBy: [{ createdAt: 'desc' }],
+        take: limit,
+      }),
+      this.prisma.notificationRecipient.count({
+        where,
+      }),
+    ]);
 
     return {
       seenAt,
-      unreadCount: items.length,
+      unreadCount,
       items: items.map((item) => ({
         recipientId: item.id,
         status: item.status,

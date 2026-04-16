@@ -1,4 +1,6 @@
 import { apiBaseUrl } from './config';
+import { authStorage } from '../auth/storage';
+import type { AuthUser } from '../auth/types';
 
 type Primitive = string | number | boolean | null | undefined;
 
@@ -15,6 +17,16 @@ type ApiRequestOptions = {
   path: string;
   searchParams?: Record<string, SearchParamsValue>;
   signal?: AbortSignal;
+};
+
+type RefreshResponse = {
+  status: 'authenticated';
+  user: AuthUser;
+  tokens: {
+    accessToken: string;
+    accessTokenExpiresAt: string;
+  };
+  csrfToken: string;
 };
 
 type ErrorPayload = {
@@ -34,6 +46,23 @@ export class ApiError extends Error {
     this.payload = payload;
   }
 }
+
+const isSuccessfulRefreshPayload = (payload: unknown): payload is RefreshResponse => {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+
+  const candidate = payload as RefreshResponse;
+
+  return (
+    candidate.status === 'authenticated' &&
+    typeof candidate.csrfToken === 'string' &&
+    typeof candidate.tokens?.accessToken === 'string' &&
+    typeof candidate.tokens?.accessTokenExpiresAt === 'string' &&
+    candidate.user !== null &&
+    candidate.user !== undefined
+  );
+};
 
 const buildUrl = (
   path: string,
@@ -101,22 +130,69 @@ export async function apiRequest<T>({
   searchParams,
   signal,
 }: ApiRequestOptions): Promise<T> {
-  const response = await fetch(buildUrl(path, searchParams), {
-    method,
-    credentials: 'include',
-    headers: {
-      Accept: 'application/json',
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      ...(accessToken
-        ? {
-            Authorization: `Bearer ${accessToken}`,
-          }
-        : {}),
-      ...headers,
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    signal,
+  const requestUrl = buildUrl(path, searchParams);
+  const requestBody = body !== undefined ? JSON.stringify(body) : undefined;
+  const createHeaders = (token: string | null | undefined) => ({
+    Accept: 'application/json',
+    ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    ...(token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : {}),
+    ...headers,
   });
+  const executeRequest = (token: string | null | undefined) =>
+    fetch(requestUrl, {
+      method,
+      credentials: 'include',
+      headers: createHeaders(token),
+      body: requestBody,
+      signal,
+    });
+
+  let response = await executeRequest(accessToken);
+
+  const canAttemptRefresh =
+    Boolean(accessToken) &&
+    response.status === 401 &&
+    !path.startsWith('/auth/');
+
+  if (canAttemptRefresh) {
+    const csrfToken = authStorage.getCsrfToken();
+
+    if (csrfToken) {
+      try {
+        const refreshResponse = await fetch(buildUrl('/auth/refresh'), {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken,
+          },
+          body: JSON.stringify({}),
+          signal,
+        });
+
+        if (refreshResponse.ok) {
+          const refreshPayload = (await refreshResponse.json()) as unknown;
+
+          if (isSuccessfulRefreshPayload(refreshPayload)) {
+            authStorage.save({
+              accessToken: refreshPayload.tokens.accessToken,
+              accessTokenExpiresAt: refreshPayload.tokens.accessTokenExpiresAt,
+              csrfToken: refreshPayload.csrfToken,
+              user: refreshPayload.user,
+            });
+            response = await executeRequest(refreshPayload.tokens.accessToken);
+          }
+        }
+      } catch {
+        // Let the original request error surface below.
+      }
+    }
+  }
 
   if (!response.ok) {
     const payload = await readJsonSafely(response);

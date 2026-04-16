@@ -1195,6 +1195,7 @@ export class OrganizationsService {
       },
       select: {
         id: true,
+        userId: true,
         role: true,
         status: true,
       },
@@ -1239,22 +1240,26 @@ export class OrganizationsService {
       MembershipStatus.LEFT,
     );
 
-    await this.prisma.membership.update({
-      where: { id: membership.id },
-      data: {
-        status: MembershipStatus.LEFT,
-      },
-    });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.membership.update({
+        where: { id: membership.id },
+        data: {
+          status: MembershipStatus.LEFT,
+        },
+      });
 
-    await this.prisma.auditLog.create({
-      data: {
-        organizationId,
-        actorUserId,
-        targetType: AuditTargetType.MEMBERSHIP,
-        targetId: membership.id,
-        action: 'membership.removed',
-        description: 'Membership removed from organization',
-      },
+      await this.detachParticipantsForUser(tx, organizationId, membership.userId);
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          targetType: AuditTargetType.MEMBERSHIP,
+          targetId: membership.id,
+          action: 'membership.removed',
+          description: 'Membership removed from organization',
+        },
+      });
     });
 
     return {
@@ -1290,24 +1295,28 @@ export class OrganizationsService {
       MembershipStatus.LEFT,
     );
 
-    await this.prisma.membership.update({
-      where: {
-        id: membership.id,
-      },
-      data: {
-        status: MembershipStatus.LEFT,
-      },
-    });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.membership.update({
+        where: {
+          id: membership.id,
+        },
+        data: {
+          status: MembershipStatus.LEFT,
+        },
+      });
 
-    await this.prisma.auditLog.create({
-      data: {
-        organizationId,
-        actorUserId: userId,
-        targetType: AuditTargetType.MEMBERSHIP,
-        targetId: membership.id,
-        action: 'membership.left',
-        description: 'User left organization',
-      },
+      await this.detachParticipantsForUser(tx, organizationId, userId);
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: userId,
+          targetType: AuditTargetType.MEMBERSHIP,
+          targetId: membership.id,
+          action: 'membership.left',
+          description: 'User left organization',
+        },
+      });
     });
 
     return {
@@ -1428,6 +1437,23 @@ export class OrganizationsService {
       });
 
       return membership;
+    });
+  }
+
+  private async detachParticipantsForUser(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+  ) {
+    await tx.participant.updateMany({
+      where: {
+        organizationId,
+        userId,
+      },
+      data: {
+        userId: null,
+        linkedAt: null,
+      },
     });
   }
 

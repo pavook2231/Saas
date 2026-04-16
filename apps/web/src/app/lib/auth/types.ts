@@ -151,4 +151,5 @@ export type OAuthStartResponse = {
 export type CalendarSyncLinks = {
   httpsUrl: string;
   webcalUrl: string;
+  rotatedAt?: string;
 };

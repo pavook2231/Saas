@@ -26,6 +26,16 @@ import {
 
 const authBaseUrl = `${apiBaseUrl}/auth`;
 
+export class AuthApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'AuthApiError';
+    this.status = status;
+  }
+}
+
 const parseApiError = async (response: Response): Promise<string> => {
   const fallback = `Ошибка запроса (${response.status})`;
 
@@ -55,7 +65,7 @@ const parseApiError = async (response: Response): Promise<string> => {
 
 const assertOk = async (response: Response): Promise<Response> => {
   if (!response.ok) {
-    throw new Error(await parseApiError(response));
+    throw new AuthApiError(await parseApiError(response), response.status);
   }
 
   return response;
@@ -313,6 +323,20 @@ export const authApi = {
 
   async getCalendarSyncLinks(accessToken: string): Promise<CalendarSyncLinks> {
     const response = await fetch(`${authBaseUrl}/account/calendar-sync`, {
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    await assertOk(response);
+    return (await response.json()) as CalendarSyncLinks;
+  },
+
+  async rotateCalendarSyncLinks(accessToken: string): Promise<CalendarSyncLinks> {
+    const response = await fetch(`${authBaseUrl}/account/calendar-sync/rotate`, {
+      method: 'POST',
       credentials: 'include',
       headers: {
         Accept: 'application/json',

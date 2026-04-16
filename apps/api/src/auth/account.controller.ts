@@ -39,6 +39,13 @@ export class AccountController {
     return this.authService.getCalendarSyncLinks(user.sub);
   }
 
+  @Post('calendar-sync/rotate')
+  async rotateCalendarSyncLinks(
+    @CurrentUser() user: AccessTokenPayload,
+  ): Promise<CalendarSyncLinksResponse> {
+    return this.authService.rotateCalendarSyncLinks(user.sub);
+  }
+
   @Post('password')
   @RateLimit({ bucket: 'auth' })
   async changePassword(

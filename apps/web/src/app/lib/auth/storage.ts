@@ -1,6 +1,7 @@
 import { StoredSession } from './types';
 
 const LEGACY_AUTH_STORAGE_KEY = 'saas.auth.session';
+const AUTH_SESSION_STORAGE_KEY = 'saas.auth.session.v2';
 const DEFAULT_CSRF_COOKIE_NAME = 'saas_csrf_token';
 
 const readCookie = (name: string): string | null => {
@@ -33,18 +34,68 @@ const clearLegacySession = () => {
   window.localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
 };
 
+const readSessionStorage = (): Storage | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return window.sessionStorage;
+};
+
 export const authStorage = {
   load(): StoredSession | null {
     clearLegacySession();
-    return null;
+
+    const storage = readSessionStorage();
+
+    if (!storage) {
+      return null;
+    }
+
+    const raw = storage.getItem(AUTH_SESSION_STORAGE_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as StoredSession;
+
+      if (
+        !parsed ||
+        typeof parsed.accessToken !== 'string' ||
+        typeof parsed.accessTokenExpiresAt !== 'string' ||
+        typeof parsed.csrfToken !== 'string' ||
+        !parsed.user
+      ) {
+        storage.removeItem(AUTH_SESSION_STORAGE_KEY);
+        return null;
+      }
+
+      return parsed;
+    } catch {
+      storage.removeItem(AUTH_SESSION_STORAGE_KEY);
+      return null;
+    }
   },
 
-  save(_: StoredSession): void {
+  save(session: StoredSession): void {
     clearLegacySession();
+
+    const storage = readSessionStorage();
+
+    if (!storage) {
+      return;
+    }
+
+    storage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(session));
   },
 
   clear(): void {
     clearLegacySession();
+
+    const storage = readSessionStorage();
+    storage?.removeItem(AUTH_SESSION_STORAGE_KEY);
   },
 
   getCsrfToken(): string | null {

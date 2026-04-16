@@ -69,6 +69,7 @@ export type MeResponse = {
 export type CalendarSyncLinksResponse = {
   httpsUrl: string;
   webcalUrl: string;
+  rotatedAt?: string;
 };
 
 export type TwoFactorStatusResponse = {

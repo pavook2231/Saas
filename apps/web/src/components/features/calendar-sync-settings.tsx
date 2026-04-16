@@ -18,6 +18,7 @@ export function CalendarSyncSettings({
   onError,
 }: CalendarSyncSettingsProps) {
   const [loading, setLoading] = useState(false);
+  const [rotating, setRotating] = useState(false);
 
   const handleSync = async () => {
     if (!accessToken) {
@@ -36,14 +37,51 @@ export function CalendarSyncSettings({
 
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(links.httpsUrl);
-        onNotice('Ссылка на календарь скопирована. Если телефон не открыл календарь сам, вставьте её в подписку календаря вручную.');
+        onNotice(
+          'Ссылка на календарь скопирована. Если телефон не открыл календарь сам, вставьте ее в подписку вручную.',
+        );
       } else {
-        onNotice('Подписка на календарь подготовлена. Если календарь не открылся автоматически, используйте HTTPS-ссылку из поддержки браузера.');
+        onNotice(
+          'Подписка на календарь подготовлена. Если календарь не открылся автоматически, используйте HTTPS-ссылку вручную.',
+        );
       }
     } catch (error) {
-      onError(error instanceof Error ? error.message : 'Не удалось подготовить синхронизацию календаря.');
+      onError(
+        error instanceof Error
+          ? error.message
+          : 'Не удалось подготовить синхронизацию календаря.',
+      );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRotate = async () => {
+    if (!accessToken) {
+      onError('Нужна активная сессия.');
+      return;
+    }
+
+    setRotating(true);
+
+    try {
+      const links = await authApi.rotateCalendarSyncLinks(accessToken);
+
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(links.httpsUrl);
+      }
+
+      onNotice(
+        'Ссылка календаря перевыпущена. Старая ссылка больше не работает, ее нужно заменить в календаре телефона вручную.',
+      );
+    } catch (error) {
+      onError(
+        error instanceof Error
+          ? error.message
+          : 'Не удалось перевыпустить ссылку календаря.',
+      );
+    } finally {
+      setRotating(false);
     }
   };
 
@@ -80,13 +118,37 @@ export function CalendarSyncSettings({
       </div>
 
       <div className="account-browser-push__meta">
-        <span>Кнопка создаст персональную ссылку календаря и попробует открыть её как подписку.</span>
-        <span>В календаре телефона будут появляться все ваши события, где вы назначены участником.</span>
+        <span>
+          Кнопка создаст персональную ссылку календаря и попробует открыть ее как
+          подписку.
+        </span>
+        <span>
+          В календаре телефона будут появляться только ваши события, где вы назначены
+          участником.
+        </span>
+        <span>
+          После перевыпуска ссылки старую подписку в календаре телефона нужно заменить
+          вручную.
+        </span>
       </div>
 
       <div className="account-browser-push__actions">
-        <Button type="button" onClick={() => void handleSync()} loading={loading} disabled={!accessToken}>
+        <Button
+          type="button"
+          onClick={() => void handleSync()}
+          loading={loading}
+          disabled={!accessToken}
+        >
           Синхронизировать с календарем телефона
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => void handleRotate()}
+          loading={rotating}
+          disabled={!accessToken || loading}
+        >
+          Перевыпустить ссылку
         </Button>
       </div>
     </div>

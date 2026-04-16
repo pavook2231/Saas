@@ -8,6 +8,7 @@ import {
   AuditTargetType,
   EventAttendanceStatus,
   EventStatus,
+  MembershipStatus,
   NotificationChannel,
   NotificationDeliveryStatus,
   NotificationType,
@@ -319,10 +320,27 @@ export class NotificationsService {
 
   async listMyNotifications(userId: string, query: ListMyNotificationsQueryDto) {
     const limit = query.limit ?? 50;
+    const activeOrganizationIds = await this.getActiveOrganizationIds(userId);
 
     const where: Prisma.NotificationRecipientWhereInput = {
       userId,
       channel: NotificationChannel.WEB,
+      notification: {
+        OR: [
+          {
+            organizationId: null,
+          },
+          ...(activeOrganizationIds.length > 0
+            ? [
+                {
+                  organizationId: {
+                    in: activeOrganizationIds,
+                  },
+                },
+              ]
+            : []),
+        ],
+      },
       ...(query.unreadOnly ? { status: { not: NotificationDeliveryStatus.READ } } : {}),
     };
 
@@ -356,6 +374,22 @@ export class NotificationsService {
         where: {
           userId,
           channel: NotificationChannel.WEB,
+          notification: {
+            OR: [
+              {
+                organizationId: null,
+              },
+              ...(activeOrganizationIds.length > 0
+                ? [
+                    {
+                      organizationId: {
+                        in: activeOrganizationIds,
+                      },
+                    },
+                  ]
+                : []),
+            ],
+          },
           status: {
             not: NotificationDeliveryStatus.READ,
           },
@@ -387,6 +421,7 @@ export class NotificationsService {
     }
 
     const seenAt = user.scheduleChangesSeenAt;
+    const activeOrganizationIds = await this.getActiveOrganizationIds(userId);
     const where: Prisma.NotificationRecipientWhereInput = {
       userId,
       channel: NotificationChannel.WEB,
@@ -394,6 +429,17 @@ export class NotificationsService {
         type: {
           in: scheduleChangeNotificationTypes,
         },
+        ...(activeOrganizationIds.length > 0
+          ? {
+              organizationId: {
+                in: activeOrganizationIds,
+              },
+            }
+          : {
+              organizationId: {
+                in: [],
+              },
+            }),
         ...(seenAt ? { createdAt: { gt: seenAt } } : {}),
       },
     };
@@ -523,9 +569,13 @@ export class NotificationsService {
       },
     });
 
-    const userIds = assignments
+    const requestedUserIds = assignments
       .map((assignment) => assignment.participant.userId)
       .filter((userId): userId is string => typeof userId === 'string');
+    const userIds = await this.filterActiveOrganizationUserIds(
+      input.organizationId,
+      requestedUserIds,
+    );
 
     return this.notifyUsers({
       organizationId: input.organizationId,
@@ -686,6 +736,52 @@ export class NotificationsService {
     };
   }
 
+  private async filterActiveOrganizationUserIds(
+    organizationId: string,
+    userIds: string[],
+  ): Promise<string[]> {
+    const uniqueUserIds = this.deduplicateIds(userIds);
+
+    if (uniqueUserIds.length === 0) {
+      return [];
+    }
+
+    const activeMemberships = await this.prisma.membership.findMany({
+      where: {
+        organizationId,
+        userId: {
+          in: uniqueUserIds,
+        },
+        status: MembershipStatus.ACTIVE,
+        organization: {
+          deletedAt: null,
+        },
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    return activeMemberships.map((membership) => membership.userId);
+  }
+
+  private async getActiveOrganizationIds(userId: string): Promise<string[]> {
+    const memberships = await this.prisma.membership.findMany({
+      where: {
+        userId,
+        status: MembershipStatus.ACTIVE,
+        organization: {
+          deletedAt: null,
+        },
+      },
+      select: {
+        organizationId: true,
+      },
+    });
+
+    return memberships.map((membership) => membership.organizationId);
+  }
+
   async dispatchDueEventReminders(
     offsetMinutes: number,
     windowMinutes = 2,
@@ -796,10 +892,14 @@ export class NotificationsService {
             },
           });
 
-      const userIds = this.deduplicateIds(
+      const requestedUserIds = this.deduplicateIds(
         event.participants
           .map((participant) => participant.participant.userId)
           .filter((userId): userId is string => Boolean(userId)),
+      );
+      const userIds = await this.filterActiveOrganizationUserIds(
+        event.organizationId,
+        requestedUserIds,
       );
 
       try {
@@ -975,10 +1075,14 @@ export class NotificationsService {
             },
           });
 
-      const userIds = this.deduplicateIds(
+      const requestedUserIds = this.deduplicateIds(
         event.participants
           .map((participant) => participant.participant.userId)
           .filter((userId): userId is string => Boolean(userId)),
+      );
+      const userIds = await this.filterActiveOrganizationUserIds(
+        event.organizationId,
+        requestedUserIds,
       );
 
       if (userIds.length === 0) {

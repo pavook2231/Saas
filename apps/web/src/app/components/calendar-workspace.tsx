@@ -294,18 +294,13 @@ export function CalendarWorkspace() {
       return;
     }
 
-    const syncMobileModes = () => {
-      const isMobileViewport = window.innerWidth <= 760;
-      setIsMobileViewport(isMobileViewport);
-      if (isMobileViewport) {
-        setViewMode('week');
-      }
-    };
+    const mediaQuery = window.matchMedia('(max-width: 760px)');
+    const syncMobileModes = () => setIsMobileViewport(mediaQuery.matches);
 
     syncMobileModes();
-    window.addEventListener('resize', syncMobileModes);
+    mediaQuery.addEventListener('change', syncMobileModes);
 
-    return () => window.removeEventListener('resize', syncMobileModes);
+    return () => mediaQuery.removeEventListener('change', syncMobileModes);
   }, []);
 
   const loadCalendar = useCallback(async () => {

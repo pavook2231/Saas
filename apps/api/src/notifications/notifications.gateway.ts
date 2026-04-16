@@ -8,7 +8,6 @@ import {
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { MembershipStatus } from '@prisma/client';
 import { Server, Socket } from 'socket.io';
 
 import { AccessTokenPayload } from '../auth/auth.types';
@@ -82,26 +81,9 @@ export class NotificationsGateway
       client.data.userId = payload.sub;
       client.join(this.userRoom(payload.sub));
 
-      const memberships = await this.prisma.membership.findMany({
-        where: {
-          userId: payload.sub,
-          status: MembershipStatus.ACTIVE,
-          organization: {
-            deletedAt: null,
-          },
-        },
-        select: {
-          organizationId: true,
-        },
-      });
-
-      memberships.forEach((membership) => {
-        client.join(this.organizationRoom(membership.organizationId));
-      });
-
       client.emit('notifications:ready', {
         userId: payload.sub,
-        organizations: memberships.map((membership) => membership.organizationId),
+        organizations: payload.memberships.map((membership) => membership.organizationId),
       });
     } catch (error) {
       this.logger.warn(`WebSocket auth failed: ${(error as Error).message}`);
@@ -122,10 +104,6 @@ export class NotificationsGateway
     uniqueIds.forEach((userId) => {
       this.server.to(this.userRoom(userId)).emit(event, payload);
     });
-  }
-
-  emitToOrganization(organizationId: string, event: string, payload: unknown): void {
-    this.server.to(this.organizationRoom(organizationId)).emit(event, payload);
   }
 
   private extractToken(client: Socket): string | null {
@@ -191,9 +169,5 @@ export class NotificationsGateway
 
   private userRoom(userId: string): string {
     return `user:${userId}`;
-  }
-
-  private organizationRoom(organizationId: string): string {
-    return `organization:${organizationId}`;
   }
 }

@@ -105,11 +105,7 @@ export class OrganizationsController {
 
   @Get(':organizationId/memberships')
   @UseGuards(OrganizationRoleGuard)
-  @RequireOrgRoles(
-    OrganizationRole.ADMIN,
-    OrganizationRole.DIRECTOR,
-    OrganizationRole.ASSISTANT,
-  )
+  @RequireOrgRoles(OrganizationRole.ADMIN, OrganizationRole.DIRECTOR)
   async listMemberships(
     @Param('organizationId', new ParseUUIDPipe({ version: '4' }))
     organizationId: string,

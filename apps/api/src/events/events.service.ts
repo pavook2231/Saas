@@ -1872,6 +1872,7 @@ export class EventsService {
       },
       select: {
         id: true,
+        organizationId: true,
         title: true,
         startsAt: true,
         timezone: true,
@@ -1909,10 +1910,14 @@ export class EventsService {
       throw new NotFoundException('Событие не найдено');
     }
 
-    const userIds = this.deduplicateUuids(
+    const requestedUserIds = this.deduplicateUuids(
       event.participants
         .map((participant) => participant.participant.userId)
         .filter((userId): userId is string => Boolean(userId)),
+    );
+    const userIds = await this.filterActiveOrganizationUserIds(
+      event.organizationId,
+      requestedUserIds,
     );
 
     if (userIds.length === 0) {
@@ -3296,6 +3301,35 @@ export class EventsService {
 
   private deduplicateUuids(values: string[]): string[] {
     return Array.from(new Set(values));
+  }
+
+  private async filterActiveOrganizationUserIds(
+    organizationId: string,
+    userIds: string[],
+  ): Promise<string[]> {
+    const uniqueIds = this.deduplicateUuids(userIds);
+
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+
+    const activeMemberships = await this.prisma.membership.findMany({
+      where: {
+        organizationId,
+        userId: {
+          in: uniqueIds,
+        },
+        status: MembershipStatus.ACTIVE,
+        organization: {
+          deletedAt: null,
+        },
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    return activeMemberships.map((membership) => membership.userId);
   }
 
   private requireTrimmedText(value: string, field: string, minLength = 1): string {

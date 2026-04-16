@@ -3,6 +3,7 @@
 import {
   createContext,
   type PropsWithChildren,
+  useRef,
   useCallback,
   useContext,
   useEffect,
@@ -12,7 +13,7 @@ import {
 
 import { sanitizeInternalPath } from '@/lib/safe-url';
 
-import { authApi } from '../lib/auth/api';
+import { AuthApiError, authApi } from '../lib/auth/api';
 import { authStorage } from '../lib/auth/storage';
 import {
   AuthResponse,
@@ -88,9 +89,20 @@ const toStoredSession = (payload: AuthSuccessResponse): StoredSession => {
   };
 };
 
+const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
+const RETRY_REFRESH_DELAY_MS = 30_000;
+
+const parseExpiresAt = (value: string): number | null => {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const isAuthApiError = (error: unknown): error is AuthApiError => error instanceof AuthApiError;
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [session, setSession] = useState<StoredSession | null>(null);
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const applySession = useCallback((nextSession: StoredSession) => {
     authStorage.save(nextSession);
@@ -100,6 +112,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const clearSession = useCallback(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
+
     authStorage.clear();
     setSession(null);
     setStatus('unauthenticated');
@@ -351,8 +368,48 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let cancelled = false;
 
     const bootstrap = async () => {
-      authStorage.load();
-      const csrfToken = authStorage.getCsrfToken();
+      const storedSession = authStorage.load();
+      const cookieCsrfToken = authStorage.getCsrfToken();
+      const csrfToken = cookieCsrfToken ?? storedSession?.csrfToken ?? null;
+
+      if (storedSession) {
+        const storedExpiry = parseExpiresAt(storedSession.accessTokenExpiresAt);
+        const hasFreshAccessToken =
+          storedExpiry !== null && storedExpiry > Date.now() + 5_000;
+
+        if (hasFreshAccessToken && !cancelled) {
+          setSession(storedSession);
+          setStatus('authenticated');
+        }
+
+        if (hasFreshAccessToken) {
+          try {
+            const response = await authApi.me(storedSession.accessToken);
+
+            if (!cancelled) {
+              applySession({
+                ...storedSession,
+                csrfToken: csrfToken ?? storedSession.csrfToken,
+                user: response.user,
+              });
+            }
+
+            return;
+          } catch (error) {
+            if (!isAuthApiError(error) || (error.status !== 401 && error.status !== 403)) {
+              if (!cancelled) {
+                setSession({
+                  ...storedSession,
+                  csrfToken: csrfToken ?? storedSession.csrfToken,
+                });
+                setStatus('authenticated');
+              }
+
+              return;
+            }
+          }
+        }
+      }
 
       if (!csrfToken) {
         if (!cancelled) {
@@ -367,9 +424,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!cancelled) {
           applySession(refreshed);
         }
-      } catch {
-        if (!cancelled) {
+      } catch (error) {
+        if (!cancelled && isAuthApiError(error) && (error.status === 401 || error.status === 403)) {
           clearSession();
+        } else if (!cancelled && storedSession) {
+          setSession({
+            ...storedSession,
+            csrfToken: csrfToken ?? storedSession.csrfToken,
+          });
+          setStatus('authenticated');
+        } else if (!cancelled) {
+          setStatus('unauthenticated');
         }
       }
     };
@@ -380,6 +445,48 @@ export function AuthProvider({ children }: PropsWithChildren) {
       cancelled = true;
     };
   }, [applySession, clearSession, refreshFromToken]);
+
+  useEffect(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
+
+    if (!session?.accessTokenExpiresAt || status !== 'authenticated') {
+      return;
+    }
+
+    const expiresAt = parseExpiresAt(session.accessTokenExpiresAt);
+
+    if (expiresAt === null) {
+      return;
+    }
+
+    const scheduleRefresh = (delayMs: number) => {
+      refreshTimeoutRef.current = setTimeout(async () => {
+        try {
+          await refreshSession();
+        } catch (error) {
+          if (isAuthApiError(error) && (error.status === 401 || error.status === 403)) {
+            clearSession();
+            return;
+          }
+
+          scheduleRefresh(RETRY_REFRESH_DELAY_MS);
+        }
+      }, delayMs);
+    };
+
+    const refreshInMs = Math.max(0, expiresAt - Date.now() - ACCESS_TOKEN_REFRESH_SKEW_MS);
+    scheduleRefresh(refreshInMs);
+
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
+    };
+  }, [clearSession, refreshSession, session?.accessTokenExpiresAt, status]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

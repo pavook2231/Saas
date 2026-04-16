@@ -81,48 +81,5 @@
       conflictTitle: 'Есть пересечения',
     },
   },
-  chat: {
-    title: 'Чаты',
-    note: 'Чат организации и событий с обновлениями в реальном времени.',
-    scopes: {
-      ORGANIZATION: 'Организация',
-      EVENT: 'Событие',
-    },
-    currentScopeTitles: {
-      ORGANIZATION: 'чат организации',
-      EVENT: 'чат события',
-    },
-    fields: {
-      organizationId: 'ID организации',
-      organizationPlaceholder: 'UUID организации',
-      accessToken: 'Токен доступа',
-      accessTokenPlaceholder: 'JWT токен доступа',
-      eventId: 'ID события',
-      eventPlaceholder: 'UUID события',
-      messagePlaceholder: 'Введите сообщение...',
-    },
-    errors: {
-      eventIdRequired: 'В режиме события нужен ID события',
-      emptyMessage: 'Сообщение не может быть пустым',
-      socketError: 'Ошибка сокета чата',
-    },
-    actions: {
-      loadScope: (scopeTitle: string) => `Загрузить ${scopeTitle}`,
-      loading: 'Загрузка...',
-      connectRealtime: 'Подключить realtime',
-      reconnectRealtime: 'Переподключить realtime',
-      connectingRealtime: 'Подключение...',
-      disconnect: 'Отключить',
-      send: 'Отправить',
-      sending: 'Отправка...',
-    },
-    notices: {
-      loadedMessages: (count: number) => `Загружено сообщений: ${count}`,
-      messageSent: 'Сообщение отправлено',
-      realtimeConnected: 'Realtime подключен',
-      editedPrefix: 'изменено',
-    },
-    emptyState: 'Сообщения пока не загружены.',
-  },
 } as const;
 

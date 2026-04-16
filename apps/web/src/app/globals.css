@@ -1877,6 +1877,68 @@ body.is-scroll-locked {
   line-height: 1.38;
 }
 
+.account-browser-push__install,
+.account-browser-push__status-item,
+.account-browser-push__guide-note {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.account-browser-push__install {
+  padding: 10px 12px;
+  border: 1px solid rgba(219, 227, 239, 0.88);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.account-browser-push__install-copy,
+.account-browser-push__summary {
+  display: grid;
+  gap: 4px;
+}
+
+.account-browser-push__install-copy strong,
+.account-browser-push__summary strong {
+  font-size: 0.88rem;
+}
+
+.account-browser-push__install-copy span,
+.account-browser-push__summary span,
+.account-browser-push__guide-note span,
+.account-browser-push__guide-steps li {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.42;
+}
+
+.account-browser-push__status-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.account-browser-push__status-item {
+  padding: 8px 10px;
+  border: 1px solid rgba(219, 227, 239, 0.82);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.account-browser-push__status-item span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.account-browser-push__summary {
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.12);
+}
+
 .account-browser-push__toggle small,
 .account-browser-push__subscription-copy span {
   color: var(--text-muted);
@@ -1910,6 +1972,95 @@ body.is-scroll-locked {
 .account-browser-push__actions {
   display: flex;
   justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.account-browser-push__guide {
+  display: grid;
+  gap: 12px;
+}
+
+.account-browser-push__guide-note {
+  padding: 10px 12px;
+  border: 1px solid rgba(219, 227, 239, 0.88);
+  border-radius: 16px;
+  background: rgba(247, 249, 252, 0.86);
+}
+
+.account-browser-push__guide-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+
+.account-notifications-inbox {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(219, 227, 239, 0.92);
+  border-radius: 18px;
+  background: rgba(247, 249, 252, 0.7);
+}
+
+.account-notifications-inbox__header,
+.account-notifications-inbox__section-head,
+.account-notification-item__head,
+.account-notification-item__actions,
+.account-notifications-inbox__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.account-notifications-inbox__header-copy,
+.account-notifications-inbox__section,
+.account-notifications-inbox__list,
+.account-notification-item {
+  display: grid;
+  gap: 8px;
+}
+
+.account-notifications-inbox__header-copy span {
+  color: var(--text-soft);
+  font-size: 0.84rem;
+}
+
+.account-notification-item {
+  padding: 12px 14px;
+  border: 1px solid rgba(219, 227, 239, 0.92);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.account-notification-item.is-unread {
+  border-color: rgba(37, 99, 235, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.account-notification-item p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.account-notification-item__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.account-notification-item__head span {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.account-notification-item--compact {
+  gap: 6px;
 }
 
 .account-security-card__group {
@@ -2260,9 +2411,8 @@ body.is-scroll-locked {
 .auth-error-banner,
 .auth-success-banner,
 .finance-error,
-.chat-error,
 .finance-notice,
-.chat-notice {
+.finance-notice {
   margin: 0;
   padding: 12px 14px;
   border-radius: 16px;
@@ -2271,8 +2421,7 @@ body.is-scroll-locked {
 }
 
 .auth-error-banner,
-.finance-error,
-.chat-error {
+.finance-error {
   background: var(--error-soft);
   border: 1px solid rgba(220, 38, 38, 0.18);
   color: var(--error);
@@ -2284,8 +2433,7 @@ body.is-scroll-locked {
   color: var(--success);
 }
 
-.finance-notice,
-.chat-notice {
+.finance-notice {
   background: var(--success-soft);
   border: 1px solid rgba(15, 157, 105, 0.18);
   color: var(--success);
@@ -2381,8 +2529,7 @@ body.is-scroll-locked {
 }
 
 .calendar-shell,
-.quick-panel,
-.chat-panel {
+.quick-panel {
   border: 1px solid rgba(219, 227, 239, 0.9);
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.84);
@@ -2422,7 +2569,6 @@ body.is-scroll-locked {
 .period-label,
 .empty-state,
 .finance-note,
-.chat-note,
 .finance-meta,
 .more-events {
   margin: 0;
@@ -2438,8 +2584,7 @@ body.is-scroll-locked {
 }
 
 .segmented,
-.nav-controls,
-.chat-segmented {
+.nav-controls {
   display: inline-flex;
   padding: 4px;
   border: 1px solid rgba(199, 211, 228, 0.98);
@@ -2470,8 +2615,7 @@ body.is-scroll-locked {
 .segmented button.active,
 .nav-controls button:hover,
 .action-row button:hover,
-.quick-actions button:hover,
-.chat-segmented button.active {
+.quick-actions button:hover {
   background: #fff;
   color: var(--text);
   border-color: rgba(199, 211, 228, 0.98);
@@ -2771,19 +2915,14 @@ body.is-scroll-locked {
 }
 .status-cancelled { opacity: 0.58; text-decoration: line-through; }
 
-.quick-panel,
-.chat-panel { padding: 16px; display: grid; gap: 12px; align-content: start; }
-.quick-panel h2,
-.chat-panel h2 { margin: 0; }
+.quick-panel { padding: 16px; display: grid; gap: 12px; align-content: start; }
+.quick-panel h2 { margin: 0; }
 .quick-form,
-.chat-form,
-.chat-compose { display: grid; gap: 10px; }
-.quick-form label,
-.chat-form label { display: grid; gap: 6px; font-size: 0.84rem; font-weight: 600; }
+.quick-form { display: grid; gap: 10px; }
+.quick-form label { display: grid; gap: 6px; font-size: 0.84rem; font-weight: 600; }
 .quick-form input,
 .quick-form select,
-.chat-form input,
-.chat-compose textarea {
+.quick-form select {
   width: 100%;
   min-height: 42px;
   padding: 0 12px;
@@ -2793,18 +2932,9 @@ body.is-scroll-locked {
   outline: none;
 }
 
-.chat-compose textarea { min-height: 110px; padding: 12px; resize: vertical; }
-.quick-form .row,
-.chat-form .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.quick-form .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .quick-actions .danger { color: var(--error); border-color: rgba(220, 38, 38, 0.16); }
-.chat-messages { overflow: auto; border: 1px solid rgba(219, 227, 239, 0.92); border-radius: 16px; background: rgba(255, 255, 255, 0.92); }
-.chat-messages { max-height: 320px; padding: 10px; display: grid; gap: 8px; }
-.chat-message { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid rgba(219, 227, 239, 0.92); border-radius: 14px; background: rgba(247, 249, 252, 0.84); }
-.chat-message header { display: flex; justify-content: space-between; gap: 8px; font-size: 0.78rem; }
-.chat-message header span,
-.chat-message small { color: var(--text-soft); }
-.chat-message p { margin: 0; white-space: pre-wrap; word-break: break-word; }
 
 .app-sidebar,
 .app-topbar {
@@ -3045,8 +3175,7 @@ body.is-scroll-locked {
   max-height: none;
 }
 
-.side-stack--calendar .quick-panel,
-.side-stack--calendar .chat-panel {
+.side-stack--calendar .quick-panel {
   height: 100%;
   min-height: 0;
   max-height: none;
@@ -3423,8 +3552,7 @@ textarea.ui-field {
   padding: 14px;
 }
 
-.data-table-wrap,
-.chat-messages {
+.data-table-wrap {
   border-radius: 14px;
 }
 
@@ -3442,8 +3570,7 @@ textarea.ui-field {
   min-height: 40px;
 }
 
-.quick-panel,
-.chat-panel {
+.quick-panel {
   padding: 14px;
   gap: 12px;
 }
@@ -3475,8 +3602,7 @@ textarea.ui-field {
 
 .calendar-selected-note,
 .composer-template-preview,
-.composer-conflict-card,
-.chat-message {
+.composer-conflict-card {
   border-radius: 14px;
 }
 
@@ -3725,8 +3851,7 @@ textarea.ui-field {
   min-height: 0;
 }
 
-.composer-panel,
-.chat-panel {
+.composer-panel {
   max-height: calc(100vh - 250px);
   overflow: auto;
 }
@@ -5931,7 +6056,6 @@ textarea.ui-field {
   .app-topbar,
   .calendar-shell,
   .quick-panel,
-  .chat-panel,
   .ui-card,
   .auth-hero-card,
   .auth-panel,
@@ -6020,33 +6144,24 @@ textarea.ui-field {
   }
 
   .calendar-simple__actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    justify-items: initial;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-  }
-
-  .calendar-simple__actions::-webkit-scrollbar {
-    display: none;
+    display: grid;
+    gap: 6px;
+    align-items: stretch;
   }
 
   .calendar-simple__actions-main {
-    display: inline-flex;
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
     align-items: center;
-    gap: 8px;
-    flex: 0 0 auto;
-    min-width: max-content;
+    gap: 6px;
+    min-width: 0;
   }
 
   .calendar-simple__actions .segmented {
-    display: inline-grid;
-    grid-template-columns: repeat(2, minmax(72px, auto));
-    width: auto;
-    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
   }
 
   .calendar-simple__view-modes {
@@ -6063,22 +6178,22 @@ textarea.ui-field {
   }
 
   .calendar-simple__actions .nav-controls {
-    display: inline-grid;
-    grid-template-columns: repeat(3, minmax(72px, auto));
-    gap: 6px;
-    width: auto;
-    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
   }
 
   .calendar-simple__actions .segmented button,
   .calendar-simple__actions .nav-controls button {
-    width: auto;
+    width: 100%;
     justify-content: center;
     min-width: 0;
-    min-height: 34px;
-    padding-inline: 10px;
-    font-size: 0.7rem;
-    white-space: nowrap;
+    min-height: 33px;
+    padding-inline: 6px;
+    font-size: 0.68rem;
+    letter-spacing: -0.01em;
   }
 
   .calendar-simple__actions-cta {
@@ -6392,6 +6507,13 @@ textarea.ui-field {
 
   .account-browser-push__platform {
     padding: 0;
+  }
+
+  .account-browser-push__install,
+  .account-browser-push__status-item,
+  .account-browser-push__guide-note {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .account-layout .profile-item-card .resource-card__actions,

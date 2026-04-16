@@ -18,6 +18,8 @@ import {
   AuditTargetType,
   EmailAuthCodePurpose,
   EventAttendanceStatus,
+  EventStatus,
+  EventType,
   MembershipStatus,
   OAuthAccountStatus,
   OAuthProvider,
@@ -495,6 +497,32 @@ export class AuthService {
   }
 
   async getCalendarSyncLinks(userId: string): Promise<CalendarSyncLinksResponse> {
+    const token = await this.ensureCalendarSyncToken(userId);
+    return this.buildCalendarSyncLinks(token);
+  }
+
+  async rotateCalendarSyncLinks(userId: string): Promise<CalendarSyncLinksResponse> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        calendarSyncToken: randomBytes(32).toString('hex'),
+      },
+      select: {
+        calendarSyncToken: true,
+      },
+    });
+
+    if (!user.calendarSyncToken) {
+      throw new InternalServerErrorException('Не удалось перевыпустить календарную подписку');
+    }
+
+    return {
+      ...this.buildCalendarSyncLinks(user.calendarSyncToken),
+      rotatedAt: new Date().toISOString(),
+    };
+  }
+
+  private async ensureCalendarSyncToken(userId: string): Promise<string> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -525,15 +553,7 @@ export class AuthService {
       throw new InternalServerErrorException('Не удалось подготовить календарную подписку');
     }
 
-    const frontendBase =
-      this.getConfig().app.corsOrigins[0] ?? this.getConfig().app.corsOrigin;
-    const normalizedBase = frontendBase.replace(/\/$/, '');
-    const httpsUrl = `${normalizedBase}/api/calendar/subscriptions/${token}.ics`;
-
-    return {
-      httpsUrl,
-      webcalUrl: httpsUrl.replace(/^https?/, 'webcal'),
-    };
+    return token;
   }
 
   async getCalendarSubscriptionFeed(token: string): Promise<CalendarSubscriptionFeed> {
@@ -561,9 +581,29 @@ export class AuthService {
       throw new NotFoundException('Календарная подписка не найдена');
     }
 
-    const now = new Date();
+    const activeMemberships = await this.prisma.membership.findMany({
+      where: {
+        userId: user.id,
+        status: MembershipStatus.ACTIVE,
+        organization: {
+          deletedAt: null,
+        },
+      },
+      select: {
+        organizationId: true,
+      },
+    });
+
+    const activeOrganizationIds = activeMemberships.map((membership) => membership.organizationId);
+    if (activeOrganizationIds.length === 0) {
+      return this.buildCalendarSubscriptionFeed(user, []);
+    }
+
     const events = await this.prisma.event.findMany({
       where: {
+        organizationId: {
+          in: activeOrganizationIds,
+        },
         deletedAt: null,
         status: {
           not: 'DRAFT',
@@ -600,6 +640,45 @@ export class AuthService {
       },
     });
 
+    return this.buildCalendarSubscriptionFeed(user, events);
+  }
+
+  private buildCalendarSyncLinks(token: string): CalendarSyncLinksResponse {
+    const frontendBase =
+      this.getConfig().app.corsOrigins[0] ?? this.getConfig().app.corsOrigin;
+    const normalizedBase = frontendBase.replace(/\/$/, '');
+    const httpsUrl = `${normalizedBase}/api/calendar/subscriptions/${token}.ics`;
+
+    return {
+      httpsUrl,
+      webcalUrl: httpsUrl.replace(/^https?/, 'webcal'),
+    };
+  }
+
+  private buildCalendarSubscriptionFeed(
+    user: {
+      id: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+    },
+    events: Array<{
+      id: string;
+      createdAt: Date;
+      updatedAt: Date;
+      title: string;
+      description: string | null;
+      type: EventType;
+      status: EventStatus;
+      startsAt: Date;
+      endsAt: Date;
+      location: string | null;
+      organization: {
+        name: string;
+      } | null;
+    }>,
+  ): CalendarSubscriptionFeed {
+    const now = new Date();
     const lastModified = events.reduce<Date>(
       (latest, event) => (event.updatedAt > latest ? event.updatedAt : latest),
       now,

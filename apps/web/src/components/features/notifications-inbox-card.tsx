@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
@@ -59,6 +60,7 @@ export function NotificationsInboxCard({
   onNotice,
   onError,
 }: NotificationsInboxCardProps) {
+  const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<NotificationsListResponse | null>(null);
@@ -272,7 +274,7 @@ export function NotificationsInboxCard({
                         type="button"
                         size="sm"
                         variant="ghost"
-                        onClick={() => window.location.assign(targetUrl)}
+                          onClick={() => router.push(targetUrl)}
                       >
                         Открыть
                       </Button>

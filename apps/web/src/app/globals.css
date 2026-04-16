@@ -865,7 +865,12 @@ body.is-scroll-locked {
 
 .participant-picker-modal__content {
   display: grid;
-  gap: 14px;
+  gap: 12px;
+  min-width: 0;
+}
+
+.participant-picker-modal {
+  width: min(100%, 720px);
 }
 
 .participant-picker-modal__section {
@@ -896,8 +901,8 @@ body.is-scroll-locked {
 
 .participant-picker-modal__list {
   display: grid;
-  gap: 8px;
-  max-height: min(42dvh, 360px);
+  gap: 6px;
+  max-height: min(42dvh, 340px);
   overflow-y: auto;
   overflow-x: hidden;
   min-width: 0;
@@ -905,13 +910,13 @@ body.is-scroll-locked {
 }
 
 .participant-picker-modal__option {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   min-width: 0;
-  padding: 11px 12px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: rgba(247, 249, 252, 0.72);
@@ -929,14 +934,20 @@ body.is-scroll-locked {
 .participant-picker-modal__option-main {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   min-width: 0;
   flex: 1 1 auto;
 }
 
+.participant-picker-modal__option-copy {
+  display: grid;
+  gap: 2px;
+}
+
 .participant-picker-modal__option-copy strong {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 0;
+  line-height: 1.2;
 }
 
 .participant-picker-modal__option-copy span,
@@ -946,10 +957,11 @@ body.is-scroll-locked {
 
 .participant-picker-modal__option-side {
   display: inline-flex;
-  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  min-width: 0;
+  min-width: fit-content;
+  white-space: nowrap;
 }
 
 .participant-picker-modal__option-side span {
@@ -2968,6 +2980,14 @@ body.is-scroll-locked {
 
 .month-cell.outside { opacity: 0.56; }
 .month-cell.today { border-color: rgba(37, 99, 235, 0.26); box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08); }
+.month-cell.has-holiday {
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.94) 0, rgba(255, 255, 255, 0) 18%),
+    radial-gradient(circle at 86% 18%, rgba(255, 240, 168, 0.88) 0, rgba(255, 240, 168, 0) 24%),
+    linear-gradient(180deg, rgba(255, 249, 232, 0.98), rgba(255, 241, 214, 0.94));
+  border-color: rgba(232, 179, 63, 0.36);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45), 0 16px 34px rgba(229, 168, 48, 0.12);
+}
 .month-cell-header { display: flex; align-items: baseline; justify-content: space-between; min-width: 0; gap: 6px; }
 .month-cell-header__actions { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .month-cell-header span { font-weight: 700; }
@@ -2993,6 +3013,10 @@ body.is-scroll-locked {
   font-size: 0.66rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+}
+.month-cell.has-holiday .month-cell__summary {
+  background: rgba(255, 252, 241, 0.95);
+  border-color: rgba(232, 179, 63, 0.3);
 }
 .month-cell__dot {
   width: 6px;
@@ -3192,6 +3216,15 @@ body.is-scroll-locked {
 .type-custom {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(167, 139, 250, 0.08));
   border-color: rgba(139, 92, 246, 0.22);
+}
+
+.type-holiday {
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.9) 0, rgba(255, 255, 255, 0) 20%),
+    radial-gradient(circle at 82% 28%, rgba(255, 244, 184, 0.9) 0, rgba(255, 244, 184, 0) 24%),
+    linear-gradient(135deg, rgba(255, 222, 132, 0.42), rgba(255, 126, 95, 0.2) 48%, rgba(214, 51, 132, 0.14));
+  border-color: rgba(232, 162, 36, 0.4);
+  box-shadow: 0 12px 24px rgba(234, 153, 35, 0.16);
 }
 .status-cancelled { opacity: 0.58; text-decoration: line-through; }
 
@@ -5567,6 +5600,12 @@ textarea.ui-field {
   background: rgba(242, 236, 229, 0.92);
 }
 
+.theatre-week-table__row.has-holiday {
+  background:
+    radial-gradient(circle at 12% 50%, rgba(255, 248, 214, 0.9) 0, rgba(255, 248, 214, 0) 18%),
+    linear-gradient(90deg, rgba(255, 249, 233, 0.96), rgba(255, 241, 215, 0.94));
+}
+
 .theatre-week-table__row.is-today {
   background: rgba(92, 47, 79, 0.06);
 }
@@ -5782,6 +5821,25 @@ textarea.ui-field {
   color: #536174;
 }
 
+.theatre-event--holiday {
+  border-color: rgba(232, 169, 54, 0.4);
+  background:
+    radial-gradient(circle at 12% 20%, rgba(255, 255, 255, 0.88) 0, rgba(255, 255, 255, 0) 16%),
+    radial-gradient(circle at 88% 28%, rgba(255, 236, 152, 0.92) 0, rgba(255, 236, 152, 0) 22%),
+    linear-gradient(90deg, rgba(255, 236, 179, 0.98) 0, rgba(255, 236, 179, 0.98) 4px, rgba(255, 250, 239, 0.98) 4px),
+    rgba(255, 250, 239, 0.98);
+  box-shadow: 0 18px 36px rgba(219, 151, 38, 0.12);
+}
+
+.theatre-event--holiday .theatre-event__time {
+  background: rgba(255, 243, 205, 0.98);
+  color: #a04b00;
+}
+
+.theatre-event--holiday .theatre-event__type {
+  color: #b96d11;
+}
+
 .theatre-event:hover {
   transform: translateY(-1px);
   border-color: rgba(92, 47, 79, 0.22);
@@ -5827,6 +5885,10 @@ textarea.ui-field {
 .theatre-event__marker--event,
 .theatre-event__marker--custom {
   background: #9333ea;
+}
+
+.theatre-event__marker--holiday {
+  background: linear-gradient(180deg, #f59e0b, #ec4899);
 }
 
 .theatre-event__primary,
@@ -6148,6 +6210,19 @@ textarea.ui-field {
 
 .calendar-composer__notes {
   min-height: 92px;
+}
+
+.calendar-composer__holiday-button {
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.88) 0, rgba(255, 255, 255, 0) 18%),
+    linear-gradient(135deg, #f7b733, #fc4a1a 55%, #e44189);
+  color: #fff;
+  border: 0;
+  box-shadow: 0 18px 30px rgba(227, 107, 33, 0.24);
+}
+
+.calendar-composer__holiday-button:hover {
+  box-shadow: 0 20px 34px rgba(227, 107, 33, 0.28);
 }
 
 @media (max-width: 1240px) {
@@ -7320,10 +7395,18 @@ textarea.ui-field {
 
 .plays-role-editor__alternate {
   display: grid;
+  gap: 8px;
 }
 
 .plays-role-editor__alternate:not(.is-visible) {
   display: none;
+}
+
+.plays-role-editor__replacement-hint {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  line-height: 1.35;
 }
 
 .schedule-cast-switcher {
@@ -8368,6 +8451,15 @@ textarea.ui-field {
     border-color: rgba(92, 47, 79, 0.16);
   }
 
+  .theatre-mobile-day.has-holiday {
+    background:
+      radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.92) 0, rgba(255, 255, 255, 0) 16%),
+      radial-gradient(circle at 88% 22%, rgba(255, 239, 171, 0.92) 0, rgba(255, 239, 171, 0) 24%),
+      linear-gradient(180deg, rgba(255, 248, 230, 0.98), rgba(255, 238, 208, 0.96));
+    border-color: rgba(233, 176, 62, 0.34);
+    box-shadow: 0 18px 32px rgba(219, 152, 44, 0.12);
+  }
+
   .theatre-mobile-day.is-empty {
     background: rgba(252, 250, 247, 0.94);
   }
@@ -8457,6 +8549,10 @@ textarea.ui-field {
   .theatre-event--event .theatre-event__stream-marker,
   .theatre-event--custom .theatre-event__stream-marker {
     background: #64748b;
+  }
+
+  .theatre-event--holiday .theatre-event__stream-marker {
+    background: linear-gradient(180deg, #f59e0b, #ec4899);
   }
 
   .theatre-event__stream-time,

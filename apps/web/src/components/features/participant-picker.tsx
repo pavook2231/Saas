@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -24,8 +26,9 @@ type ParticipantOption = {
   value: string;
   label: string;
   description: string;
-  badge: string;
+  badge: string | null;
   avatarLabel: string;
+  searchableText: string;
 };
 
 const sortParticipants = (participants: ParticipantRecord[], recentIds: string[]) => {
@@ -80,19 +83,23 @@ export function ParticipantPicker({
 
   const options = useMemo<ParticipantOption[]>(
     () =>
-      sortParticipants(participants, recentIds).map((participant) => ({
-        value: participant.id,
-        label: participantDisplayName(participant),
-        description: participant.userId
-          ? `С аккаунтом · ${participant.email ?? 'контакт скрыт'}`
-          : `Без аккаунта · ${participant.email ?? participant.phone ?? 'контакт не указан'}`,
-        badge: recentIds.includes(participant.id)
-          ? 'Недавно'
-          : participant.userId
-            ? 'Аккаунт'
-            : 'Участник',
-        avatarLabel: participantDisplayName(participant),
-      })),
+      sortParticipants(participants, recentIds).map((participant) => {
+        const labelText = participantDisplayName(participant);
+        return {
+          value: participant.id,
+          label: labelText,
+          description: participant.userId ? 'С аккаунтом' : 'Без аккаунта',
+          badge: recentIds.includes(participant.id) ? 'Недавно' : null,
+          avatarLabel: labelText,
+          searchableText: [
+            labelText,
+            participant.email ?? '',
+            participant.phone ?? '',
+          ]
+            .join(' ')
+            .toLowerCase(),
+        };
+      }),
     [participants, recentIds],
   );
 
@@ -108,9 +115,7 @@ export function ParticipantPicker({
       return options;
     }
 
-    return options.filter((option) => {
-      return option.label.toLowerCase().includes(normalized) || option.description.toLowerCase().includes(normalized);
-    });
+    return options.filter((option) => option.searchableText.includes(normalized));
   }, [options, query]);
 
   const availableOptions = useMemo(
@@ -153,7 +158,9 @@ export function ParticipantPicker({
             <span>{summaryText}</span>
           </div>
           <span className="participant-picker__trigger-meta">
-            {selectedOptions.length > 0 ? selectedOptions.slice(0, 2).map((option) => option.label).join(', ') : 'Открыть'}
+            {selectedOptions.length > 0
+              ? selectedOptions.slice(0, 2).map((option) => option.label).join(', ')
+              : 'Открыть'}
           </span>
         </button>
 
@@ -178,7 +185,7 @@ export function ParticipantPicker({
         open={open}
         onClose={() => setOpen(false)}
         title="Выбрать участников"
-        description="Быстрый поиск, отдельный список выбранных и добавление без лишних шагов."
+        description="Быстрый поиск, список выбранных и добавление без лишних шагов."
         panelClassName="participant-picker-modal"
         footer={
           <>
@@ -241,7 +248,7 @@ export function ParticipantPicker({
                       </div>
                     </div>
                     <div className="participant-picker-modal__option-side">
-                      <small>{option.badge}</small>
+                      {option.badge ? <small>{option.badge}</small> : null}
                       <span>Добавить</span>
                     </div>
                   </button>

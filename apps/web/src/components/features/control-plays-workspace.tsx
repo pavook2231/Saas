@@ -755,20 +755,20 @@ export function ControlPlaysWorkspace() {
                 }))
               }
             />
-            <span>Есть дубль</span>
+            <span>Есть 2 состав</span>
           </label>
 
           <div className="plays-editor__hint-card">
-            <strong>Как это будет работать в расписании</strong>
+            <strong>Как работают 1 и 2 состав</strong>
             <p>
-              Если дубль включен, составы чередуются по дням: один день играет 1 состав, следующий день со спектаклем — 2 состав. При необходимости администратор сможет вручную переключить состав на конкретный день.
+              Если у спектакля есть дубль, вы просто указываете, кто заменяет кого по каждой роли. Дальше расписание само чередует 1 и 2 состав по дням, а при необходимости администратор может вручную переключить конкретный день.
             </p>
           </div>
 
           <div className="plays-editor__section-head">
             <div>
               <strong>Состав участников</strong>
-              <p>Роль, основной исполнитель и, при необходимости, дублер.</p>
+              <p>Для каждой роли сначала выберите 1 состав, а если есть замена — укажите, кто играет ту же роль во 2 составе.</p>
             </div>
             <Button type="button" variant="ghost" size="sm" onClick={addRole}>
               Добавить роль
@@ -791,7 +791,7 @@ export function ControlPlaysWorkspace() {
                 </div>
 
                 <ParticipantPicker
-                  label={form.hasAlternateCast ? '1 состав' : 'Участники роли'}
+                  label={form.hasAlternateCast ? '1 состав · основа' : 'Участники роли'}
                   participants={participants}
                   value={role.primaryParticipantIds}
                   onChange={(primaryParticipantIds) => updateRole(role.id, (current) => ({ ...current, primaryParticipantIds }))}
@@ -800,13 +800,18 @@ export function ControlPlaysWorkspace() {
 
                 <div className={`plays-role-editor__alternate${form.hasAlternateCast ? ' is-visible' : ''}`}>
                   {form.hasAlternateCast ? (
-                    <ParticipantPicker
-                      label="2 состав"
-                      participants={participants}
-                      value={role.alternateParticipantIds}
-                      onChange={(alternateParticipantIds) => updateRole(role.id, (current) => ({ ...current, alternateParticipantIds }))}
-                      searchPlaceholder="Кто играет этот же образ в дубле"
-                    />
+                    <>
+                      <p className="plays-role-editor__replacement-hint">
+                        Кто заменяет {role.primaryParticipantIds.length > 0 ? 'этот 1 состав' : 'эту роль'} во 2 составе
+                      </p>
+                      <ParticipantPicker
+                        label="2 состав · замена"
+                        participants={participants}
+                        value={role.alternateParticipantIds}
+                        onChange={(alternateParticipantIds) => updateRole(role.id, (current) => ({ ...current, alternateParticipantIds }))}
+                        searchPlaceholder="Кто заменяет эту роль"
+                      />
+                    </>
                   ) : null}
                 </div>
               </div>

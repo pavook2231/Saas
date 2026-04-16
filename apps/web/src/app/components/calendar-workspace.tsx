@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import {
   operationsApi,
@@ -111,6 +111,18 @@ const typeLabel: Record<EventRecord['type'], string> = {
   CUSTOM: 'Событие',
 };
 
+const isHolidayEvent = (
+  event: Pick<EventRecord, 'type' | 'title' | 'description' | 'isAllDay'>,
+) => event.type === 'CUSTOM' && event.title.trim().toLowerCase() === 'выходной';
+
+const getEventVisualType = (
+  event: Pick<EventRecord, 'type' | 'title' | 'description' | 'isAllDay'>,
+) => (isHolidayEvent(event) ? 'holiday' : event.type.toLowerCase());
+
+const getEventTypeLabel = (
+  event: Pick<EventRecord, 'type' | 'title' | 'description' | 'isAllDay'>,
+) => (isHolidayEvent(event) ? 'Выходной' : typeLabel[event.type]);
+
 const theatreLaneMeta: Array<{
   id: TheatreLane;
   label: string;
@@ -162,7 +174,13 @@ const defaultDurationByKind: Record<CalendarComposerKind, number> = {
 const getEventTimeRange = (event: EventRecord) =>
   `${timeFormat.format(new Date(event.startsAt))} — ${timeFormat.format(new Date(event.endsAt))}`;
 
-const getEventScheduleRange = (event: Pick<EventRecord, 'startsAt' | 'endsAt' | 'assemblyAt'>) => {
+const getEventScheduleRange = (
+  event: Pick<EventRecord, 'startsAt' | 'endsAt' | 'assemblyAt' | 'isAllDay' | 'type' | 'title' | 'description'>,
+) => {
+  if (event.isAllDay || isHolidayEvent(event)) {
+    return 'Весь день';
+  }
+
   const performanceTime = `${timeFormat.format(new Date(event.startsAt))} — ${timeFormat.format(new Date(event.endsAt))}`;
   return event.assemblyAt ? `Выезд ${timeFormat.format(new Date(event.assemblyAt))} · ${performanceTime}` : performanceTime;
 };
@@ -269,6 +287,8 @@ const mapPlayParticipants = (play: TemplateRecord) =>
   Array.from(new Set(play.roles.flatMap((role) => role.assignments.map((assignment) => assignment.participantId))));
 
 export function CalendarWorkspace() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { accessToken, activeOrganizationId, activeRole } = useActiveWorkspace();
   const [viewMode, setViewMode] = useState<ViewMode>('week');
@@ -288,6 +308,18 @@ export function CalendarWorkspace() {
   const [eventActionLoading, setEventActionLoading] = useState<'cancel' | 'delete' | null>(null);
 
   const canOpenControlPanel = canAccessControlPanel(activeRole);
+
+  const clearEventIdFromUrl = useCallback(() => {
+    const current = new URLSearchParams(searchParams.toString());
+
+    if (!current.has('eventId')) {
+      return;
+    }
+
+    current.delete('eventId');
+    const nextQuery = current.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -370,7 +402,8 @@ export function CalendarWorkspace() {
     setSelectedEventId(focusedEvent.id);
     setCursorDate(startOfDay(new Date(focusedEvent.startsAt)));
     setViewMode('week');
-  }, [events, searchParams]);
+    clearEventIdFromUrl();
+  }, [clearEventIdFromUrl, events, searchParams]);
 
   const participantsById = useMemo(
     () => new Map(participants.map((participant) => [participant.id, participant])),
@@ -600,6 +633,7 @@ export function CalendarWorkspace() {
 
   const openComposerForReplacement = (event: EventRecord) => {
     setSelectedEventId(null);
+    clearEventIdFromUrl();
     setComposerEditingEventId(event.id);
     setComposerState(buildComposerStateForEvent(event));
     setComposerErrorText(null);
@@ -647,10 +681,64 @@ export function CalendarWorkspace() {
                 : [],
           }
         : current,
-    );
-  };
+      );
+    };
 
-  const handleComposerSave = async () => {
+    const handleComposerMakeDayOff = async () => {
+      if (!composerState || !accessToken || !activeOrganizationId || composerSaving) {
+        return;
+      }
+
+      setComposerSaving(true);
+      setComposerErrorText(null);
+
+      try {
+        const payload = {
+          title: 'Выходной',
+          description: 'Праздничный выходной день.',
+          type: 'CUSTOM' as const,
+          status: 'PLANNED' as const,
+          startsAt: toIso(composerState.date, '00:00'),
+          endsAt: toIso(composerState.date, '23:59'),
+          timezone: MOSCOW_TIMEZONE,
+          isAllDay: true,
+        };
+
+        const saved = composerEditingEventId
+          ? await operationsApi.updateEvent({
+              organizationId: activeOrganizationId,
+              eventId: composerEditingEventId,
+              accessToken,
+              payload,
+            })
+          : await operationsApi.createEvent({
+              organizationId: activeOrganizationId,
+              accessToken,
+              payload,
+            });
+
+        setEvents((current) =>
+          composerEditingEventId
+            ? current.map((event) => (event.id === saved.id ? saved : event))
+            : [...current, saved],
+        );
+        setComposerEditingEventId(null);
+        setComposerState(null);
+        setComposerErrorText(null);
+      } catch (error) {
+        setComposerErrorText(
+          error instanceof Error
+            ? error.message
+            : composerEditingEventId
+              ? 'Не удалось сделать день выходным.'
+              : 'Не удалось создать выходной.',
+        );
+      } finally {
+        setComposerSaving(false);
+      }
+    };
+
+    const handleComposerSave = async () => {
     if (!composerState || !accessToken || !activeOrganizationId) {
       return;
     }
@@ -789,24 +877,25 @@ export function CalendarWorkspace() {
 
   const renderEventChip = (event: EventRecord) => {
     const venue = isVenueName(event.location) ? event.location : null;
+    const visualType = getEventVisualType(event);
 
     return (
       <button
         key={event.id}
         type="button"
-        className={`event-chip type-${event.type.toLowerCase()}${selectedEventId === event.id ? ' is-selected' : ''}${event.status === 'CANCELLED' ? ' status-cancelled' : ''}`}
+        className={`event-chip type-${visualType}${selectedEventId === event.id ? ' is-selected' : ''}${event.status === 'CANCELLED' ? ' status-cancelled' : ''}`}
         onClick={(action) => {
           action.stopPropagation();
           setSelectedEventId(event.id);
         }}
-      >
-        <span className="chip-time">{getEventScheduleRange(event)}</span>
-        <span className="chip-title">{event.title}</span>
-        <span className="chip-meta">
-          {typeLabel[event.type]}
-          {event.performanceCastNumber ? ` · ${event.performanceCastNumber} состав` : ''}
-          {venue ? ` · ${venue}` : ''}
-        </span>
+        >
+          <span className="chip-time">{getEventScheduleRange(event)}</span>
+          <span className="chip-title">{event.title}</span>
+          <span className="chip-meta">
+            {getEventTypeLabel(event)}
+            {event.performanceCastNumber ? ` · ${event.performanceCastNumber} состав` : ''}
+            {venue ? ` · ${venue}` : ''}
+          </span>
       </button>
     );
   };
@@ -819,6 +908,7 @@ export function CalendarWorkspace() {
     const timeRange = getEventScheduleRange(event);
     const showTypeLabel = options?.showTypeLabel ?? true;
     const isMobileStream = options?.mobileStream ?? false;
+    const visualType = getEventVisualType(event);
     const isUpdated =
       new Date(event.updatedAt).getTime() - new Date(event.createdAt).getTime() > 60_000;
     const metaParts = [
@@ -832,7 +922,7 @@ export function CalendarWorkspace() {
         <button
           key={event.id}
           type="button"
-          className={`theatre-event theatre-event--stream theatre-event--${event.type.toLowerCase()}${
+          className={`theatre-event theatre-event--stream theatre-event--${visualType}${
             selectedEventId === event.id ? ' is-selected' : ''
           }${event.status === 'CANCELLED' ? ' is-cancelled' : ''}`}
           onClick={() => setSelectedEventId(event.id)}
@@ -861,10 +951,10 @@ export function CalendarWorkspace() {
       >
         <div className="theatre-event__eyebrow">
           <span
-            className={`theatre-event__marker theatre-event__marker--${event.type.toLowerCase()}`}
+            className={`theatre-event__marker theatre-event__marker--${visualType}`}
             aria-hidden="true"
           />
-          {showTypeLabel ? <span className="theatre-event__type">{typeLabel[event.type]}</span> : null}
+          {showTypeLabel ? <span className="theatre-event__type">{getEventTypeLabel(event)}</span> : null}
         </div>
         <div className="theatre-event__primary">
           <strong>{event.title}</strong>
@@ -958,11 +1048,12 @@ export function CalendarWorkspace() {
               const isOutside = day.getMonth() !== cursorDate.getMonth();
               const isToday = isSameDay(day, new Date());
               const canCreateOnDay = canOpenControlPanel && items.length === 0;
+              const hasHoliday = items.some((item) => isHolidayEvent(item));
 
               return (
                 <article
                   key={key}
-                  className={`month-cell${isOutside ? ' outside' : ''}${isToday ? ' today' : ''} is-interactive`}
+                  className={`month-cell${isOutside ? ' outside' : ''}${isToday ? ' today' : ''}${hasHoliday ? ' has-holiday' : ''} is-interactive`}
                   onClick={() => openMonthDayDetails(day)}
                   role="button"
                   tabIndex={0}
@@ -1037,9 +1128,12 @@ export function CalendarWorkspace() {
                 const laneEvents = theatreWeekMap.get(dayKey);
                 const isToday = isSameDay(day, new Date());
                 const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+                const hasHoliday = theatreLaneMeta.some((lane) =>
+                  (laneEvents?.[lane.id] ?? []).some((event) => isHolidayEvent(event)),
+                );
 
                 return (
-                  <div key={dayKey} className={`theatre-week-table__row${isToday ? ' is-today' : ''}${isWeekend ? ' is-weekend' : ''}`}>
+                  <div key={dayKey} className={`theatre-week-table__row${isToday ? ' is-today' : ''}${isWeekend ? ' is-weekend' : ''}${hasHoliday ? ' has-holiday' : ''}`}>
                     <aside className="theatre-week-table__day">
                       <strong>{formatDayName(day)}</strong>
                       <span className="theatre-week-table__day-meta">{weekDayNumberFormat.format(day)}</span>
@@ -1089,13 +1183,14 @@ export function CalendarWorkspace() {
           <div className="theatre-week-mobile__list">
             {mobileScheduleDays.map(({ day, dayKey, events, isToday }) => {
               const canCreateOnDay = canOpenControlPanel && events.length === 0;
+              const hasHoliday = events.some((event) => isHolidayEvent(event));
 
               return (
                 <article
                   key={`${dayKey}-mobile`}
                   className={`theatre-mobile-day${isToday ? ' is-today' : ''}${
                     events.length === 0 ? ' is-empty' : ''
-                  }${canCreateOnDay ? ' is-interactive' : ''}`}
+                  }${canCreateOnDay ? ' is-interactive' : ''}${hasHoliday ? ' has-holiday' : ''}`}
                   onClick={canCreateOnDay ? () => openComposer(day) : undefined}
                   role={canCreateOnDay ? 'button' : undefined}
                   tabIndex={canCreateOnDay ? 0 : undefined}
@@ -1167,6 +1262,14 @@ export function CalendarWorkspace() {
             <>
               <Button type="button" variant="ghost" onClick={closeComposer} disabled={composerSaving}>
                 Отмена
+              </Button>
+              <Button
+                type="button"
+                className="calendar-composer__holiday-button"
+                onClick={() => void handleComposerMakeDayOff()}
+                disabled={composerSaving}
+              >
+                Сделать выходной
               </Button>
               <Button type="button" onClick={() => void handleComposerSave()} loading={composerSaving}>
                 {composerEditingEventId ? 'Сохранить изменения' : 'Добавить событие'}
@@ -1402,14 +1505,20 @@ export function CalendarWorkspace() {
 
       <Modal
         open={Boolean(selectedEvent)}
-        onClose={() => setSelectedEventId(null)}
+        onClose={() => {
+          setSelectedEventId(null);
+          clearEventIdFromUrl();
+        }}
         title={selectedEvent?.title ?? 'Событие'}
-        description={selectedEvent ? `${typeLabel[selectedEvent.type]} · ${getEventScheduleRange(selectedEvent)}` : undefined}
+        description={selectedEvent ? `${getEventTypeLabel(selectedEvent)} · ${getEventScheduleRange(selectedEvent)}` : undefined}
         size="lg"
         footer={
           selectedEvent && canOpenControlPanel ? (
             <>
-              <Button type="button" variant="ghost" onClick={() => setSelectedEventId(null)} disabled={Boolean(eventActionLoading)}>
+              <Button type="button" variant="ghost" onClick={() => {
+                setSelectedEventId(null);
+                clearEventIdFromUrl();
+              }} disabled={Boolean(eventActionLoading)}>
                 Закрыть
               </Button>
               <Button

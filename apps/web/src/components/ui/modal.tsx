@@ -27,6 +27,7 @@ export function Modal({
   children,
 }: ModalProps) {
   const prefersReducedMotion = useReducedMotion();
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -81,11 +82,47 @@ export function Modal({
       return;
     }
 
+    const isFormField = (value: EventTarget | null): value is HTMLElement =>
+      value instanceof HTMLElement &&
+      (value.matches('input, textarea, select') || value.isContentEditable);
+
+    const isTextEntryField = (value: EventTarget | null): value is HTMLElement => {
+      if (!(value instanceof HTMLElement)) {
+        return false;
+      }
+
+      if (value.matches('textarea') || value.isContentEditable) {
+        return true;
+      }
+
+      if (value.matches('input')) {
+        const input = value as HTMLInputElement;
+        const type = (input.type || 'text').toLowerCase();
+        return !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file'].includes(type);
+      }
+
+      return false;
+    };
+
     const root = document.documentElement;
+    const wrapperElement = wrapperRef.current;
     const panelElement = panelRef.current;
     const headerElement = headerRef.current;
     const footerElement = footerRef.current;
     const viewport = window.visualViewport;
+    const syncFocusedFieldState = () => {
+      const activeElement = document.activeElement;
+      const textEntryActive = isTextEntryField(activeElement) && panelElement?.contains(activeElement);
+
+      if (wrapperElement) {
+        wrapperElement.dataset.textEntryActive = textEntryActive ? 'true' : 'false';
+      }
+
+      if (panelElement) {
+        panelElement.dataset.textEntryActive = textEntryActive ? 'true' : 'false';
+      }
+    };
+
     const updateViewportHeight = () => {
       const height = viewport?.height ?? window.innerHeight;
       const keyboardOffset = Math.max(0, window.innerHeight - height - (viewport?.offsetTop ?? 0));
@@ -98,15 +135,23 @@ export function Modal({
       panelElement?.style.setProperty('--modal-header-height', `${headerHeight}px`);
       panelElement?.style.setProperty('--modal-footer-height', `${footerHeight}px`);
 
+      if (wrapperElement) {
+        wrapperElement.dataset.keyboardVisible = keyboardVisible ? 'true' : 'false';
+      }
+
       if (panelElement) {
         panelElement.dataset.keyboardVisible = keyboardVisible ? 'true' : 'false';
       }
+
+      syncFocusedFieldState();
     };
 
     updateViewportHeight();
     viewport?.addEventListener('resize', updateViewportHeight);
     viewport?.addEventListener('scroll', updateViewportHeight);
     window.addEventListener('orientationchange', updateViewportHeight);
+    document.addEventListener('focusin', updateViewportHeight);
+    document.addEventListener('focusout', updateViewportHeight);
 
     const resizeObserver =
       typeof ResizeObserver !== 'undefined'
@@ -127,14 +172,22 @@ export function Modal({
       viewport?.removeEventListener('resize', updateViewportHeight);
       viewport?.removeEventListener('scroll', updateViewportHeight);
       window.removeEventListener('orientationchange', updateViewportHeight);
+      document.removeEventListener('focusin', updateViewportHeight);
+      document.removeEventListener('focusout', updateViewportHeight);
       resizeObserver?.disconnect();
       root.style.removeProperty('--viewport-height');
       root.style.removeProperty('--keyboard-offset');
+
+      if (wrapperElement) {
+        delete wrapperElement.dataset.keyboardVisible;
+        delete wrapperElement.dataset.textEntryActive;
+      }
 
       if (panelElement) {
         panelElement.style.removeProperty('--modal-header-height');
         panelElement.style.removeProperty('--modal-footer-height');
         delete panelElement.dataset.keyboardVisible;
+        delete panelElement.dataset.textEntryActive;
       }
     };
   }, [open]);
@@ -167,7 +220,7 @@ export function Modal({
         const viewportHeight = viewport?.height ?? window.innerHeight;
         const viewportTop = viewport?.offsetTop ?? 0;
         const footerHeight = footerRef.current?.offsetHeight ?? 0;
-        const visibleTop = Math.max(bodyRect.top + 10, viewportTop + 18);
+        const visibleTop = Math.max(bodyRect.top + 10, viewportTop + 10);
         const visibleBottom = Math.min(
           bodyRect.bottom - 12,
           viewportTop + viewportHeight - Math.max(footerHeight + 24, 88),
@@ -255,7 +308,7 @@ export function Modal({
   return createPortal(
     <AnimatePresence>
       {open ? (
-        <div className="ui-modal" role="dialog" aria-modal="true">
+        <div className="ui-modal" role="dialog" aria-modal="true" ref={wrapperRef}>
           <motion.button
             className="ui-modal__backdrop"
             type="button"

@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import type { Route } from 'next';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -318,7 +319,8 @@ export function CalendarWorkspace() {
 
     current.delete('eventId');
     const nextQuery = current.toString();
-    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    const nextUrl = (nextQuery ? `${pathname}?${nextQuery}` : pathname) as Route;
+    router.replace(nextUrl, { scroll: false });
   }, [pathname, router, searchParams]);
 
   useEffect(() => {

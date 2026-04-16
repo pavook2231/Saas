@@ -1,5 +1,6 @@
 'use client';
 
+import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
@@ -274,7 +275,7 @@ export function NotificationsInboxCard({
                         type="button"
                         size="sm"
                         variant="ghost"
-                          onClick={() => router.push(targetUrl)}
+                          onClick={() => router.push(targetUrl as Route)}
                       >
                         Открыть
                       </Button>

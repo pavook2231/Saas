@@ -961,7 +961,7 @@ body.is-scroll-locked {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  min-width: fit-content;
+  min-width: 0;
   white-space: nowrap;
 }
 
@@ -8686,10 +8686,14 @@ textarea.ui-field {
   }
 
   .participant-picker-modal__option-side {
-    width: 100%;
+    width: auto;
     justify-content: flex-start;
     gap: 10px;
     padding-left: 42px;
     font-size: 0.82rem;
+  }
+
+  .participant-picker-modal__option-side:empty {
+    display: none;
   }
 }

@@ -249,7 +249,6 @@ export function ParticipantPicker({
                     </div>
                     <div className="participant-picker-modal__option-side">
                       {option.badge ? <small>{option.badge}</small> : null}
-                      <span>Добавить</span>
                     </div>
                   </button>
                 ))

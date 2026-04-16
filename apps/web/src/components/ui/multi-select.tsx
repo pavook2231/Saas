@@ -33,6 +33,7 @@ export function MultiSelect({
   onChange,
 }: MultiSelectProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -52,6 +53,17 @@ export function MultiSelect({
     [options, value],
   );
 
+  useEffect(() => {
+    if (!open) {
+      setQuery('');
+      return;
+    }
+
+    window.setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 20);
+  }, [open]);
+
   const filteredOptions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
 
@@ -67,13 +79,26 @@ export function MultiSelect({
     });
   }, [options, query]);
 
+  const availableOptions = useMemo(
+    () => filteredOptions.filter((option) => !value.includes(option.value)),
+    [filteredOptions, value],
+  );
+
   const toggleValue = (optionValue: string) => {
     if (value.includes(optionValue)) {
       onChange(value.filter((item) => item !== optionValue));
+      setQuery('');
+      window.requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
       return;
     }
 
     onChange([...value, optionValue]);
+    setQuery('');
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
   };
 
   return (
@@ -105,35 +130,58 @@ export function MultiSelect({
       {open ? (
         <div className="ui-multiselect__panel">
           <input
+            ref={searchInputRef}
             className="ui-field"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={searchPlaceholder}
+            autoComplete="off"
           />
 
-          <div className="ui-multiselect__options">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => {
-                const active = value.includes(option.value);
-
-                return (
+          {selectedOptions.length > 0 ? (
+            <div className="ui-multiselect__selected">
+              <div className="ui-multiselect__section-head">
+                <strong>Выбрано</strong>
+                <span>{selectedOptions.length}</span>
+              </div>
+              <div className="ui-multiselect__selected-tags">
+                {selectedOptions.map((option) => (
                   <button
                     key={option.value}
                     type="button"
-                    className={cn('ui-multiselect__option', active && 'is-active')}
+                    className="ui-multiselect__selected-tag"
                     onClick={() => toggleValue(option.value)}
                   >
-                    <div className="ui-multiselect__option-main">
-                      {option.avatarLabel ? <Avatar size="sm" name={option.avatarLabel} /> : null}
-                      <div className="ui-multiselect__option-copy">
-                        <strong>{option.label}</strong>
-                        {option.description ? <span>{option.description}</span> : null}
-                      </div>
-                    </div>
-                    {option.badge ? <small>{option.badge}</small> : null}
+                    <span>{option.label}</span>
+                    <span aria-hidden="true">×</span>
                   </button>
-                );
-              })
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="ui-multiselect__options">
+            {availableOptions.length > 0 ? (
+              availableOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className="ui-multiselect__option"
+                  onClick={() => toggleValue(option.value)}
+                >
+                  <div className="ui-multiselect__option-main">
+                    {option.avatarLabel ? <Avatar size="sm" name={option.avatarLabel} /> : null}
+                    <div className="ui-multiselect__option-copy">
+                      <strong>{option.label}</strong>
+                      {option.description ? <span>{option.description}</span> : null}
+                    </div>
+                  </div>
+                  <div className="ui-multiselect__option-side">
+                    {option.badge ? <small>{option.badge}</small> : null}
+                    <span className="ui-multiselect__option-action">Добавить</span>
+                  </div>
+                </button>
+              ))
             ) : (
               <p className="ui-multiselect__empty">{emptyText}</p>
             )}

@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import './globals.css';
 import { ru } from './lib/i18n/ru';
 import { AuthProvider } from './providers/auth-provider';
+import { MobileInputViewportProvider } from './providers/mobile-input-viewport-provider';
+import { PwaInstallProvider } from './providers/pwa-install-provider';
 import { ToastProvider } from './providers/toast-provider';
 import { WorkspaceProvider } from './providers/workspace-provider';
 
@@ -25,9 +27,13 @@ export default function RootLayout({ children }: LayoutProps) {
     <html lang="ru">
       <body>
         <ToastProvider>
-          <AuthProvider>
-            <WorkspaceProvider>{children}</WorkspaceProvider>
-          </AuthProvider>
+          <PwaInstallProvider>
+            <MobileInputViewportProvider>
+              <AuthProvider>
+                <WorkspaceProvider>{children}</WorkspaceProvider>
+              </AuthProvider>
+            </MobileInputViewportProvider>
+          </PwaInstallProvider>
         </ToastProvider>
       </body>
     </html>

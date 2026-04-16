@@ -28,7 +28,9 @@ export function Modal({
 }: ModalProps) {
   const prefersReducedMotion = useReducedMotion();
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const footerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open || typeof document === 'undefined') {
@@ -80,23 +82,60 @@ export function Modal({
     }
 
     const root = document.documentElement;
+    const panelElement = panelRef.current;
+    const headerElement = headerRef.current;
+    const footerElement = footerRef.current;
     const viewport = window.visualViewport;
     const updateViewportHeight = () => {
       const height = viewport?.height ?? window.innerHeight;
       const keyboardOffset = Math.max(0, window.innerHeight - height - (viewport?.offsetTop ?? 0));
+      const keyboardVisible = keyboardOffset > 72;
+      const headerHeight = headerElement?.offsetHeight ?? 0;
+      const footerHeight = footerElement?.offsetHeight ?? 0;
+
       root.style.setProperty('--viewport-height', `${height}px`);
       root.style.setProperty('--keyboard-offset', `${keyboardOffset}px`);
+      panelElement?.style.setProperty('--modal-header-height', `${headerHeight}px`);
+      panelElement?.style.setProperty('--modal-footer-height', `${footerHeight}px`);
+
+      if (panelElement) {
+        panelElement.dataset.keyboardVisible = keyboardVisible ? 'true' : 'false';
+      }
     };
 
     updateViewportHeight();
     viewport?.addEventListener('resize', updateViewportHeight);
+    viewport?.addEventListener('scroll', updateViewportHeight);
     window.addEventListener('orientationchange', updateViewportHeight);
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            updateViewportHeight();
+          })
+        : null;
+
+    if (headerElement) {
+      resizeObserver?.observe(headerElement);
+    }
+
+    if (footerElement) {
+      resizeObserver?.observe(footerElement);
+    }
 
     return () => {
       viewport?.removeEventListener('resize', updateViewportHeight);
+      viewport?.removeEventListener('scroll', updateViewportHeight);
       window.removeEventListener('orientationchange', updateViewportHeight);
+      resizeObserver?.disconnect();
       root.style.removeProperty('--viewport-height');
       root.style.removeProperty('--keyboard-offset');
+
+      if (panelElement) {
+        panelElement.style.removeProperty('--modal-header-height');
+        panelElement.style.removeProperty('--modal-footer-height');
+        delete panelElement.dataset.keyboardVisible;
+      }
     };
   }, [open]);
 
@@ -127,8 +166,12 @@ export function Modal({
         const fieldRect = field.getBoundingClientRect();
         const viewportHeight = viewport?.height ?? window.innerHeight;
         const viewportTop = viewport?.offsetTop ?? 0;
-        const visibleTop = Math.max(bodyRect.top + 10, viewportTop + 28);
-        const visibleBottom = Math.min(bodyRect.bottom - 12, viewportTop + viewportHeight - 96);
+        const footerHeight = footerRef.current?.offsetHeight ?? 0;
+        const visibleTop = Math.max(bodyRect.top + 10, viewportTop + 18);
+        const visibleBottom = Math.min(
+          bodyRect.bottom - 12,
+          viewportTop + viewportHeight - Math.max(footerHeight + 24, 88),
+        );
 
         let nextScrollTop = bodyElement.scrollTop;
 
@@ -231,7 +274,7 @@ export function Modal({
             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
-            <div className="ui-modal__header">
+            <div className="ui-modal__header" ref={headerRef}>
               <div>
                 {title ? <h3>{title}</h3> : null}
                 {description ? <p>{description}</p> : null}
@@ -248,7 +291,7 @@ export function Modal({
             <div className="ui-modal__body" ref={bodyRef}>
               {children}
             </div>
-            {footer ? <div className="ui-modal__footer">{footer}</div> : null}
+            {footer ? <div className="ui-modal__footer" ref={footerRef}>{footer}</div> : null}
           </motion.div>
         </div>
       ) : null}

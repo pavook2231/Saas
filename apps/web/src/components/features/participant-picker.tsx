@@ -73,7 +73,7 @@ export function ParticipantPicker({
       value={value}
       onChange={onChange}
       placeholder="Выберите участников"
-      searchPlaceholder={searchPlaceholder}
+      searchPlaceholder={`${searchPlaceholder} или email`}
       emptyText={emptyText}
     />
   );

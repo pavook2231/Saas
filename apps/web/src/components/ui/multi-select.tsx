@@ -33,6 +33,7 @@ export function MultiSelect({
   onChange,
 }: MultiSelectProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -62,6 +63,86 @@ export function MultiSelect({
     window.setTimeout(() => {
       searchInputRef.current?.focus();
     }, 20);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const isScrollable = (element: HTMLElement) => {
+      const styles = window.getComputedStyle(element);
+      const overflowY = styles.overflowY;
+      return (
+        (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+        element.scrollHeight > element.clientHeight
+      );
+    };
+
+    const findScrollContainer = (element: HTMLElement | null) => {
+      let current = element?.parentElement ?? null;
+
+      while (current) {
+        if (isScrollable(current)) {
+          return current;
+        }
+
+        current = current.parentElement;
+      }
+
+      return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : document.documentElement;
+    };
+
+    const revealPanel = () => {
+      const root = rootRef.current;
+      const panel = panelRef.current;
+
+      if (!root || !panel) {
+        return;
+      }
+
+      const scrollContainer = findScrollContainer(root);
+      const containerRect =
+        scrollContainer === document.documentElement || scrollContainer === document.body
+          ? {
+              top: 0,
+              bottom: window.innerHeight,
+            }
+          : scrollContainer.getBoundingClientRect();
+      const rootRect = root.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const topPadding = 16;
+      const bottomPadding = 16;
+      let delta = 0;
+
+      if (rootRect.top < containerRect.top + topPadding) {
+        delta = rootRect.top - (containerRect.top + topPadding);
+      }
+
+      if (panelRect.bottom > containerRect.bottom - bottomPadding) {
+        delta = Math.max(delta, panelRect.bottom - (containerRect.bottom - bottomPadding));
+      }
+
+      if (delta === 0) {
+        return;
+      }
+
+      if (scrollContainer === document.documentElement || scrollContainer === document.body) {
+        window.scrollBy({ top: delta, behavior: 'smooth' });
+        return;
+      }
+
+      scrollContainer.scrollTo({
+        top: scrollContainer.scrollTop + delta,
+        behavior: 'smooth',
+      });
+    };
+
+    const timer = window.setTimeout(() => {
+      revealPanel();
+    }, 30);
+
+    return () => window.clearTimeout(timer);
   }, [open]);
 
   const filteredOptions = useMemo(() => {
@@ -128,7 +209,7 @@ export function MultiSelect({
       </button>
 
       {open ? (
-        <div className="ui-multiselect__panel">
+        <div className="ui-multiselect__panel" ref={panelRef}>
           <input
             ref={searchInputRef}
             className="ui-field"

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -34,15 +34,15 @@ const detectDeviceLabel = () => {
   }
 
   return /iphone|android|mobile/i.test(navigator.userAgent)
-    ? 'РњРѕР±РёР»СЊРЅС‹Р№ Р±СЂР°СѓР·РµСЂ'
-    : 'Р‘СЂР°СѓР·РµСЂ';
+    ? 'Мобильный браузер'
+    : 'Браузер';
 };
 
 const detectPushPlatform = () => {
   if (typeof navigator === 'undefined') {
     return {
-      label: 'РЈСЃС‚СЂРѕР№СЃС‚РІРѕ',
-      hint: 'РћС‚РєСЂРѕР№С‚Рµ СЃС‚СЂР°РЅРёС†Сѓ РЅР° РЅСѓР¶РЅРѕРј СѓСЃС‚СЂРѕР№СЃС‚РІРµ, С‡С‚РѕР±С‹ РїСЂРѕРІРµСЂРёС‚СЊ РїРѕРґРґРµСЂР¶РєСѓ push.',
+      label: 'Устройство',
+      hint: 'Откройте страницу на нужном устройстве, чтобы проверить поддержку push.',
       variant: 'neutral' as const,
     };
   }
@@ -61,7 +61,7 @@ const detectPushPlatform = () => {
   if (isIphone || isIpad) {
     return {
       label: 'iPhone / iPad',
-      hint: 'РќР° iPhone Рё iPad web push РЅР°РґРµР¶РЅРµРµ СЂР°Р±РѕС‚Р°РµС‚ РїРѕСЃР»Рµ РґРѕР±Р°РІР»РµРЅРёСЏ СЃР°Р№С‚Р° РЅР° СЌРєСЂР°РЅ РґРѕРјРѕР№ Рё Р·Р°РїСѓСЃРєР° РєР°Рє РѕС‚РґРµР»СЊРЅРѕРіРѕ РІРµР±-РїСЂРёР»РѕР¶РµРЅРёСЏ.',
+      hint: 'На iPhone и iPad web push надежнее работает после добавления сайта на экран домой и запуска как отдельного веб-приложения.',
       variant: 'warning' as const,
     };
   }
@@ -69,7 +69,7 @@ const detectPushPlatform = () => {
   if (isAndroid && isChrome) {
     return {
       label: 'Android / Chrome',
-      hint: 'РќР° Android push СЂР°Р±РѕС‚Р°РµС‚ РїСЂСЏРјРѕ РІ Р±СЂР°СѓР·РµСЂРµ, Р° Р·Р°РїСѓСЃРє СЃ РґРѕРјР°С€РЅРµРіРѕ СЌРєСЂР°РЅР° РґРµР»Р°РµС‚ СЃРµСЂРІРёСЃ СѓРґРѕР±РЅРµРµ РєР°Рє РїСЂРёР»РѕР¶РµРЅРёРµ.',
+      hint: 'На Android push работает прямо в браузере, а запуск с домашнего экрана делает сервис удобнее как приложение.',
       variant: 'success' as const,
     };
   }
@@ -77,7 +77,7 @@ const detectPushPlatform = () => {
   if (isChrome) {
     return {
       label: 'Chrome',
-      hint: 'Push РїРѕРґРґРµСЂР¶РёРІР°РµС‚СЃСЏ РїСЂСЏРјРѕ РІ Р±СЂР°СѓР·РµСЂРµ. Р”РѕСЃС‚Р°С‚РѕС‡РЅРѕ РІС‹РґР°С‚СЊ СЂР°Р·СЂРµС€РµРЅРёРµ РЅР° СѓРІРµРґРѕРјР»РµРЅРёСЏ.',
+      hint: 'Push поддерживается прямо в браузере. Достаточно выдать разрешение на уведомления.',
       variant: 'success' as const,
     };
   }
@@ -85,14 +85,14 @@ const detectPushPlatform = () => {
   if (isSafari) {
     return {
       label: 'Safari',
-      hint: 'РќР° Mac push СЂР°Р±РѕС‚Р°РµС‚ РІ Safari. РќР° iPhone Рё iPad РЅСѓР¶РµРЅ Р·Р°РїСѓСЃРє СЃ СЌРєСЂР°РЅР° РґРѕРјРѕР№.',
+      hint: 'На Mac push работает в Safari. На iPhone и iPad нужен запуск с экрана домой.',
       variant: 'warning' as const,
     };
   }
 
   return {
-    label: 'Р‘СЂР°СѓР·РµСЂ',
-    hint: 'РџРѕРґРґРµСЂР¶РєР° push Р·Р°РІРёСЃРёС‚ РѕС‚ Р±СЂР°СѓР·РµСЂР° Рё СЃРёСЃС‚РµРјРЅС‹С… СЂР°Р·СЂРµС€РµРЅРёР№.',
+    label: 'Браузер',
+    hint: 'Поддержка push зависит от браузера и системных разрешений.',
     variant: 'neutral' as const,
   };
 };
@@ -100,11 +100,11 @@ const detectPushPlatform = () => {
 const detectInstallGuide = (): BrowserInstallGuide => {
   if (typeof navigator === 'undefined') {
     return {
-      browserLabel: 'Р‘СЂР°СѓР·РµСЂ',
-      note: 'Р•СЃР»Рё Р±СЂР°СѓР·РµСЂ РЅРµ РїРѕРєР°Р·С‹РІР°РµС‚ СЃРёСЃС‚РµРјРЅСѓСЋ СѓСЃС‚Р°РЅРѕРІРєСѓ, РґРѕР±Р°РІРёС‚СЊ СЃР°Р№С‚ РјРѕР¶РЅРѕ С‡РµСЂРµР· РµРіРѕ РјРµРЅСЋ.',
-      menuStep: 'РћС‚РєСЂРѕР№С‚Рµ РјРµРЅСЋ Р±СЂР°СѓР·РµСЂР° РЅР° СЌС‚РѕР№ СЃС‚СЂР°РЅРёС†Рµ.',
-      actionStep: 'РќР°Р№РґРёС‚Рµ РїСѓРЅРєС‚ В«РЈСЃС‚Р°РЅРѕРІРёС‚СЊ РїСЂРёР»РѕР¶РµРЅРёРµВ» РёР»Рё В«Р”РѕР±Р°РІРёС‚СЊ РЅР° СЌРєСЂР°РЅ РґРѕРјРѕР№В».',
-      confirmStep: 'РџРѕРґС‚РІРµСЂРґРёС‚Рµ РґРѕР±Р°РІР»РµРЅРёРµ СЃР°Р№С‚Р°.',
+      browserLabel: 'Браузер',
+      note: 'Если браузер не показывает системную установку, добавить сайт можно через его меню.',
+      menuStep: 'Откройте меню браузера на этой странице.',
+      actionStep: 'Найдите пункт «Установить приложение» или «Добавить на экран домой».',
+      confirmStep: 'Подтвердите добавление сайта.',
     };
   }
 
@@ -124,70 +124,70 @@ const detectInstallGuide = (): BrowserInstallGuide => {
 
   if (isIphone || isIpad) {
     return {
-      browserLabel: 'Safari РЅР° iPhone / iPad',
-      note: 'РќР° iPhone Рё iPad СЃРёСЃС‚РµРјРЅС‹Р№ prompt РЅРµ РѕС‚РєСЂС‹РІР°РµС‚СЃСЏ РєРЅРѕРїРєРѕР№ СЃР°Р№С‚Р°, РїРѕСЌС‚РѕРјСѓ РґРѕР±Р°РІР»РµРЅРёРµ РґРµР»Р°РµС‚СЃСЏ С‡РµСЂРµР· РјРµРЅСЋ Safari.',
-      menuStep: 'РќР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ В«РџРѕРґРµР»РёС‚СЊСЃСЏВ» РІ Safari.',
-      actionStep: 'Р’С‹Р±РµСЂРёС‚Рµ В«РќР° СЌРєСЂР°РЅ Р”РѕРјРѕР№В».',
-      confirmStep: 'РџРѕРґС‚РІРµСЂРґРёС‚Рµ РґРѕР±Р°РІР»РµРЅРёРµ Рё РїРѕС‚РѕРј РѕС‚РєСЂС‹РІР°Р№С‚Рµ СЃРµСЂРІРёСЃ СѓР¶Рµ СЃ РёРєРѕРЅРєРё РЅР° СЌРєСЂР°РЅРµ.',
+      browserLabel: 'Safari на iPhone / iPad',
+      note: 'На iPhone и iPad системный prompt не открывается кнопкой сайта, поэтому добавление делается через меню Safari.',
+      menuStep: 'Нажмите кнопку «Поделиться» в Safari.',
+      actionStep: 'Выберите «На экран Домой».',
+      confirmStep: 'Подтвердите добавление и потом открывайте сервис уже с иконки на экране.',
     };
   }
 
   if (isSamsung) {
     return {
       browserLabel: 'Samsung Internet',
-      note: 'Р’ Samsung Internet СѓСЃС‚Р°РЅРѕРІРєР° СЃР°Р№С‚Р° С‡Р°С‰Рµ РІСЃРµРіРѕ РґРѕСЃС‚СѓРїРЅР° РїСЂСЏРјРѕ РІ РјРµРЅСЋ Р±СЂР°СѓР·РµСЂР°.',
-      menuStep: 'РћС‚РєСЂРѕР№С‚Рµ РјРµРЅСЋ Samsung Internet.',
-      actionStep: 'РќР°Р№РґРёС‚Рµ РїСѓРЅРєС‚ В«Р”РѕР±Р°РІРёС‚СЊ СЃС‚СЂР°РЅРёС†Сѓ РЅР°В» РёР»Рё В«РЈСЃС‚Р°РЅРѕРІРёС‚СЊ РїСЂРёР»РѕР¶РµРЅРёРµВ».',
-      confirmStep: 'РџРѕРґС‚РІРµСЂРґРёС‚Рµ РґРѕР±Р°РІР»РµРЅРёРµ РЅР° РіР»Р°РІРЅС‹Р№ СЌРєСЂР°РЅ.',
+      note: 'В Samsung Internet установка сайта чаще всего доступна прямо в меню браузера.',
+      menuStep: 'Откройте меню Samsung Internet.',
+      actionStep: 'Найдите пункт «Добавить страницу на» или «Установить приложение».',
+      confirmStep: 'Подтвердите добавление на главный экран.',
     };
   }
 
   if (isEdge) {
     return {
       browserLabel: 'Microsoft Edge',
-      note: 'Edge РѕР±С‹С‡РЅРѕ РїСЂРµРґР»Р°РіР°РµС‚ СѓСЃС‚Р°РЅРѕРІРєСѓ СЃР°Рј, РЅРѕ РµС‘ РјРѕР¶РЅРѕ РѕС‚РєСЂС‹С‚СЊ Рё РІСЂСѓС‡РЅСѓСЋ С‡РµСЂРµР· РјРµРЅСЋ Р±СЂР°СѓР·РµСЂР°.',
-      menuStep: 'РћС‚РєСЂРѕР№С‚Рµ РјРµРЅСЋ Edge.',
-      actionStep: 'Р’С‹Р±РµСЂРёС‚Рµ В«РџСЂРёР»РѕР¶РµРЅРёСЏВ» Рё Р·Р°С‚РµРј В«РЈСЃС‚Р°РЅРѕРІРёС‚СЊ СЌС‚РѕС‚ СЃР°Р№С‚ РєР°Рє РїСЂРёР»РѕР¶РµРЅРёРµВ».',
-      confirmStep: 'РџРѕРґС‚РІРµСЂРґРёС‚Рµ СѓСЃС‚Р°РЅРѕРІРєСѓ.',
+      note: 'Edge обычно предлагает установку сам, но её можно открыть и вручную через меню браузера.',
+      menuStep: 'Откройте меню Edge.',
+      actionStep: 'Выберите «Приложения» и затем «Установить этот сайт как приложение».',
+      confirmStep: 'Подтвердите установку.',
     };
   }
 
   if (isFirefox) {
     return {
-      browserLabel: isAndroid ? 'Firefox РЅР° Android' : 'Firefox',
-      note: 'Р’ Firefox РїРѕРґРґРµСЂР¶РєР° СѓСЃС‚Р°РЅРѕРІРєРё Рё web push Р·Р°РІРёСЃРёС‚ РѕС‚ РїР»Р°С‚С„РѕСЂРјС‹, РїРѕСЌС‚РѕРјСѓ РёРЅРѕРіРґР° РґРѕСЃС‚СѓРїРЅРѕ С‚РѕР»СЊРєРѕ РґРѕР±Р°РІР»РµРЅРёРµ СЏСЂР»С‹РєР°.',
-      menuStep: 'РћС‚РєСЂРѕР№С‚Рµ РјРµРЅСЋ Firefox.',
-      actionStep: 'РќР°Р№РґРёС‚Рµ В«Р”РѕР±Р°РІРёС‚СЊ РЅР° РіР»Р°РІРЅС‹Р№ СЌРєСЂР°РЅВ» РёР»Рё РїРѕС…РѕР¶РёР№ РїСѓРЅРєС‚ СЃ СЏСЂР»С‹РєРѕРј СЃР°Р№С‚Р°.',
-      confirmStep: 'РџРѕРґС‚РІРµСЂРґРёС‚Рµ РґРѕР±Р°РІР»РµРЅРёРµ Рё Р·Р°С‚РµРј РїСЂРѕРІРµСЂСЊС‚Рµ push РЅР° СЌС‚РѕРј СѓСЃС‚СЂРѕР№СЃС‚РІРµ.',
+      browserLabel: isAndroid ? 'Firefox на Android' : 'Firefox',
+      note: 'В Firefox поддержка установки и web push зависит от платформы, поэтому иногда доступно только добавление ярлыка.',
+      menuStep: 'Откройте меню Firefox.',
+      actionStep: 'Найдите «Добавить на главный экран» или похожий пункт с ярлыком сайта.',
+      confirmStep: 'Подтвердите добавление и затем проверьте push на этом устройстве.',
     };
   }
 
   if (isChrome) {
     return {
-      browserLabel: isAndroid ? 'Chrome РЅР° Android' : 'Chrome',
-      note: 'Chrome РѕР±С‹С‡РЅРѕ СѓРјРµРµС‚ Рё СЃРёСЃС‚РµРјРЅСѓСЋ СѓСЃС‚Р°РЅРѕРІРєСѓ, Рё СЂСѓС‡РЅРѕРµ РґРѕР±Р°РІР»РµРЅРёРµ СЃР°Р№С‚Р° С‡РµСЂРµР· РјРµРЅСЋ.',
-      menuStep: 'РћС‚РєСЂРѕР№С‚Рµ РјРµРЅСЋ Chrome.',
-      actionStep: 'Р’С‹Р±РµСЂРёС‚Рµ В«РЈСЃС‚Р°РЅРѕРІРёС‚СЊ РїСЂРёР»РѕР¶РµРЅРёРµВ» РёР»Рё В«Р”РѕР±Р°РІРёС‚СЊ РЅР° РіР»Р°РІРЅС‹Р№ СЌРєСЂР°РЅВ».',
-      confirmStep: 'РџРѕРґС‚РІРµСЂРґРёС‚Рµ РґРѕР±Р°РІР»РµРЅРёРµ Рё РѕС‚РєСЂРѕР№С‚Рµ СЃРµСЂРІРёСЃ СѓР¶Рµ СЃ РґРѕРјР°С€РЅРµРіРѕ СЌРєСЂР°РЅР°.',
+      browserLabel: isAndroid ? 'Chrome на Android' : 'Chrome',
+      note: 'Chrome обычно умеет и системную установку, и ручное добавление сайта через меню.',
+      menuStep: 'Откройте меню Chrome.',
+      actionStep: 'Выберите «Установить приложение» или «Добавить на главный экран».',
+      confirmStep: 'Подтвердите добавление и откройте сервис уже с домашнего экрана.',
     };
   }
 
   if (isSafari) {
     return {
       browserLabel: 'Safari',
-      note: 'Р’ Safari СЃРїРѕСЃРѕР± СѓСЃС‚Р°РЅРѕРІРєРё Р·Р°РІРёСЃРёС‚ РѕС‚ СѓСЃС‚СЂРѕР№СЃС‚РІР°, РЅРѕ С‡Р°С‰Рµ РІСЃРµРіРѕ СЌС‚Рѕ РґРµР»Р°РµС‚СЃСЏ С‡РµСЂРµР· РјРµРЅСЋ Р±СЂР°СѓР·РµСЂР°.',
-      menuStep: 'РћС‚РєСЂРѕР№С‚Рµ РјРµРЅСЋ Safari РёР»Рё РєРЅРѕРїРєСѓ В«РџРѕРґРµР»РёС‚СЊСЃСЏВ».',
-      actionStep: 'РќР°Р№РґРёС‚Рµ В«Р”РѕР±Р°РІРёС‚СЊ РЅР° СЌРєСЂР°РЅ Р”РѕРјРѕР№В».',
-      confirmStep: 'РџРѕРґС‚РІРµСЂРґРёС‚Рµ РґРѕР±Р°РІР»РµРЅРёРµ СЃР°Р№С‚Р°.',
+      note: 'В Safari способ установки зависит от устройства, но чаще всего это делается через меню браузера.',
+      menuStep: 'Откройте меню Safari или кнопку «Поделиться».',
+      actionStep: 'Найдите «Добавить на экран Домой».',
+      confirmStep: 'Подтвердите добавление сайта.',
     };
   }
 
   return {
-    browserLabel: 'РўРµРєСѓС‰РёР№ Р±СЂР°СѓР·РµСЂ',
-    note: 'Р•СЃР»Рё Р±СЂР°СѓР·РµСЂ РЅРµ РїРѕРєР°Р·С‹РІР°РµС‚ СЃРёСЃС‚РµРјРЅСѓСЋ СѓСЃС‚Р°РЅРѕРІРєСѓ, РґРѕР±Р°РІРёС‚СЊ СЃР°Р№С‚ РјРѕР¶РЅРѕ С‡РµСЂРµР· РµРіРѕ РјРµРЅСЋ.',
-    menuStep: 'РћС‚РєСЂРѕР№С‚Рµ РјРµРЅСЋ Р±СЂР°СѓР·РµСЂР° РЅР° СЌС‚РѕР№ СЃС‚СЂР°РЅРёС†Рµ.',
-    actionStep: 'РќР°Р№РґРёС‚Рµ РїСѓРЅРєС‚ В«РЈСЃС‚Р°РЅРѕРІРёС‚СЊ РїСЂРёР»РѕР¶РµРЅРёРµВ» РёР»Рё В«Р”РѕР±Р°РІРёС‚СЊ РЅР° СЌРєСЂР°РЅ РґРѕРјРѕР№В».',
-    confirmStep: 'РџРѕРґС‚РІРµСЂРґРёС‚Рµ РґРѕР±Р°РІР»РµРЅРёРµ СЃР°Р№С‚Р°.',
+    browserLabel: 'Текущий браузер',
+    note: 'Если браузер не показывает системную установку, добавить сайт можно через его меню.',
+    menuStep: 'Откройте меню браузера на этой странице.',
+    actionStep: 'Найдите пункт «Установить приложение» или «Добавить на экран домой».',
+    confirmStep: 'Подтвердите добавление сайта.',
   };
 };
 
@@ -208,10 +208,10 @@ const isIosFamily = () => {
 };
 
 const permissionLabel: Record<NotificationPermission | 'unsupported', string> = {
-  default: 'Р Р°Р·СЂРµС€РµРЅРёРµ РµС‰Рµ РЅРµ РІС‹РґР°РЅРѕ',
-  denied: 'Р Р°Р·СЂРµС€РµРЅРёРµ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРѕ',
-  granted: 'Р Р°Р·СЂРµС€РµРЅРёРµ РІС‹РґР°РЅРѕ',
-  unsupported: 'Р‘СЂР°СѓР·РµСЂ РЅРµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚ web push',
+  default: 'Разрешение еще не выдано',
+  denied: 'Разрешение заблокировано',
+  granted: 'Разрешение выдано',
+  unsupported: 'Браузер не поддерживает web push',
 };
 
 const BellIcon = ({ enabled }: { enabled: boolean }) => (
@@ -247,7 +247,7 @@ const BellIcon = ({ enabled }: { enabled: boolean }) => (
 
 const formatLastSeenAt = (value: string | null | undefined) => {
   if (!value) {
-    return 'вЂ”';
+    return '—';
   }
 
   return new Intl.DateTimeFormat('ru-RU', {
@@ -327,7 +327,7 @@ export function BrowserNotificationsSettings({
       onError(
         error instanceof Error
           ? error.message
-          : 'РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РЅР°СЃС‚СЂРѕР№РєРё Р±СЂР°СѓР·РµСЂРЅС‹С… СѓРІРµРґРѕРјР»РµРЅРёР№.',
+          : 'Не удалось получить настройки браузерных уведомлений.',
       );
       return null;
     }
@@ -343,7 +343,7 @@ export function BrowserNotificationsSettings({
       const items = await notificationsApi.listWebPushSubscriptions({ accessToken });
       setSubscriptions(items);
     } catch (error) {
-      onError(error instanceof Error ? error.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ push-РїРѕРґРїРёСЃРєРё.');
+      onError(error instanceof Error ? error.message : 'Не удалось загрузить push-подписки.');
     }
   }, [accessToken, onError]);
 
@@ -362,12 +362,12 @@ export function BrowserNotificationsSettings({
 
   const handleToggle = async (nextValue: boolean) => {
     if (!accessToken) {
-      onError('РќСѓР¶РЅР° Р°РєС‚РёРІРЅР°СЏ СЃРµСЃСЃРёСЏ.');
+      onError('Нужна активная сессия.');
       return;
     }
 
     if (!supported) {
-      onError('Р­С‚РѕС‚ Р±СЂР°СѓР·РµСЂ РЅРµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚ push-СѓРІРµРґРѕРјР»РµРЅРёСЏ.');
+      onError('Этот браузер не поддерживает push-уведомления.');
       return;
     }
 
@@ -379,7 +379,7 @@ export function BrowserNotificationsSettings({
         const clientDeviceId = browserPush.getClientDeviceId() ?? undefined;
 
         if (!runtimeConfig?.enabled || !runtimeConfig.publicKey) {
-          throw new Error('РќР° СЃРµСЂРІРµСЂРµ РїРѕРєР° РЅРµ РЅР°СЃС‚СЂРѕРµРЅС‹ Р±СЂР°СѓР·РµСЂРЅС‹Рµ push-СѓРІРµРґРѕРјР»РµРЅРёСЏ.');
+          throw new Error('На сервере пока не настроены браузерные push-уведомления.');
         }
 
         const subscription = await browserPush.subscribe(
@@ -397,7 +397,7 @@ export function BrowserNotificationsSettings({
         });
 
         await Promise.all([syncDeviceSubscription(), loadSubscriptions()]);
-        onNotice('Push-СѓРІРµРґРѕРјР»РµРЅРёСЏ РІРєР»СЋС‡РµРЅС‹ РґР»СЏ СЌС‚РѕРіРѕ СѓСЃС‚СЂРѕР№СЃС‚РІР°.');
+        onNotice('Push-уведомления включены для этого устройства.');
       } else {
         const endpoint = await browserPush.unsubscribe();
 
@@ -410,10 +410,10 @@ export function BrowserNotificationsSettings({
         }
 
         await Promise.all([syncDeviceSubscription(), loadSubscriptions()]);
-        onNotice('Push-СѓРІРµРґРѕРјР»РµРЅРёСЏ РІС‹РєР»СЋС‡РµРЅС‹ РЅР° СЌС‚РѕРј СѓСЃС‚СЂРѕР№СЃС‚РІРµ.');
+        onNotice('Push-уведомления выключены на этом устройстве.');
       }
     } catch (error) {
-      onError(error instanceof Error ? error.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ push-СѓРІРµРґРѕРјР»РµРЅРёСЏ.');
+      onError(error instanceof Error ? error.message : 'Не удалось обновить push-уведомления.');
     } finally {
       setLoading(false);
     }
@@ -421,7 +421,7 @@ export function BrowserNotificationsSettings({
 
   const handleInstall = async () => {
     if (standaloneMode) {
-      onNotice('РЎР°Р№С‚ СѓР¶Рµ РѕС‚РєСЂС‹С‚ РєР°Рє РїСЂРёР»РѕР¶РµРЅРёРµ СЃ СЌРєСЂР°РЅР° РґРѕРјРѕР№.');
+      onNotice('Сайт уже открыт как приложение с экрана домой.');
       return;
     }
 
@@ -431,12 +431,12 @@ export function BrowserNotificationsSettings({
         const choice = await installPromptEvent.userChoice;
 
         if (choice.outcome === 'accepted') {
-          onNotice('РЎР°Р№С‚ РґРѕР±Р°РІР»РµРЅ РЅР° СЌРєСЂР°РЅ РґРѕРјРѕР№. РћС‚РєСЂС‹РІР°Р№С‚Рµ РµРіРѕ РєР°Рє РїСЂРёР»РѕР¶РµРЅРёРµ.');
+          onNotice('Сайт добавлен на экран домой. Открывайте его как приложение.');
         } else {
-          onNotice('РЈСЃС‚Р°РЅРѕРІРєР° РЅРµ РїРѕРґС‚РІРµСЂР¶РґРµРЅР°. РРЅСЃС‚СЂСѓРєС†РёСЋ РјРѕР¶РЅРѕ РѕС‚РєСЂС‹С‚СЊ СЃРЅРѕРІР° РІ СЌС‚РѕРј Р±Р»РѕРєРµ.');
+          onNotice('Установка не подтверждена. Инструкцию можно открыть снова в этом блоке.');
         }
       } catch (error) {
-        onError(error instanceof Error ? error.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ СѓСЃС‚Р°РЅРѕРІРєСѓ СЃР°Р№С‚Р°.');
+        onError(error instanceof Error ? error.message : 'Не удалось открыть установку сайта.');
       }
 
       return;
@@ -447,17 +447,17 @@ export function BrowserNotificationsSettings({
 
   const handleTestNotification = async () => {
     if (!accessToken) {
-      onError('РќСѓР¶РЅР° Р°РєС‚РёРІРЅР°СЏ СЃРµСЃСЃРёСЏ.');
+      onError('Нужна активная сессия.');
       return;
     }
 
     if (configState === 'loading') {
-      onError('РџРѕРґРѕР¶РґРёС‚Рµ, РїРѕРєР° Р·Р°РіСЂСѓР·СЏС‚СЃСЏ РЅР°СЃС‚СЂРѕР№РєРё push.');
+      onError('Подождите, пока загрузятся настройки push.');
       return;
     }
 
     if (configState === 'error' || !config?.enabled || !config?.publicKey) {
-      onError('РЎРµСЂРІРµСЂ web push СЃРµР№С‡Р°СЃ РЅРµ РіРѕС‚РѕРІ.');
+      onError('Сервер web push сейчас не готов.');
       return;
     }
 
@@ -470,23 +470,23 @@ export function BrowserNotificationsSettings({
       });
 
       if (!response.hasActiveSubscription) {
-        onError('Р”Р»СЏ СЌС‚РѕРіРѕ СѓСЃС‚СЂРѕР№СЃС‚РІР° РЅРµС‚ Р°РєС‚РёРІРЅРѕР№ push-РїРѕРґРїРёСЃРєРё. РЎРЅР°С‡Р°Р»Р° РІРєР»СЋС‡РёС‚Рµ СѓРІРµРґРѕРјР»РµРЅРёСЏ.');
+        onError('Для этого устройства нет активной push-подписки. Сначала включите уведомления.');
         return;
       }
 
       if (response.success) {
-        onNotice('РўРµСЃС‚РѕРІРѕРµ СѓРІРµРґРѕРјР»РµРЅРёРµ РѕС‚РїСЂР°РІР»РµРЅРѕ РёРјРµРЅРЅРѕ РЅР° СЌС‚Рѕ СѓСЃС‚СЂРѕР№СЃС‚РІРѕ. Р•СЃР»Рё push РІРєР»СЋС‡РµРЅ, РѕРЅРѕ РґРѕР»Р¶РЅРѕ РїСЂРёР№С‚Рё РєР°Рє РѕР±С‹С‡РЅРѕРµ СЃРёСЃС‚РµРјРЅРѕРµ СѓРІРµРґРѕРјР»РµРЅРёРµ.');
+        onNotice('Тестовое уведомление отправлено именно на это устройство. Если push включен, оно должно прийти как обычное системное уведомление.');
         return;
       }
 
       if (response.pendingCount > 0) {
-        onNotice('РўРµСЃС‚ РѕС‚РїСЂР°РІР»РµРЅ РЅР° СЌС‚Рѕ СѓСЃС‚СЂРѕР№СЃС‚РІРѕ, РЅРѕ РїСЂРѕРІР°Р№РґРµСЂ РµС‰Рµ РЅРµ РїРѕРґС‚РІРµСЂРґРёР» РґРѕСЃС‚Р°РІРєСѓ. РџСЂРѕРІРµСЂСЊ СѓРІРµРґРѕРјР»РµРЅРёСЏ С‡РµСЂРµР· РЅРµСЃРєРѕР»СЊРєРѕ СЃРµРєСѓРЅРґ.');
+        onNotice('Тест отправлен на это устройство, но провайдер еще не подтвердил доставку. Проверь уведомления через несколько секунд.');
         return;
       }
 
-      onError('РЎРµСЂРІРµСЂ РїРѕРїСЂРѕР±РѕРІР°Р» РѕС‚РїСЂР°РІРёС‚СЊ С‚РµСЃС‚, РЅРѕ РґРѕСЃС‚Р°РІРєР° РЅРµ РїРѕРґС‚РІРµСЂРґРёР»Р°СЃСЊ.');
+      onError('Сервер попробовал отправить тест, но доставка не подтвердилась.');
     } catch (error) {
-      onError(error instanceof Error ? error.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ С‚РµСЃС‚РѕРІРѕРµ СѓРІРµРґРѕРјР»РµРЅРёРµ.');
+      onError(error instanceof Error ? error.message : 'Не удалось отправить тестовое уведомление.');
     } finally {
       setTestingNotification(false);
     }
@@ -494,66 +494,66 @@ export function BrowserNotificationsSettings({
 
   const stateLabel = useMemo(() => {
     if (!supported) {
-      return 'Р­С‚РѕС‚ Р±СЂР°СѓР·РµСЂ РЅРµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚ push-СѓРІРµРґРѕРјР»РµРЅРёСЏ.';
+      return 'Этот браузер не поддерживает push-уведомления.';
     }
 
     if (configState === 'loading') {
-      return 'РџСЂРѕРІРµСЂСЏРµРј РЅР°СЃС‚СЂРѕР№РєРё push РЅР° СЃРµСЂРІРµСЂРµ.';
+      return 'Проверяем настройки push на сервере.';
     }
 
     if (configState === 'error') {
-      return 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РЅР°СЃС‚СЂРѕР№РєРё push СЃ СЃРµСЂРІРµСЂР°.';
+      return 'Не удалось загрузить настройки push с сервера.';
     }
 
     if (config && (!config.enabled || !config.publicKey)) {
-      return 'Push-СѓРІРµРґРѕРјР»РµРЅРёСЏ РµС‰Рµ РЅРµ РЅР°СЃС‚СЂРѕРµРЅС‹ РЅР° СЃРµСЂРІРµСЂРµ.';
+      return 'Push-уведомления еще не настроены на сервере.';
     }
 
     if (permission === 'denied') {
-      return 'Р Р°Р·СЂРµС€РµРЅРёРµ РЅР° СѓРІРµРґРѕРјР»РµРЅРёСЏ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРѕ РІ Р±СЂР°СѓР·РµСЂРµ.';
+      return 'Разрешение на уведомления заблокировано в браузере.';
     }
 
     if (hasBrowserSubscription && !hasServerDeviceSubscription) {
-      return 'РќР° СѓСЃС‚СЂРѕР№СЃС‚РІРµ РµСЃС‚СЊ Р»РѕРєР°Р»СЊРЅР°СЏ РїРѕРґРїРёСЃРєР°, РЅРѕ СЃРµСЂРІРµСЂСѓ РЅСѓР¶РЅР° РїРµСЂРµРїСЂРёРІСЏР·РєР°. Р’РєР»СЋС‡РёС‚Рµ push Р·Р°РЅРѕРІРѕ.';
+      return 'На устройстве есть локальная подписка, но серверу нужна перепривязка. Включите push заново.';
     }
 
     return hasDeviceSubscription
-      ? 'Push-СѓРІРµРґРѕРјР»РµРЅРёСЏ РїРѕРґРєР»СЋС‡РµРЅС‹ РЅР° СЌС‚РѕРј СѓСЃС‚СЂРѕР№СЃС‚РІРµ.'
-      : 'Push-СѓРІРµРґРѕРјР»РµРЅРёСЏ РїРѕРєР° РЅРµ РїРѕРґРєР»СЋС‡РµРЅС‹.';
+      ? 'Push-уведомления подключены на этом устройстве.'
+      : 'Push-уведомления пока не подключены.';
   }, [config, configState, hasBrowserSubscription, hasDeviceSubscription, hasServerDeviceSubscription, permission, supported]);
 
   const toggleHint = useMemo(() => {
     if (!accessToken) {
-      return 'РќСѓР¶РЅР° Р°РєС‚РёРІРЅР°СЏ СЃРµСЃСЃРёСЏ';
+      return 'Нужна активная сессия';
     }
 
     if (!supported) {
-      return 'РќРµРґРѕСЃС‚СѓРїРЅРѕ РІ СЌС‚РѕРј Р±СЂР°СѓР·РµСЂРµ';
+      return 'Недоступно в этом браузере';
     }
 
     if (configState === 'loading') {
-      return 'РџСЂРѕРІРµСЂСЏРµРј РЅР°СЃС‚СЂРѕР№РєРё СЃРµСЂРІРµСЂР°';
+      return 'Проверяем настройки сервера';
     }
 
     if (configState === 'error') {
-      return 'РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕРІРµСЂРёС‚СЊ СЃРµСЂРІРµСЂ push';
+      return 'Не удалось проверить сервер push';
     }
 
     if (config && (!config.enabled || !config.publicKey)) {
-      return 'РЎРµСЂРІРµСЂ push РµС‰Рµ РЅРµ РЅР°СЃС‚СЂРѕРµРЅ';
+      return 'Сервер push еще не настроен';
     }
 
     if (permission === 'denied') {
-      return 'Р Р°Р·СЂРµС€РµРЅРёРµ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРѕ РІ Р±СЂР°СѓР·РµСЂРµ';
+      return 'Разрешение заблокировано в браузере';
     }
 
     if (hasBrowserSubscription && !hasServerDeviceSubscription) {
-      return 'РќР°Р¶РјРёС‚Рµ, С‡С‚РѕР±С‹ РїРµСЂРµРїСЂРёРІСЏР·Р°С‚СЊ СЌС‚Рѕ СѓСЃС‚СЂРѕР№СЃС‚РІРѕ Рє СЃРµСЂРІРµСЂСѓ push';
+      return 'Нажмите, чтобы перепривязать это устройство к серверу push';
     }
 
     return hasDeviceSubscription
-      ? 'РќР°Р¶РјРёС‚Рµ, С‡С‚РѕР±С‹ РІС‹РєР»СЋС‡РёС‚СЊ'
-      : 'РќР°Р¶РјРёС‚Рµ, С‡С‚РѕР±С‹ РІРєР»СЋС‡РёС‚СЊ';
+      ? 'Нажмите, чтобы выключить'
+      : 'Нажмите, чтобы включить';
   }, [accessToken, config, configState, hasBrowserSubscription, hasDeviceSubscription, hasServerDeviceSubscription, permission, supported]);
 
   const canToggle =
@@ -574,22 +574,22 @@ export function BrowserNotificationsSettings({
 
   const statusItems = [
     {
-      label: 'РЈСЃС‚СЂРѕР№СЃС‚РІРѕ',
+      label: 'Устройство',
       value: platformInfo.label,
       tone: 'neutral' as const,
     },
     {
-      label: 'РЈСЃС‚Р°РЅРѕРІРєР° РЅР° СЌРєСЂР°РЅ',
-      value: standaloneMode ? 'РЈР¶Рµ РґРѕР±Р°РІР»РµРЅ' : 'РџРѕРєР° РІ Р±СЂР°СѓР·РµСЂРµ',
+      label: 'Установка на экран',
+      value: standaloneMode ? 'Уже добавлен' : 'Пока в браузере',
       tone: standaloneMode ? ('success' as const) : ('warning' as const),
     },
     {
-      label: 'Push РІ Р±СЂР°СѓР·РµСЂРµ',
-      value: supported ? 'РџРѕРґРґРµСЂР¶РёРІР°РµС‚СЃСЏ' : 'РќРµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚СЃСЏ',
+      label: 'Push в браузере',
+      value: supported ? 'Поддерживается' : 'Не поддерживается',
       tone: supported ? ('success' as const) : ('error' as const),
     },
     {
-      label: 'Р Р°Р·СЂРµС€РµРЅРёРµ',
+      label: 'Разрешение',
       value: permissionLabel[permission],
       tone:
         permission === 'granted'
@@ -599,15 +599,15 @@ export function BrowserNotificationsSettings({
             : ('neutral' as const),
     },
     {
-      label: 'РЎРµСЂРІРµСЂ push',
+      label: 'Сервер push',
       value:
         configState === 'loading'
-          ? 'РџСЂРѕРІРµСЂСЏРµРј'
+          ? 'Проверяем'
           : configState === 'error'
-            ? 'РћС€РёР±РєР° РїСЂРѕРІРµСЂРєРё'
+            ? 'Ошибка проверки'
             : config && (!config.enabled || !config.publicKey)
-              ? 'РќРµ РЅР°СЃС‚СЂРѕРµРЅ'
-              : 'Р“РѕС‚РѕРІ',
+              ? 'Не настроен'
+              : 'Готов',
       tone:
         configState === 'loading'
           ? ('neutral' as const)
@@ -616,8 +616,8 @@ export function BrowserNotificationsSettings({
           : ('success' as const),
     },
     {
-      label: 'Р­С‚Рѕ СѓСЃС‚СЂРѕР№СЃС‚РІРѕ',
-      value: hasDeviceSubscription ? 'РџРѕРґРїРёСЃР°РЅРѕ' : 'РќРµ РїРѕРґРїРёСЃР°РЅРѕ',
+      label: 'Это устройство',
+      value: hasDeviceSubscription ? 'Подписано' : 'Не подписано',
       tone: hasDeviceSubscription ? ('success' as const) : ('warning' as const),
     },
   ];
@@ -633,7 +633,7 @@ export function BrowserNotificationsSettings({
             disabled={loading || !canToggle}
             role="switch"
             aria-checked={hasDeviceSubscription}
-            aria-label={hasDeviceSubscription ? 'Р’С‹РєР»СЋС‡РёС‚СЊ push-СѓРІРµРґРѕРјР»РµРЅРёСЏ' : 'Р’РєР»СЋС‡РёС‚СЊ push-СѓРІРµРґРѕРјР»РµРЅРёСЏ'}
+            aria-label={hasDeviceSubscription ? 'Выключить push-уведомления' : 'Включить push-уведомления'}
           >
             <span
               className={`account-browser-push__bell ${hasDeviceSubscription ? 'is-enabled' : 'is-disabled'}`}
@@ -641,8 +641,8 @@ export function BrowserNotificationsSettings({
               <BellIcon enabled={hasDeviceSubscription} />
             </span>
             <span className="account-browser-push__switch-copy">
-              <strong>{hasDeviceSubscription ? 'РЈРІРµРґРѕРјР»РµРЅРёСЏ РІРєР»СЋС‡РµРЅС‹' : 'РЈРІРµРґРѕРјР»РµРЅРёСЏ РІС‹РєР»СЋС‡РµРЅС‹'}</strong>
-              <small>{loading ? 'РЎРѕС…СЂР°РЅСЏРµРј...' : toggleHint}</small>
+              <strong>{hasDeviceSubscription ? 'Уведомления включены' : 'Уведомления выключены'}</strong>
+              <small>{loading ? 'Сохраняем...' : toggleHint}</small>
             </span>
           </button>
           <Badge variant={hasDeviceSubscription ? 'success' : 'error'}>{stateLabel}</Badge>
@@ -655,7 +655,7 @@ export function BrowserNotificationsSettings({
 
         <div className="account-browser-push__install">
           <div className="account-browser-push__install-copy">
-            <strong>Р”РѕР±Р°РІРёС‚СЊ РЅР° СЌРєСЂР°РЅ РґРѕРјРѕР№</strong>
+            <strong>Добавить на экран домой</strong>
             <span>{installLabel}</span>
           </div>
           <Button
@@ -664,7 +664,7 @@ export function BrowserNotificationsSettings({
             variant={standaloneMode ? 'ghost' : 'primary'}
             onClick={() => void handleInstall()}
           >
-            {standaloneMode ? 'РЈР¶Рµ РґРѕР±Р°РІР»РµРЅ' : 'Р”РѕР±Р°РІРёС‚СЊ'}
+            {standaloneMode ? 'Уже добавлен' : 'Добавить'}
           </Button>
         </div>
 
@@ -686,19 +686,19 @@ export function BrowserNotificationsSettings({
         </div>
 
         <div className="account-browser-push__meta">
-          <span>РќР° С‚РµР»РµС„РѕРЅ РїСЂРёС…РѕРґСЏС‚ РёР·РјРµРЅРµРЅРёСЏ СЂР°СЃРїРёСЃР°РЅРёСЏ, СЃСЂРѕС‡РЅС‹Рµ РїРµСЂРµРЅРѕСЃС‹ Рё РїСѓР±Р»РёРєР°С†РёСЏ РЅРѕРІРѕР№ РЅРµРґРµР»Рё.</span>
-          <span>РќР°РїРѕРјРёРЅР°РЅРёСЏ Рѕ СЃРѕР±С‹С‚РёСЏС… РІРєР»СЋС‡Р°СЋС‚СЃСЏ РѕС‚РґРµР»СЊРЅС‹Рј РїРµСЂРµРєР»СЋС‡Р°С‚РµР»РµРј РІ СЌС‚РѕРј Р¶Рµ СЂР°Р·РґРµР»Рµ.</span>
+          <span>На телефон приходят изменения расписания, срочные переносы и публикация новой недели.</span>
+          <span>Напоминания о событиях включаются отдельным переключателем в этом же разделе.</span>
           {permission === 'default' ? (
-            <span>РџРѕСЃР»Рµ РІРєР»СЋС‡РµРЅРёСЏ Р±СЂР°СѓР·РµСЂ РїРѕРїСЂРѕСЃРёС‚ СЂР°Р·СЂРµС€РµРЅРёРµ РЅР° СѓРІРµРґРѕРјР»РµРЅРёСЏ.</span>
+            <span>После включения браузер попросит разрешение на уведомления.</span>
           ) : null}
           {permission === 'denied' ? (
-            <span>Р Р°Р·СЂРµС€РµРЅРёРµ РјРѕР¶РЅРѕ РІРµСЂРЅСѓС‚СЊ РІ РЅР°СЃС‚СЂРѕР№РєР°С… Р±СЂР°СѓР·РµСЂР° Рё СѓСЃС‚СЂРѕР№СЃС‚РІР°.</span>
+            <span>Разрешение можно вернуть в настройках браузера и устройства.</span>
           ) : null}
           {!supported ? (
-            <span>РќР° СЌС‚РѕРј СѓСЃС‚СЂРѕР№СЃС‚РІРµ Р±СЂР°СѓР·РµСЂ РЅРµ РґР°РµС‚ РѕС„РѕСЂРјРёС‚СЊ web push-РїРѕРґРїРёСЃРєСѓ.</span>
+            <span>На этом устройстве браузер не дает оформить web push-подписку.</span>
           ) : null}
           {standaloneMode ? (
-            <span>РЎР°Р№С‚ СѓР¶Рµ СѓСЃС‚Р°РЅРѕРІР»РµРЅ. Р”Р»СЏ Р»СѓС‡С€РµР№ РґРѕСЃС‚Р°РІРєРё РѕС‚РєСЂС‹РІР°Р№С‚Рµ СЃРµСЂРІРёСЃ РёРјРµРЅРЅРѕ СЃ РёРєРѕРЅРєРё РЅР° РґРѕРјР°С€РЅРµРј СЌРєСЂР°РЅРµ.</span>
+            <span>Сайт уже установлен. Для лучшей доставки открывайте сервис именно с иконки на домашнем экране.</span>
           ) : null}
         </div>
 
@@ -707,11 +707,11 @@ export function BrowserNotificationsSettings({
             {subscriptions.map((subscription) => (
               <div key={subscription.id} className="account-browser-push__subscription">
                 <div className="account-browser-push__subscription-copy">
-                  <strong>{subscription.deviceLabel || 'Р‘СЂР°СѓР·РµСЂ'}</strong>
-                  <span>РџРѕСЃР»РµРґРЅСЏСЏ Р°РєС‚РёРІРЅРѕСЃС‚СЊ: {formatLastSeenAt(subscription.lastSeenAt)}</span>
+                  <strong>{subscription.deviceLabel || 'Браузер'}</strong>
+                  <span>Последняя активность: {formatLastSeenAt(subscription.lastSeenAt)}</span>
                 </div>
                 <Badge variant={subscription.isActive ? 'success' : 'neutral'}>
-                  {subscription.isActive ? 'РђРєС‚РёРІРЅР°' : 'Р’С‹РєР»СЋС‡РµРЅР°'}
+                  {subscription.isActive ? 'Активна' : 'Выключена'}
                 </Badge>
               </div>
             ))}
@@ -727,7 +727,7 @@ export function BrowserNotificationsSettings({
             loading={testingNotification}
             disabled={testingNotification || !accessToken || configState === 'loading'}
           >
-            РўРµСЃС‚ СѓРІРµРґРѕРјР»РµРЅРёСЏ
+            Тест уведомления
           </Button>
           <Button
             type="button"
@@ -736,7 +736,7 @@ export function BrowserNotificationsSettings({
             onClick={() => void Promise.all([loadSubscriptions(), syncDeviceSubscription(), loadConfig()])}
             loading={loading}
           >
-            РћР±РЅРѕРІРёС‚СЊ СЃС‚Р°С‚СѓСЃ
+            Обновить статус
           </Button>
         </div>
       </div>
@@ -744,11 +744,11 @@ export function BrowserNotificationsSettings({
       <Modal
         open={installModalOpen}
         onClose={() => setInstallModalOpen(false)}
-        title="Р”РѕР±Р°РІРёС‚СЊ РЅР° СЌРєСЂР°РЅ РґРѕРјРѕР№"
+        title="Добавить на экран домой"
         description={`Шаги ниже подобраны для ${installGuide.browserLabel}. Так сервис удобнее открывать как приложение, а web push на телефоне работает стабильнее.`}
         footer={
           <Button type="button" variant="ghost" onClick={() => setInstallModalOpen(false)}>
-            РџРѕРЅСЏС‚РЅРѕ
+            Понятно
           </Button>
         }
       >
@@ -768,4 +768,5 @@ export function BrowserNotificationsSettings({
     </>
   );
 }
+
 
